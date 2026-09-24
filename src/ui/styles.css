@@ -1,0 +1,38 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0f1a;
+  --fg: #e8ecf5;
+  --muted: #9aa6bf;
+  font-family: 'Manrope Variable', system-ui, sans-serif;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#root {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.stub {
+  padding: 16px;
+  text-align: center;
+}
+
+.stub h1 {
+  margin: 0 0 0.5em;
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 8vw, 4rem);
+}
+
+.stub p {
+  margin: 0;
+  color: var(--muted);
+}

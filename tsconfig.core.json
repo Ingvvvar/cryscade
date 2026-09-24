@@ -1,0 +1,13 @@
+{
+  // core/ и protocol/ общие для браузера и Node: ни DOM, ни типов среды,
+  // разрешение модулей как у Node — относительные импорты только с .ts.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.core.tsbuildinfo",
+    "lib": ["ES2023"],
+    "types": [],
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["src/core/**/*", "src/protocol/**/*"]
+}

@@ -1,0 +1,12 @@
+{
+  // Порядок важен для редактора: файл открывается в первом проекте, который его включает.
+  // core/ и protocol/ — без DOM раньше app, чтобы редактор не показывал им типы DOM.
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.core.json" },
+    { "path": "./tsconfig.server.json" },
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.tests.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

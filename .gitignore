@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Сессия и локальные настройки Claude Code
+SESSION.md
+.claude/settings.local.json
+
+# Артефакты Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Отчёты
+coverage/
+reports/

@@ -1,0 +1,12 @@
+{
+  // Сервер живёт в Web Worker: lib WebWorker без DOM — document и window здесь не компилируются.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "lib": ["ES2023", "WebWorker"],
+    "types": [],
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["src/server/**/*"]
+}
