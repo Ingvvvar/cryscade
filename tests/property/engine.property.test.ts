@@ -1,12 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { EventRecorder, RoundEngine, SeededEngine, SilentRecorder } from '../../src/core/engine/index.ts';
+import { EventRecorder, RoundEngine, SeededEngine, SilentRecorder, WatchdogSource } from '../../src/core/engine/index.ts';
 import { DEFAULT_CONFIG, type GameConfig } from '../../src/core/model/config.ts';
 import type { RoundEvent } from '../../src/core/model/events.ts';
 import { STRESS_CONFIG, TEST_CONFIG } from '../support/configs.ts';
 import { verifyRound, type RoundFacts } from '../support/round-model.ts';
 import { StreamSource } from '../support/streams.ts';
-import { GuardedRounds, WATCHDOG_LIMIT, WatchdogSource } from '../support/watchdog.ts';
+import { WATCHDOG_LIMIT, guarded } from '../support/watchdog.ts';
 
 // Property-тесты движка §14 и §15. Раунды — под сторожем: надкритичный конфиг даёт красный тест с сидом,
 // а не висящий процесс. При падении fast-check печатает свой сид и сид раунда (контрпример).
@@ -26,7 +26,7 @@ function endOf(events: readonly RoundEvent[]): number | null {
 describe.each(CONFIGS)('конфиг «%s»', (name, config) => {
   it('каждый раунд сходится с эталонной моделью: сетка полна, взорвано = досыпано, кап, грамматика, выплаты, точки, фриспины', () => {
     const recorder = new EventRecorder();
-    const rounds = new GuardedRounds(config, recorder);
+    const rounds = guarded(config, recorder);
     const seen = { wins: 0, features: 0, freeSpins: 0, retriggers: 0, caps: 0, cascades3: 0 };
     fc.assert(
       fc.property(SEED, (seed) => {
@@ -58,8 +58,8 @@ describe.each(CONFIGS)('конфиг «%s»', (name, config) => {
 
   it('тихий и записывающий режимы: один итог и одинаковое число запросов к источнику', () => {
     const recorder = new EventRecorder();
-    const recording = new GuardedRounds(config, recorder);
-    const silent = new GuardedRounds(config, new SilentRecorder());
+    const recording = guarded(config, recorder);
+    const silent = guarded(config, new SilentRecorder());
     fc.assert(
       fc.property(SEED, (seed) => {
         const quiet = silent.play(seed);
@@ -74,8 +74,8 @@ describe.each(CONFIGS)('конфиг «%s»', (name, config) => {
 
   it('тихий и записывающий режимы на сидах 0…9999 дают один итог (§4.7)', () => {
     const recorder = new EventRecorder();
-    const recording = new GuardedRounds(config, recorder);
-    const silent = new GuardedRounds(config, new SilentRecorder());
+    const recording = guarded(config, recorder);
+    const silent = guarded(config, new SilentRecorder());
     const mismatches: string[] = [];
     for (let seed = 0; seed < 10_000; seed++) {
       const quiet = silent.play(seed);
@@ -89,11 +89,11 @@ describe.each(CONFIGS)('конфиг «%s»', (name, config) => {
     fc.assert(
       fc.property(SEED, fc.array(SEED, { maxLength: 4 }), (seed, before) => {
         const freshRecorder = new EventRecorder();
-        new GuardedRounds(config, freshRecorder).play(seed);
+        guarded(config, freshRecorder).play(seed);
         const fresh = JSON.stringify(freshRecorder.events);
 
         const reusedRecorder = new EventRecorder();
-        const reused = new GuardedRounds(config, reusedRecorder);
+        const reused = guarded(config, reusedRecorder);
         for (const other of before) reused.play(other);
         reused.play(seed);
         expect(JSON.stringify(reusedRecorder.events)).toBe(fresh);
@@ -102,14 +102,14 @@ describe.each(CONFIGS)('конфиг «%s»', (name, config) => {
     );
   });
 
-  it('SeededEngine играет те же раунды, что и раунды под сторожем', () => {
+  it('сторож не меняет поток: SeededEngine с порогом и без играет одни и те же раунды', () => {
     const seededRecorder = new EventRecorder();
     const seeded = new SeededEngine(config, seededRecorder);
     const guardedRecorder = new EventRecorder();
-    const guarded = new GuardedRounds(config, guardedRecorder);
+    const withWatchdog = guarded(config, guardedRecorder);
     fc.assert(
       fc.property(SEED, (seed) => {
-        guarded.play(seed);
+        withWatchdog.play(seed);
         seeded.play(seed);
         expect(JSON.stringify(seededRecorder.events)).toBe(JSON.stringify(guardedRecorder.events));
       }),

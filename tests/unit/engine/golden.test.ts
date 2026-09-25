@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { EventRecorder } from '../../../src/core/engine/index.ts';
 import { GOLDEN_CONFIG } from '../../support/configs.ts';
 import { verifyRound } from '../../support/round-model.ts';
-import { GuardedRounds } from '../../support/watchdog.ts';
+import { guarded } from '../../support/watchdog.ts';
 
 // Золотой хеш — булавка от регрессий, а не доказательство правильности: правильность держат литеральные
 // сценарии и эталонная модель, и каждый раунд здесь сначала сверяется с моделью. Хеш меняет любое изменение
@@ -27,7 +27,7 @@ describe('золотой хеш', () => {
 
   it('SHA-256 событий сидов 0…999 и итоги прогона', () => {
     const recorder = new EventRecorder();
-    const rounds = new GuardedRounds(GOLDEN_CONFIG, recorder);
+    const rounds = guarded(GOLDEN_CONFIG, recorder);
     const hash = createHash('sha256');
     const summary = { totalX100: 0, wins: 0, features: 0, retriggers: 0, caps: 0 };
     for (let seed = 0; seed < 1000; seed++) {

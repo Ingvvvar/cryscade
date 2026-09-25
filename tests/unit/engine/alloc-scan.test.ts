@@ -88,6 +88,15 @@ describe('горячий путь движка без аллокаций', () =>
         'SplitMix32.next',
         'fmix32',
         'draw',
+        'WatchdogSource.next',
+        'StatsRecorder.begin',
+        'StatsRecorder.fill',
+        'StatsRecorder.win',
+        'StatsRecorder.spots',
+        'StatsRecorder.end',
+        'StatsRecorder.addUsageTo',
+        'StatsRecorder.addCascadesTo',
+        'StatsRecorder.#closeSpin',
       ]),
     );
   });

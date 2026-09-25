@@ -3,14 +3,14 @@ import { EventRecorder } from '../../../src/core/engine/index.ts';
 import type { RoundEvent } from '../../../src/core/model/events.ts';
 import { STRESS_CONFIG } from '../../support/configs.ts';
 import { ModelMismatch, verifyRound, type RoundFacts } from '../../support/round-model.ts';
-import { GuardedRounds } from '../../support/watchdog.ts';
+import { guarded } from '../../support/watchdog.ts';
 
 // Положительный контроль эталонной модели: модели верят, только если она ловит испорченные события.
 // Раунд-образец — первый сид стресс-конфига, где есть всё: каскад, множитель, фича, ретриггер и кап.
 
 function findSample(): { seed: number; events: readonly RoundEvent[]; facts: RoundFacts } {
   const recorder = new EventRecorder();
-  const rounds = new GuardedRounds(STRESS_CONFIG, recorder);
+  const rounds = guarded(STRESS_CONFIG, recorder);
   for (let seed = 0; seed < 100_000; seed++) {
     rounds.play(seed);
     const facts = verifyRound(STRESS_CONFIG, recorder.events);
