@@ -1,6 +1,7 @@
 import { EventRecorder, RoundEngine, SilentRecorder, type SymbolSource } from '../../src/core/engine/index.ts';
 import type { GameConfig, SpinMode } from '../../src/core/model/config.ts';
 import type { RoundEvent } from '../../src/core/model/events.ts';
+import { verifyRound } from './round-model.ts';
 
 // Литеральные сценарии: сетку и досыпку задаёт внедряемый источник символов, а не подбор сидов.
 // Буквы — id символов: Q0 A1 C2 E3 S4 R5 D6 *7; точка — клетка, которую источник не отдаёт.
@@ -107,7 +108,7 @@ function assertConsumed(source: ScenarioSource): void {
 
 /**
  * Играет раунды сценария на одном движке с записью и отдельно — в тихом режиме.
- * Итог тихого режима обязан совпасть с записанным, а end — с итогом.
+ * Итог тихого режима обязан совпасть с записанным, а end — с итогом; каждый раунд сверяется с эталонной моделью.
  */
 export function playScenario(config: GameConfig, steps: readonly ScenarioStep[], rounds = 1): RoundEvent[][] {
   const recorder = new EventRecorder();
@@ -120,6 +121,7 @@ export function playScenario(config: GameConfig, steps: readonly ScenarioStep[],
     played.push([...recorder.events]);
   }
   assertConsumed(source);
+  for (const events of played) verifyRound(config, events);
 
   const silentSource = new ScenarioSource(steps);
   const silent = new RoundEngine(config, silentSource, new SilentRecorder());

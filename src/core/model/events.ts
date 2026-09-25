@@ -34,7 +34,7 @@ export type RoundEvent =
   | { readonly t: 'spots'; readonly cells: readonly number[]; readonly levels: readonly number[] }
   /** moves — сдвинувшиеся символы по колонкам слева направо, в колонке снизу вверх; drops — по возрастанию клетки. */
   | { readonly t: 'refill'; readonly moves: readonly CellMove[]; readonly drops: readonly CellDrop[] }
-  /** Ядра на сетке по возрастанию; только когда их ≥ 3, следом fsStart или fsRetrigger. */
+  /** Ядра на сетке по возрастанию; когда ядра дают фриспины по конфигу (в игре — от трёх), следом fsStart или fsRetrigger. */
   | { readonly t: 'scatters'; readonly cells: readonly number[] }
   /** Фича началась, поле точек чистое. */
   | { readonly t: 'fsStart'; readonly spins: number }

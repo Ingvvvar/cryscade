@@ -24,3 +24,53 @@ export const TEST_CONFIG: GameConfig = {
 export function withCap(capX100: number): GameConfig {
   return { ...TEST_CONFIG, capX100 };
 }
+
+// TEST_CONFIG для ГСЧ не годится: ядро выпадает с вероятностью 1/8, ретриггер — 0.956 на фриспин, фича
+// надкритична. Раунд обрывает только кап 5000×: на 200 сидах 193 раунда кончаются капом, самый длинный — 23 909
+// запросов к источнику. Хеш на нём был бы замером капа, а не механики.
+
+// Надкритичный без спасения капом: кап недостижим, фича не кончается. Положительный контроль сторожа.
+export const SUPERCRITICAL_CONFIG: GameConfig = { ...TEST_CONFIG, capX100: Number.MAX_SAFE_INTEGER };
+
+// Стресс для property-тестов: частые кластеры, фичи и кап. Ядро — 16 из 1000: ретриггер 0.053 ± 0.001 на фриспин
+// (100 000 раундов, 66 551 фриспин) — вчетверо реже критических 0.2 при +5 спинов, фича кончается; за прогон
+// в 1000 раундов встречается десятки раз.
+// Кап 20× — чтобы раунды упирались в него.
+export const STRESS_CONFIG: GameConfig = {
+  ...TEST_CONFIG,
+  weights: {
+    base: [250, 200, 150, 120, 100, 80, 84, 16],
+    free: [250, 200, 150, 120, 100, 80, 84, 16],
+  },
+  capX100: 2000,
+};
+
+function deepFreeze<T extends object>(value: T): T {
+  for (const nested of Object.values(value)) {
+    if (typeof nested === 'object' && nested !== null) deepFreeze(nested as object);
+  }
+  return Object.freeze(value);
+}
+
+// Конфиг золотого хеша — свой замороженный литерал. Не DEFAULT_CONFIG: подбор весов в фазе 2 не должен его менять.
+// Не TEST_CONFIG: он надкритичен. Не ссылка на STRESS_CONFIG: подстройка стресса не должна менять хеш.
+export const GOLDEN_CONFIG: GameConfig = deepFreeze({
+  clusterMin: 5,
+  sizeBands: [5, 7, 9, 11, 13, 15],
+  paytableX100: [
+    [20, 40, 80, 150, 300, 600],
+    [25, 50, 100, 200, 400, 800],
+    [30, 60, 120, 250, 500, 1000],
+    [40, 80, 160, 300, 600, 1200],
+    [60, 120, 250, 500, 1000, 2500],
+    [80, 160, 350, 700, 1500, 4000],
+    [100, 250, 500, 1000, 2500, 10000],
+  ],
+  weights: {
+    base: [250, 200, 150, 120, 100, 80, 84, 16],
+    free: [250, 200, 150, 120, 100, 80, 84, 16],
+  },
+  freeSpinsByScatters: [0, 0, 0, 10, 12, 15, 20],
+  retrigger: { min: 3, add: 5 },
+  capX100: 2000,
+});
