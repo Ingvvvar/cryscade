@@ -73,7 +73,9 @@ export interface MathReport {
   readonly sigma: number;
   readonly sigmaBook: number;
   readonly baseRtp: number;
+  readonly baseRtpError: number;
   readonly featureRtp: number;
+  readonly featureRtpError: number;
   readonly featureShare: number;
   readonly featureShareError: number;
   readonly book: BookCorrection;
@@ -163,7 +165,9 @@ export function computeReport(plain: MathPlain, config: GameConfig): MathReport 
     sigma,
     sigmaBook: Math.sqrt(factor * meanSquare - TARGET_RTP * TARGET_RTP),
     baseRtp: base.sum / (100 * n),
+    baseRtpError: ratioError(plain.batches, (b) => b.baseX100 / 100, (b) => b.rounds),
     featureRtp: feature.sum / (100 * n),
+    featureRtpError: ratioError(plain.batches, (b) => b.featureX100 / 100, (b) => b.rounds),
     featureShare: feature.sum / total.sum,
     featureShareError: ratioError(plain.batches, (b) => b.featureX100, (b) => b.payX100),
     book: { factor, feasible: factor * winRate <= 1 },
@@ -205,15 +209,18 @@ const pct = (value: number, digits = 2): string => `${(value * 100).toFixed(digi
 const oneIn = (rate: number): string => (rate === 0 ? '—' : `1 на ${Math.round(1 / rate).toLocaleString('ru-RU')}`);
 const x = (value: number, digits = 2): string => `${value.toFixed(digits)}×`;
 
+/** Параметры прогона, от нагрузки стенда не зависящие: время и скорость в отчёт не попадают. */
 export interface RunMeta {
   readonly from: number;
   readonly threads: number;
   readonly taskSize: number;
   readonly maxRequests: number;
-  readonly seconds: number;
-  readonly environment: string;
-  readonly throughput: string | null;
 }
+
+/** Раздел скорости: его заполняет `npm run math:speed`, проверив нагрузку стенда. */
+export const SPEED_OPEN = '<!-- скорость -->';
+export const SPEED_CLOSE = '<!-- /скорость -->';
+export const SPEED_PENDING = 'Замер не проводился: `npm run math:speed` на свободной машине.';
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
   return [`| ${header.join(' | ')} |`, `|${header.map(() => '---').join('|')}|`, ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
@@ -251,8 +258,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
 
   push(
     '## Прогон',
-    `Сиды [${String(meta.from)}, ${String(meta.from + r.rounds)}) — ${r.rounds.toLocaleString('ru-RU')} раундов; потоков ${String(meta.threads)}, задача ${meta.taskSize.toLocaleString('ru-RU')} сидов; ${meta.seconds.toFixed(1)} с.`,
-    meta.environment,
+    `Сиды [${String(meta.from)}, ${String(meta.from + r.rounds)}) — ${r.rounds.toLocaleString('ru-RU')} раундов; потоков ${String(meta.threads)}, задача ${meta.taskSize.toLocaleString('ru-RU')} сидов.`,
   );
 
   push(
@@ -262,8 +268,8 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       [
         ['RTP природный', `${pct(r.rtp, 3)} ± ${pct(r.ci99, 3)} (99%), ошибка по пакетам ${pct(r.rtpError, 3)}`],
         ['Ширина 99%-интервала RTP на 10⁷ раундов', `± ${pct(r.ci99At1e7, 2)} — аргумент за книгу (§5)`],
-        ['RTP основной игры', pct(r.baseRtp)],
-        ['RTP фичи', pct(r.featureRtp)],
+        ['RTP основной игры', `${pct(r.baseRtp)} ± ${pct(r.baseRtpError)} (ошибка по пакетам)`],
+        ['RTP фичи', `${pct(r.featureRtp)} ± ${pct(r.featureRtpError)} (ошибка по пакетам)`],
         ['Доля фичи в RTP', `${pct(r.featureShare, 1)} ± ${pct(r.featureShareError, 1)}`],
         ['σ выигрыша за раунд', `${x(r.sigma)} природная, ${x(r.sigmaBook)} после книги`],
       ],
@@ -325,7 +331,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       ]),
     ),
     table(
-      ['Наибольший множитель кластера за раунд', ...Array.from({ length: MULT_SLOTS + 1 }, (_, k) => `×${String(2 ** k)}+`)],
+      ['Наибольший множитель кластера за раунд', ...Array.from({ length: MULT_SLOTS }, (_, k) => (k === 0 ? 'нет кластера' : `×${String(2 ** (k - 1))}+`))],
       [['доля раундов', ...r.maxMult.map((share) => pct(share, 4))]],
     ),
     table(
@@ -356,7 +362,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
     `Порог ${meta.maxRequests.toLocaleString('ru-RU')} запросов к источнику за раунд. Самый длинный раунд — ${r.longest.requests.toLocaleString('ru-RU')} (сид ${String(r.longest.seed)}); в среднем ${r.meanRequests.toFixed(1)}.`,
   );
 
-  if (meta.throughput !== null) push('## Пропускная способность', '> Замер стенда, не телефона; плавает от прогона к прогону.', meta.throughput);
+  push('## Пропускная способность', '> Замер стенда, не телефона. Пишет его `npm run math:speed` — только если стенд свободен.', SPEED_OPEN, SPEED_PENDING, SPEED_CLOSE);
 
   return `${lines.join('\n').trimEnd()}\n`;
 }

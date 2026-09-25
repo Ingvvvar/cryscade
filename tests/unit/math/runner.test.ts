@@ -11,7 +11,7 @@ import { WATCHDOG_LIMIT } from '../../support/watchdog.ts';
 
 const PLAN: SimulationPlan = { config: STRESS_CONFIG, from: 0, rounds: 40_000, taskSize: 5000, maxRequests: WATCHDOG_LIMIT };
 
-const META = { from: 0, threads: 0, taskSize: 5000, maxRequests: WATCHDOG_LIMIT, seconds: 0, environment: '', throughput: null };
+const META = { from: 0, threads: 0, taskSize: 5000, maxRequests: WATCHDOG_LIMIT };
 const markdown = (plain: MathPlain): string => renderMarkdown(computeReport(plain, PLAN.config), PLAN.config, META);
 function withoutBatches(plain: MathPlain): Record<string, unknown> {
   return Object.fromEntries(Object.entries(plain).filter(([key]) => key !== 'batches'));

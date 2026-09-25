@@ -46,7 +46,7 @@ function plainOf(): MathPlain {
     freeSpins: 12,
     retriggers: 1,
     cascades: new Float64Array(2 * CASCADE_SLOTS),
-    maxMult: new Float64Array(MULT_SLOTS + 1),
+    maxMult: new Float64Array(MULT_SLOTS),
     maxLevel: new Float64Array(LEVEL_SLOTS),
     usage,
     clusters: new Float64Array(cells),
@@ -130,9 +130,6 @@ describe('отчёт на литеральном распределении', ()
       threads: 1,
       taskSize: 11,
       maxRequests: 100,
-      seconds: 1,
-      environment: 'стенд',
-      throughput: null,
     });
     const lines = text.split('\n');
     const tableStarts = lines.flatMap((line, index) => (line.startsWith('| ') && !(lines[index - 1] ?? '').startsWith('|') ? [index] : []));

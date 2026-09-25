@@ -4,8 +4,11 @@ import { PAYING_SYMBOL_COUNT } from '../../src/core/model/symbols.ts';
 // Сборщик статистики симулятора. Копит только целые — гистограммы, счётчики, суммы — и сливается точным
 // сложением: итог не зависит от того, какой поток какую задачу посчитал. Дробные числа — только в отчёте.
 
-/** Наибольший множитель кластера за раунд — по степеням двойки: ячейка k — от 2^k до 2^(k+1) − 1. 49 × 128 < 2^13. */
-export const MULT_SLOTS = 13;
+/**
+ * Наибольший множитель кластера за раунд: ячейка 0 — кластеров не было, ячейка k ≥ 1 — от 2^(k−1) до 2^k − 1.
+ * 49 × 128 = 6272 < 2^13, поэтому ячеек 14.
+ */
+export const MULT_SLOTS = 14;
 export const LEVEL_SLOTS = 9;
 export const AWARD_SLOTS = 64;
 /** Наибольший кап для гистограмм: 10 000× ставки, три гистограммы по 8 МБ на поток. */
@@ -83,7 +86,7 @@ export class MathStats {
   readonly #feature: Float64Array;
   readonly #awards = new Float64Array(AWARD_SLOTS);
   readonly #cascades = new Float64Array(2 * CASCADE_SLOTS);
-  readonly #maxMult = new Float64Array(MULT_SLOTS + 1);
+  readonly #maxMult = new Float64Array(MULT_SLOTS);
   readonly #maxLevel = new Float64Array(LEVEL_SLOTS);
   readonly #usage: Float64Array;
   readonly #clusters: Float64Array;
@@ -135,7 +138,7 @@ export class MathStats {
       this.#freeSpins += stats.freeSpins;
       this.#retriggers += stats.retriggers;
     }
-    const multSlot = stats.maxClusterMult === 0 ? 0 : 31 - Math.clz32(stats.maxClusterMult);
+    const multSlot = stats.maxClusterMult === 0 ? 0 : 32 - Math.clz32(stats.maxClusterMult);
     this.#maxMult[multSlot] = (this.#maxMult[multSlot] ?? 0) + 1;
     this.#maxLevel[stats.maxLevel] = (this.#maxLevel[stats.maxLevel] ?? 0) + 1;
     stats.addCascadesTo(this.#cascades);

@@ -15,7 +15,10 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "hello": "node tools/hello.ts",
-    "math": "node tools/math/simulate.ts"
+    "math": "node tools/math/simulate.ts",
+    "math:quick": "node tools/math/quick.ts",
+    "math:speed": "node tools/math/speed.ts",
+    "math:tune": "node tools/math/tune.ts"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.3.0",

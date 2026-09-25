@@ -15,7 +15,7 @@ const SEED = fc.integer({ min: 0, max: 0xffffffff });
 
 const CONFIGS: readonly [string, GameConfig][] = [
   ['стресс', STRESS_CONFIG],
-  ['черновик игры', DEFAULT_CONFIG],
+  ['игра', DEFAULT_CONFIG],
 ];
 
 function endOf(events: readonly RoundEvent[]): number | null {
