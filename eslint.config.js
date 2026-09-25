@@ -6,7 +6,11 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 // Node 24+ импортирует .ts сам (type stripping) — правило пишется на TS без сборки.
+import { deterministicMath } from './lint/deterministic-math.ts';
 import { noModuleState } from './lint/no-module-state.ts';
+
+// Свои правила — один объект плагина: ESLint не даёт определить плагин с тем же именем дважды.
+const cryscade = { rules: { 'no-module-state': noModuleState, 'deterministic-math': deterministicMath } };
 
 // Зеркало границ §3. Линтер видит только строку импорта, поэтому правила — по сегментам пути.
 // Источник истины — тест графа импортов: он разрешает реальные пути и проверяет замыкание.
@@ -89,7 +93,7 @@ export default defineConfig([
   {
     // ООП в коде игры (CLAUDE.md). tests/ и tools/ не затрагивает.
     files: ['src/**'],
-    plugins: { cryscade: { rules: { 'no-module-state': noModuleState } } },
+    plugins: { cryscade },
     rules: {
       'cryscade/no-module-state': 'error',
       '@typescript-eslint/prefer-readonly': 'error',
@@ -122,5 +126,11 @@ export default defineConfig([
       ],
       'no-restricted-properties': ['error', { object: 'Math', property: 'random', message: 'В core/ нет Math.random.' }],
     },
+  },
+
+  {
+    // Детерминизм между движками JS (§4.7): книгу строит V8, повтор может пересчитать Safari.
+    files: ['src/core/engine/**', 'src/core/rng/**', 'src/core/money.ts'],
+    rules: { 'cryscade/deterministic-math': 'error' },
   },
 ]);
