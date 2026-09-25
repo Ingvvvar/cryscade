@@ -5,6 +5,8 @@ import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
+// Node 24+ импортирует .ts сам (type stripping) — правило пишется на TS без сборки.
+import { noModuleState } from './lint/no-module-state.ts';
 
 // Зеркало границ §3. Линтер видит только строку импорта, поэтому правила — по сегментам пути.
 // Источник истины — тест графа импортов: он разрешает реальные пути и проверяет замыкание.
@@ -41,6 +43,9 @@ const boundary = (files, patterns) => ({
   files,
   rules: { 'no-restricted-imports': ['error', { patterns }] },
 });
+
+// ООП (CLAUDE.md): приватное — через #, не private.
+const NO_PRIVATE = { selector: '[accessibility="private"]', message: 'Приватное — через #, не private.' };
 
 const CORE_LEAVE = leave(['protocol', 'server', 'client', 'render', 'ui', 'audio', 'tools']);
 const CORE_PURE = ['src/core/model/**', 'src/core/fsm/**', 'src/core/presentation/**', 'src/core/money.ts', 'src/core/jurisdiction.ts'];
@@ -82,10 +87,26 @@ export default defineConfig([
   boundary(['tools/**'], [packagesExcept(['node:[^/]+']), leave(['client', 'render', 'ui', 'audio'])]),
 
   {
+    // ООП в коде игры (CLAUDE.md). tests/ и tools/ не затрагивает.
+    files: ['src/**'],
+    plugins: { cryscade: { rules: { 'no-module-state': noModuleState } } },
+    rules: {
+      'cryscade/no-module-state': 'error',
+      '@typescript-eslint/prefer-readonly': 'error',
+      'no-restricted-syntax': ['error', NO_PRIVATE],
+    },
+  },
+
+  {
     // Файл в src/ вне модулей таблицы §3 — нарушение, а не слепая зона.
+    // no-restricted-syntax здесь заменяет правило блока выше, поэтому NO_PRIVATE повторён.
     files: ['src/*', 'src/!(core|protocol|server|client|render|ui|audio)/**'],
     rules: {
-      'no-restricted-syntax': ['error', { selector: 'Program', message: 'Граница §3: файл в src/ вне модулей таблицы.' }],
+      'no-restricted-syntax': [
+        'error',
+        NO_PRIVATE,
+        { selector: 'Program', message: 'Граница §3: файл в src/ вне модулей таблицы.' },
+      ],
     },
   },
 
