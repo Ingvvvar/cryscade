@@ -1,4 +1,5 @@
-// Семейства параметров подбора: веса по ярусам — геометрически, таблица — черновик §4.4 × k с «красивым» округлением.
+// Семейства параметров подбора: веса по ярусам — геометрически, таблица — черновик §4.4 × k × (полоса + 1)^крутизна
+// с «красивым» округлением. Крутизна — один параметр на всю таблицу: крупные кластеры дороже, мелкие дешевле.
 // Структура не меняется: 7 символов, 6 полос, награды и ретриггер — как в §4.2.
 
 export const WEIGHT_TOTAL = 10_000;
@@ -35,9 +36,14 @@ export const DRAFT_PAYTABLE_X100: readonly (readonly number[])[] = [
   [100, 250, 500, 1000, 2500, 10000],
 ];
 
-/** Черновик × k с округлением до целых сотых — для стадий подбора до красивого округления. */
-export function scaledTable(k: number): number[][] {
-  return DRAFT_PAYTABLE_X100.map((row) => row.map((value) => Math.max(1, Math.round(value * k))));
+/** Множитель полосы b (0 — полоса 5–6) при крутизне s: (b + 1)^s. При s = 0 — равномерный масштаб. */
+export function bandFactor(band: number, steepness: number): number {
+  return (band + 1) ** steepness;
+}
+
+/** Черновик × k × крутизна с округлением до целых сотых — для стадий подбора до красивого округления. */
+export function scaledTable(k: number, steepness = 0): number[][] {
+  return DRAFT_PAYTABLE_X100.map((row) => row.map((value, band) => Math.max(1, Math.round(value * k * bandFactor(band, steepness)))));
 }
 
 /** Шаг красивого значения: ниже 1× — 0.05, до 10× — 0.1, от 10× — 1×. */
@@ -52,9 +58,9 @@ export function niceValueX100(valueX100: number): number {
   return Math.max(step, Math.round(valueX100 / step) * step);
 }
 
-/** Черновик × k с красивым округлением; порядок по полосам и по ярусам сохраняется нестрого. */
-export function niceTable(k: number): number[][] {
-  return DRAFT_PAYTABLE_X100.map((row) => row.map((value) => niceValueX100(value * k)));
+/** Черновик × k × крутизна с красивым округлением; порядок по полосам и по ярусам сохраняется нестрого. */
+export function niceTable(k: number, steepness = 0): number[][] {
+  return DRAFT_PAYTABLE_X100.map((row) => row.map((value, band) => niceValueX100(value * k * bandFactor(band, steepness))));
 }
 
 /** Выплата не убывает по полосам и по ярусам: крупный кластер и старший символ не платят меньше. */

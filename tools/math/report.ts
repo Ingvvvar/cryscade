@@ -284,9 +284,9 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       ['Показатель', 'Природный', 'После книги', 'Цель §4.5'],
       [
         ['Выигрыш', pct(r.winRate), pct(r.winRate * r.book.factor), '25–35%'],
-        ['Выигрыш больше ставки', pct(r.overBetRate), pct(r.overBetRate * r.book.factor), '8–12% (мягкая)'],
+        ['Выигрыш больше ставки', pct(r.overBetRate), pct(r.overBetRate * r.book.factor), '8–12%'],
         ['Фича', oneIn(r.featureRate), oneIn(r.featureRate * r.book.factor), '1 на 150–250'],
-        ['Кап', oneIn(r.caps / r.rounds), oneIn((r.caps / r.rounds) * r.book.factor), '≥ 50 на 10⁸ (мягкая)'],
+        ['Кап', oneIn(r.caps / r.rounds), oneIn((r.caps / r.rounds) * r.book.factor), 'не реже 50 на 10⁸'],
       ],
     ),
     `Среди выигрышей не больше ставки: ${pct(r.smallWinShare, 1)} — их строгий пресет не празднует.`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { geometricWeights, isMonotone, niceTable, niceValueX100 } from '../../../tools/math/shape.ts';
+import { geometricWeights, isMonotone, niceTable, niceValueX100, scaledTable } from '../../../tools/math/shape.ts';
 
 describe('веса по ярусам', () => {
   it('поровну: 9930 / 7 = 1418.57 — остаток 4 младшим символам при равных дробных частях', () => {
@@ -52,6 +52,12 @@ describe('красивое округление', () => {
       [80, 160, 350, 700, 1500, 4000],
       [100, 250, 500, 1000, 2500, 10000],
     ]);
+  });
+
+  it('крутизна: полоса b умножается на (b + 1)^s — при s = 2 это 1, 4, 9, 16, 25, 36', () => {
+    // Кварц черновика 0.20 / 0.40 / 0.80 / 1.50 / 3 / 6 при k = 1.
+    expect(niceTable(1, 2)[0]).toStrictEqual([20, 160, 720, 2400, 7500, 21600]);
+    expect(scaledTable(1.5, 1)[6]).toStrictEqual([150, 750, 2250, 6000, 18750, 90000]);
   });
 
   it('монотонность: по полосам и по ярусам не убывает', () => {
