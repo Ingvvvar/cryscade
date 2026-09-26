@@ -1,9 +1,10 @@
 // Пропускная способность одного ядра: node tools/math/speed.ts [--threshold=2] [--control]
-// Пишет раздел «Пропускная способность» в docs/math.md между маркерами. Средняя нагрузка за минуту выше порога
-// до или после замера — число не пишется: «стенд занят» с цифрами нагрузки.
+// Пишет раздел «Пропускная способность» в docs/math.md между маркерами. Сначала ждёт до 5 минут, пока средняя
+// нагрузка за минуту опустится до порога: хвост своего же прогона спадает несколько минут. Не опустилась — или
+// поднялась за время замера — число не пишется: «стенд занят» с цифрами нагрузки.
 // Порог 2: свой поток замера добавляет к нагрузке до 1, ещё 1 — запас на фон системы.
-// --control — положительный контроль: сама нагружает все ядра, ждёт, пока нагрузка перейдёт порог,
-// и обязана отказаться; числа в отчёт не пишет, код выхода 0 — только если отказалась.
+// --control — положительный контроль: нагружает все ядра, ждёт, пока нагрузка перейдёт порог, и держит нагрузку
+// всё ожидание замера; замер обязан отказаться. Числа в отчёт не пишет, код выхода 0 — только если отказался.
 import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { Worker } from 'node:worker_threads';
@@ -11,19 +12,21 @@ import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { flag, option } from './args.ts';
 import { SPEED_CLOSE, SPEED_OPEN } from './report.ts';
 import { SIMULATOR_MAX_REQUESTS } from './limits.ts';
-import { verdict, type Verdict } from './speed-verdict.ts';
+import { verdict, waitForIdle, type Clock, type Verdict } from './speed-verdict.ts';
 import { measureThroughput } from './throughput.ts';
 
 const REPORT = 'docs/math.md';
 const threshold = option('threshold', 2);
+const WAIT_MS = option('wait', 300) * 1000;
+const clock: Clock = { now: () => performance.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
 const minuteLoad = (): number => os.loadavg()[0] ?? Number.NaN;
 const environment = `${os.cpus()[0]?.model ?? 'неизвестный CPU'}, ядер ${String(os.availableParallelism())}; Node ${process.version}, V8 ${process.versions.v8}.`;
 
-function measure(): Verdict {
-  const before = minuteLoad();
-  if (before > threshold) return verdict({ before, after: Number.NaN, threshold }, null, environment);
+async function measure(): Promise<Verdict> {
+  const wait = await waitForIdle(minuteLoad, threshold, WAIT_MS, clock);
+  if (!wait.idle) return verdict({ before: wait.load, after: Number.NaN, threshold, waitedMs: wait.waitedMs }, null, environment);
   const speed = measureThroughput(DEFAULT_CONFIG, SIMULATOR_MAX_REQUESTS);
-  return verdict({ before, after: minuteLoad(), threshold }, speed, environment);
+  return verdict({ before: wait.load, after: minuteLoad(), threshold, waitedMs: wait.waitedMs }, speed, environment);
 }
 
 async function control(): Promise<void> {
@@ -34,7 +37,7 @@ async function control(): Promise<void> {
       if (performance.now() > deadline) throw new Error(`контроль: нагрузка не поднялась выше ${String(threshold)} за 3 минуты`);
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    const result = measure();
+    const result = await measure();
     console.log(result.text);
     if (result.measured) {
       console.log('КОНТРОЛЬ ПРОВАЛЕН: под искусственной нагрузкой замер записал число.');
@@ -50,7 +53,7 @@ async function control(): Promise<void> {
 if (flag('control')) {
   await control();
 } else {
-  const result = measure();
+  const result = await measure();
   console.log(result.text);
   const report = readFileSync(REPORT, 'utf8');
   const open = report.indexOf(SPEED_OPEN);

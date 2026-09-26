@@ -253,7 +253,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       ['Символ', ...bandLabels],
       SYMBOL_NAMES.map((name, symbol) => [name, ...(config.paytableX100[symbol] ?? []).map((value) => x(value / 100))]),
     ),
-    `Кап ${x(config.capX100 / 100, 0)}; ядра ${config.freeSpinsByScatters.map(String).join(' / ')}; ретриггер ${String(config.retrigger.min)}+ → +${String(config.retrigger.add)}.`,
+    `Кап ${x(config.capX100 / 100, 0)}; ядра ${config.freeSpinsByScatters.map(String).join(' / ')}; ретриггер ${String(config.retrigger.min)}+ → +${String(config.retrigger.add)}. Самая дорогая клетка — ${x(Math.max(...config.paytableX100.flat()) / 100, 0)} (ограничение — не дороже 1000×: до капа доводят множители и каскады, а не один кластер).`,
   );
 
   push(
@@ -284,9 +284,9 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       ['Показатель', 'Природный', 'После книги', 'Цель §4.5'],
       [
         ['Выигрыш', pct(r.winRate), pct(r.winRate * r.book.factor), '25–35%'],
-        ['Выигрыш больше ставки', pct(r.overBetRate), pct(r.overBetRate * r.book.factor), '8–12%'],
+        ['Выигрыш больше ставки', pct(r.overBetRate), pct(r.overBetRate * r.book.factor), '8.5–11.5% (8–12% с запасом 0.5 п.п.)'],
         ['Фича', oneIn(r.featureRate), oneIn(r.featureRate * r.book.factor), '1 на 150–250'],
-        ['Кап', oneIn(r.caps / r.rounds), oneIn((r.caps / r.rounds) * r.book.factor), 'не реже 50 на 10⁸'],
+        ['Кап', oneIn(r.caps / r.rounds), oneIn((r.caps / r.rounds) * r.book.factor), 'от 50 до 200 на 10⁸'],
       ],
     ),
     `Среди выигрышей не больше ставки: ${pct(r.smallWinShare, 1)} — их строгий пресет не празднует.`,
@@ -342,7 +342,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
 
   push(
     '## Кап и хвост',
-    `Кап ${x(r.capX100 / 100, 0)}: ${r.caps.toLocaleString('ru-RU')} раз, ${oneIn(r.caps / r.rounds)} природно. Самый крупный выигрыш — ${x(r.top.x)} (сид ${String(r.top.seed)}).`,
+    `Кап ${x(r.capX100 / 100, 0)}: ${r.caps.toLocaleString('ru-RU')} раз, ${oneIn(r.caps / r.rounds)} природно, ${pct((r.caps * r.capX100) / (100 * r.rounds), 2)} RTP. Самый крупный выигрыш — ${x(r.top.x)} (сид ${String(r.top.seed)}).`,
     `Выше 1000×: ${pct((r.buckets.slice(-3).reduce((a, b) => a + b.natural, 0)), 5)} раундов. Мало событий в верхних корзинах — это видно по их долям; прогноз хвоста не лучше их числа.`,
   );
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { geometricWeights, isMonotone, niceTable, niceValueX100, scaledTable } from '../../../tools/math/shape.ts';
+import { MAX_CELL_X100, geometricWeights, isMonotone, maxCellX100, niceTable, niceValueX100, scaledTable } from '../../../tools/math/shape.ts';
 
 describe('веса по ярусам', () => {
   it('поровну: 9930 / 7 = 1418.57 — остаток 4 младшим символам при равных дробных частях', () => {
@@ -54,10 +54,17 @@ describe('красивое округление', () => {
     ]);
   });
 
-  it('крутизна: полоса b умножается на (b + 1)^s — при s = 2 это 1, 4, 9, 16, 25, 36', () => {
-    // Кварц черновика 0.20 / 0.40 / 0.80 / 1.50 / 3 / 6 при k = 1.
-    expect(niceTable(1, 2)[0]).toStrictEqual([20, 160, 720, 2400, 7500, 21600]);
-    expect(scaledTable(1.5, 1)[6]).toStrictEqual([150, 750, 2250, 6000, 18750, 90000]);
+  it('дешевеет только полоса 5–6: × m, остальные — черновик × k', () => {
+    // Кварц черновика 0.20 / 0.40 / 0.80 / 1.50 / 3 / 6, Бриллиант 1 / 2.50 / 5 / 10 / 25 / 100; k = 10, m = 0.15.
+    expect(niceTable(10, 0.15)[0]).toStrictEqual([30, 400, 800, 1500, 3000, 6000]);
+    expect(niceTable(10, 0.15)[6]).toStrictEqual([150, 2500, 5000, 10000, 25000, 100000]);
+    expect(scaledTable(1.5, 0.5)[6]).toStrictEqual([75, 375, 750, 1500, 3750, 15000]);
+  });
+
+  it('самая дорогая клетка и предел 1000×', () => {
+    expect(maxCellX100(niceTable(10, 0.15))).toBe(100_000);
+    expect(maxCellX100(niceTable(10, 0.15))).toBeLessThanOrEqual(MAX_CELL_X100);
+    expect(maxCellX100(niceTable(10.1, 0.15))).toBeGreaterThan(MAX_CELL_X100);
   });
 
   it('монотонность: по полосам и по ярусам не убывает', () => {
