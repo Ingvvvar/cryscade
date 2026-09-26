@@ -1,8 +1,18 @@
-// Решение замера скорости по нагрузке стенда. Число пишется, только если средняя нагрузка за минуту не выше порога
-// и до замера, и после; иначе — «стенд занят» с цифрами, без числа. До отказа замер ждёт, пока нагрузка спадёт:
-// хвост своего же прогона держит среднюю за минуту ещё несколько минут.
+// Решение замера скорости по нагрузке стенда. Порог относительный: средняя нагрузка за минуту не выше 0.4 × число
+// логических ядер. Число пишется, только если нагрузка не выше порога и до замера, и после; иначе — «стенд занят»
+// с цифрами, без числа. До отказа замер ждёт, пока нагрузка спадёт: хвост своего же прогона держит среднюю
+// за минуту ещё несколько минут.
+
+/** Доля логических ядер, до которой стенд считается свободным. */
+export const LOAD_SHARE = 0.4;
+
+export function loadThreshold(cores: number): number {
+  return LOAD_SHARE * cores;
+}
 
 export interface Load {
+  /** Логических ядер: порог — LOAD_SHARE × ядра. */
+  readonly cores: number;
   readonly before: number;
   readonly after: number;
   readonly threshold: number;
@@ -44,7 +54,9 @@ const rate = (value: number): string => Math.round(value).toLocaleString('ru-RU'
 
 export function verdict(load: Load, speed: Speed | null, environment: string): Verdict {
   const waited = `ждал ${String(Math.round(load.waitedMs / 1000))} с`;
-  const loads = `нагрузка ${load.before.toFixed(2)} до и ${Number.isNaN(load.after) ? '—' : load.after.toFixed(2)} после при пороге ${load.threshold.toFixed(2)}, ${waited}`;
+  const loads =
+    `ядер ${String(load.cores)}, порог ${load.threshold.toFixed(2)} (${String(LOAD_SHARE)} × ядра), ` +
+    `нагрузка ${load.before.toFixed(2)} до и ${Number.isNaN(load.after) ? '—' : load.after.toFixed(2)} после, ${waited}`;
   if (speed === null || load.before > load.threshold || !(load.after <= load.threshold)) {
     return {
       measured: false,

@@ -1,8 +1,9 @@
-// Пропускная способность одного ядра: node tools/math/speed.ts [--threshold=2] [--control]
+// Пропускная способность одного ядра: node tools/math/speed.ts [--wait=300] [--control]
 // Пишет раздел «Пропускная способность» в docs/math.md между маркерами. Сначала ждёт до 5 минут, пока средняя
 // нагрузка за минуту опустится до порога: хвост своего же прогона спадает несколько минут. Не опустилась — или
 // поднялась за время замера — число не пишется: «стенд занят» с цифрами нагрузки.
-// Порог 2: свой поток замера добавляет к нагрузке до 1, ещё 1 — запас на фон системы.
+// Порог — 0.4 × число логических ядер (os.availableParallelism()): свой поток замера добавляет к нагрузке до 1,
+// остальное — запас на фон системы; абсолютный порог не учитывал размер машины.
 // --control — положительный контроль: нагружает все ядра, ждёт, пока нагрузка перейдёт порог, и держит нагрузку
 // всё ожидание замера; замер обязан отказаться. Числа в отчёт не пишет, код выхода 0 — только если отказался.
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -12,11 +13,12 @@ import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { flag, option } from './args.ts';
 import { SPEED_CLOSE, SPEED_OPEN } from './report.ts';
 import { SIMULATOR_MAX_REQUESTS } from './limits.ts';
-import { verdict, waitForIdle, type Clock, type Verdict } from './speed-verdict.ts';
+import { loadThreshold, verdict, waitForIdle, type Clock, type Verdict } from './speed-verdict.ts';
 import { measureThroughput } from './throughput.ts';
 
 const REPORT = 'docs/math.md';
-const threshold = option('threshold', 2);
+const cores = os.availableParallelism();
+const threshold = loadThreshold(cores);
 const WAIT_MS = option('wait', 300) * 1000;
 const clock: Clock = { now: () => performance.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
 const minuteLoad = (): number => os.loadavg()[0] ?? Number.NaN;
@@ -24,9 +26,9 @@ const environment = `${os.cpus()[0]?.model ?? 'неизвестный CPU'}, я�
 
 async function measure(): Promise<Verdict> {
   const wait = await waitForIdle(minuteLoad, threshold, WAIT_MS, clock);
-  if (!wait.idle) return verdict({ before: wait.load, after: Number.NaN, threshold, waitedMs: wait.waitedMs }, null, environment);
+  if (!wait.idle) return verdict({ cores, before: wait.load, after: Number.NaN, threshold, waitedMs: wait.waitedMs }, null, environment);
   const speed = measureThroughput(DEFAULT_CONFIG, SIMULATOR_MAX_REQUESTS);
-  return verdict({ before: wait.load, after: minuteLoad(), threshold, waitedMs: wait.waitedMs }, speed, environment);
+  return verdict({ cores, before: wait.load, after: minuteLoad(), threshold, waitedMs: wait.waitedMs }, speed, environment);
 }
 
 async function control(): Promise<void> {
