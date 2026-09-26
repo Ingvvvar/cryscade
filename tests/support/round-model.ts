@@ -24,6 +24,8 @@ export interface RoundFacts {
   readonly longestCascade: number;
   /** Наибольший уровень точки за раунд. */
   readonly topLevel: number;
+  /** Наибольший множитель кластера за раунд; 0 — кластеров не было. */
+  readonly maxClusterMult: number;
   /** Самая большая связная группа ядер на сетке за раунд. */
   readonly largestCoreGroup: number;
   /** Ядер на сетке в конце основного спина — и тогда, когда его оборвал кап. */
@@ -97,6 +99,7 @@ class RoundModel {
   #retriggers = 0;
   #longest = 0;
   #topLevel = 0;
+  #maxClusterMult = 0;
   #largestCoreGroup = 0;
 
   constructor(config: GameConfig, events: readonly RoundEvent[]) {
@@ -143,6 +146,7 @@ class RoundModel {
       capped: this.#capped,
       longestCascade: this.#longest,
       topLevel: this.#topLevel,
+      maxClusterMult: this.#maxClusterMult,
       largestCoreGroup: this.#largestCoreGroup,
       baseCores,
       baseCapped: !baseDone,
@@ -167,6 +171,7 @@ class RoundModel {
         return { symbol, cells, payX100: this.#tableX100(symbol, cells.length) * mult, mult };
       });
       this.#expect(this.#take('win').clusters, expected, 'win: кластеры, множители, выплаты');
+      for (const cluster of expected) this.#maxClusterMult = Math.max(this.#maxClusterMult, cluster.mult);
       this.#total += expected.reduce((sum, cluster) => sum + cluster.payX100, 0);
       if (this.#total >= this.#config.capX100) {
         this.#total = this.#config.capX100;

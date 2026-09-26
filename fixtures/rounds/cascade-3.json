@@ -1,0 +1,24 @@
+{
+  "name": "cascade-3",
+  "description": "Каскад в три шага и больше в основной игре, без фичи.",
+  "seed": 512,
+  "config": "DEFAULT_CONFIG",
+  "configSha256": "d73090f232d26c55ffdc5b576c5913295ed6af89b1bbe939e641b78790f46401",
+  "payX100": 155,
+  "events": [
+    {"t":"fill","grid":[3,0,2,6,0,4,0,0,1,1,5,1,5,5,0,1,4,0,5,3,3,4,4,4,4,2,3,1,1,1,1,4,5,4,4,0,3,2,1,6,5,2,0,6,3,4,2,2,2]},
+    {"t":"win","clusters":[{"symbol":4,"cells":[16,21,22,23,24,31],"payX100":90,"mult":1}]},
+    {"t":"explode","cells":[16,21,22,23,24,31]},
+    {"t":"spots","cells":[16,21,22,23,24,31],"levels":[1,1,1,1,1,1]},
+    {"t":"refill","moves":[[14,21],[7,14],[0,7],[15,22],[8,15],[1,8],[9,23],[2,16],[17,31],[10,24],[3,17]],"drops":[{"cell":0,"symbol":4},{"cell":1,"symbol":5},{"cell":2,"symbol":6},{"cell":3,"symbol":3},{"cell":9,"symbol":0},{"cell":10,"symbol":1}]},
+    {"t":"win","clusters":[{"symbol":1,"cells":[15,22,23,28,29,30],"payX100":35,"mult":1}]},
+    {"t":"explode","cells":[15,22,23,28,29,30]},
+    {"t":"spots","cells":[15,22,23,28,29,30],"levels":[1,2,2,1,1,1]},
+    {"t":"refill","moves":[[21,28],[14,21],[7,14],[0,7],[8,29],[1,22],[16,30],[9,23],[2,16]],"drops":[{"cell":0,"symbol":3},{"cell":1,"symbol":3},{"cell":2,"symbol":0},{"cell":8,"symbol":3},{"cell":9,"symbol":0},{"cell":15,"symbol":0}]},
+    {"t":"win","clusters":[{"symbol":0,"cells":[21,28,29,35,42],"payX100":30,"mult":1}]},
+    {"t":"explode","cells":[21,28,29,35,42]},
+    {"t":"spots","cells":[21,28,29,35,42],"levels":[2,2,2,1,1]},
+    {"t":"refill","moves":[[14,42],[7,35],[0,28],[22,29],[15,22],[8,15],[1,8]],"drops":[{"cell":0,"symbol":1},{"cell":1,"symbol":0},{"cell":7,"symbol":2},{"cell":14,"symbol":1},{"cell":21,"symbol":1}]},
+    {"t":"end","payX100":155}
+  ]
+}
