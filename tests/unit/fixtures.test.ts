@@ -28,7 +28,7 @@ const CONDITIONS: Record<string, ((facts: RoundFacts) => boolean) | null> = {
   'small-win': (f) => f.payX100 > 0 && f.payX100 <= 100 && !f.featured,
   'base-win': (f) => f.payX100 > 100 && f.longestCascade === 1 && !f.featured,
   'cascade-3': (f) => f.longestCascade >= 3 && !f.featured,
-  'multiplier-8': (f) => f.maxClusterMult >= 8,
+  'multiplier-8': (f) => f.maxClusterMult >= 8 && !f.featured,
   'feature-start': (f) => f.featured && f.retriggers === 0 && !f.capped,
   retrigger: (f) => f.retriggers >= 1,
   biggest: null,
@@ -40,6 +40,11 @@ const fixtures = files.map((file) => JSON.parse(readFileSync(path.join(DIR, file
 describe('фикстуры раундов', () => {
   it('набор — ровно восемь: шесть из §15 и две для строгого пресета', () => {
     expect(fixtures.map((fixture) => fixture.name).sort()).toStrictEqual(Object.keys(CONDITIONS).sort());
+  });
+
+  it('у каждой фикстуры свой раунд: сиды попарно разные', () => {
+    const seeds = fixtures.map((fixture) => fixture.seed);
+    expect(new Set(seeds).size).toBe(seeds.length);
   });
 
   describe.each(fixtures.map((fixture) => [fixture.name, fixture] as const))('%s', (name, fixture) => {

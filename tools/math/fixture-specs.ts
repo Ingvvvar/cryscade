@@ -54,7 +54,11 @@ export const FIXTURES: readonly FixtureSpec[] = [
     accepts: (r) => r.payX100 > 100 && r.baseSteps === 1 && !r.featured,
   },
   { name: 'cascade-3', description: 'Каскад в три шага и больше в основной игре, без фичи.', accepts: (r) => r.baseSteps >= 3 && !r.featured },
-  { name: 'multiplier-8', description: 'Кластер с множителем ×8 и выше.', accepts: (r) => r.maxClusterMult >= 8 },
+  {
+    name: 'multiplier-8',
+    description: 'Кластер с множителем ×8 и выше в основной игре, без фичи: множитель вырос за один спин.',
+    accepts: (r) => r.maxClusterMult >= 8 && !r.featured,
+  },
   { name: 'feature-start', description: 'Старт фичи без ретриггера и капа.', accepts: (r) => r.featured && r.retriggers === 0 && !r.capped },
   { name: 'retrigger', description: 'Фича с ретриггером.', accepts: (r) => r.retriggers >= 1 },
   { name: 'biggest', description: 'Самый крупный выигрыш на сидах отчёта [0, 10⁸), при равенстве — меньший сид.', accepts: null },
