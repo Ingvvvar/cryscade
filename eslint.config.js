@@ -81,7 +81,10 @@ export default defineConfig([
     leave(['server', 'render', 'ui', 'audio', 'tools']),
     coreOnly('(model|fsm|presentation)/|(jurisdiction|money)\\.ts$'),
   ]),
-  boundary(['src/render/**'], [packagesExcept(['pixi\\.js']), leave(['server', 'client', 'ui', 'audio', 'tools']), coreOnly('(model|presentation)/')]),
+  // Pixi — только в render/pixi/: остальной render/ без пакетов и без render/pixi/. Блок render/pixi/** идёт
+  // следом и для своих файлов заменяет правило целиком.
+  boundary(['src/render/**'], [packagesExcept([]), leave(['server', 'client', 'ui', 'audio', 'tools', 'pixi']), coreOnly('(model|presentation)/')]),
+  boundary(['src/render/pixi/**'], [packagesExcept(['pixi\\.js']), leave(['server', 'client', 'ui', 'audio', 'tools']), coreOnly('(model|presentation)/')]),
   boundary(['src/ui/**'], [
     packagesExcept(['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope']),
     leave(['server', 'tools']),

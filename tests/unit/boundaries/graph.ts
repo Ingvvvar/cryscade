@@ -29,6 +29,7 @@ export type ModuleId =
   | 'server'
   | 'client'
   | 'render'
+  | 'render/pixi'
   | 'ui'
   | 'audio'
   | 'tools';
@@ -109,6 +110,7 @@ export function moduleOf(file: string): ModuleId | null {
     if (file.startsWith(`src/core/${dir}/`)) return `core/${dir}`;
   }
   if (file.startsWith('src/core/')) return 'core/other';
+  if (file.startsWith('src/render/pixi/')) return 'render/pixi';
   for (const dir of SRC_MODULES) {
     if (file.startsWith(`src/${dir}/`)) return dir;
   }
@@ -129,6 +131,7 @@ const TOP: Readonly<Record<ModuleId, TopModule>> = {
   server: 'server',
   client: 'client',
   render: 'render',
+  'render/pixi': 'render',
   ui: 'ui',
   audio: 'audio',
   tools: 'tools',
@@ -174,9 +177,11 @@ export const RULES: Readonly<Record<ModuleId, Rule>> = {
     modules: ['client', 'core/model', 'core/fsm', 'core/presentation', 'core/jurisdiction', 'core/money', 'protocol'],
     packages: NO_PACKAGES,
   },
-  render: { modules: ['render', 'core/model', 'core/presentation'], packages: (name) => name === 'pixi.js' },
+  // Pixi — только в render/pixi/; остальной render/ — данные и функции без Pixi, их гоняют тесты в Node.
+  render: { modules: ['render', 'core/model', 'core/presentation'], packages: NO_PACKAGES },
+  'render/pixi': { modules: ['render', 'render/pixi', 'core/model', 'core/presentation'], packages: (name) => name === 'pixi.js' },
   ui: {
-    modules: ['ui', 'client', 'render', 'audio', 'core/model', 'protocol'],
+    modules: ['ui', 'client', 'render', 'render/pixi', 'audio', 'core/model', 'protocol'],
     packages: (name) =>
       ['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope'].includes(name),
   },
@@ -279,6 +284,25 @@ export function scanRepo(root: string, dirs: readonly string[] = ['src', 'tools'
     );
   }
   return { files, imports, graph };
+}
+
+/** Внешние пакеты, достижимые из start по рёбрам между файлами, вместе с пакетами самого start. */
+export function packagesReached(scan: Pick<RepoScan, 'imports' | 'graph'>, start: string): Set<string> {
+  const packages = new Set<string>();
+  const seen = new Set([start]);
+  const queue = [start];
+  for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+    for (const { target } of scan.imports.get(file) ?? []) {
+      if (target.kind === 'package') packages.add(target.name);
+    }
+    for (const next of scan.graph.get(file) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return packages;
 }
 
 /** core/, protocol/, server/ делят браузер и Node: относительный импорт — только с `.ts`, ровно в файл. */
