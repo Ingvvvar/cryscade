@@ -121,6 +121,14 @@ export function computeLayout(viewport: Viewport): Layout {
   };
 }
 
+/** Разрешение рендерера не выше 2: атлас выпечен в 2×, а на телефоне с DPR 3 это 2.25 раза меньше пикселей
+ *  полноэкранного шейдера — главного расхода кадра. */
+export const MAX_RESOLUTION = 2;
+
+export function renderResolution(devicePixelRatio: number): number {
+  return Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? Math.min(devicePixelRatio, MAX_RESOLUTION) : 1;
+}
+
 /** Прямоугольник дизайна → CSS-пиксели на экране. */
 export function toScreen(layout: Layout, rect: Rect): Rect {
   const { stage, scale } = layout;

@@ -32,9 +32,10 @@ export type ModuleId =
   | 'render/pixi'
   | 'ui'
   | 'audio'
-  | 'tools';
+  | 'tools'
+  | 'fixtures';
 
-export type TopModule = 'core' | 'protocol' | 'server' | 'client' | 'render' | 'ui' | 'audio' | 'tools';
+export type TopModule = 'core' | 'protocol' | 'server' | 'client' | 'render' | 'ui' | 'audio' | 'tools' | 'fixtures';
 
 const CODE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
 const RESOLVE_SUFFIXES = ['', '.ts', '.tsx', '/index.ts', '/index.tsx'];
@@ -115,6 +116,8 @@ export function moduleOf(file: string): ModuleId | null {
     if (file.startsWith(`src/${dir}/`)) return dir;
   }
   if (file.startsWith('tools/')) return 'tools';
+  // Записанные раунды — данные; до фазы 4 их импортирует срез в ui/ (временное ребро, // wiring).
+  if (/^fixtures\/rounds\/[^/]+\.json$/.test(file)) return 'fixtures';
   return null;
 }
 
@@ -135,6 +138,7 @@ const TOP: Readonly<Record<ModuleId, TopModule>> = {
   ui: 'ui',
   audio: 'audio',
   tools: 'tools',
+  fixtures: 'fixtures',
 };
 
 export function topModule(id: ModuleId): TopModule {
@@ -181,12 +185,14 @@ export const RULES: Readonly<Record<ModuleId, Rule>> = {
   render: { modules: ['render', 'core/model', 'core/presentation'], packages: NO_PACKAGES },
   'render/pixi': { modules: ['render', 'render/pixi', 'core/model', 'core/presentation'], packages: (name) => name === 'pixi.js' },
   ui: {
-    modules: ['ui', 'client', 'render', 'render/pixi', 'audio', 'core/model', 'protocol'],
+    // fixtures — временно, до фазы 4: срез показывает первую сетку записанного раунда (§15, фаза 3).
+    modules: ['ui', 'client', 'render', 'render/pixi', 'audio', 'core/model', 'protocol', 'fixtures'],
     packages: (name) =>
       ['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope'].includes(name),
   },
   audio: { modules: ['audio', 'core/model', 'core/presentation'], packages: NO_PACKAGES },
   tools: { modules: ['tools', ...CORE_ALL, 'server'], packages: (name) => name.startsWith('node:') },
+  fixtures: { modules: [], packages: NO_PACKAGES },
 };
 
 /** Разрешено ли прямое ребро. Возвращает причину запрета или null. */

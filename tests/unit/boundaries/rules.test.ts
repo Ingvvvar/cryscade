@@ -26,6 +26,9 @@ describe('moduleOf', () => {
     ['src/stray.ts', null],
     ['src/misc/helper.ts', null],
     ['tests/unit/x.test.ts', null],
+    ['fixtures/rounds/loss.json', 'fixtures'],
+    ['fixtures/rounds/loss.ts', null],
+    ['fixtures/other.json', null],
   ])('%s → %s', (path, expected) => {
     expect(moduleOf(path)).toBe(expected);
   });
@@ -126,6 +129,15 @@ const EDGES: [string, Target, boolean][] = [
   ['src/ui/a.tsx', file('src/core/rng/b.ts'), false],
   ['src/ui/a.tsx', file('src/server/b.ts'), false],
   ['src/ui/a.tsx', pkg('pixi.js'), false],
+  // fixtures/rounds/*.json — только ui/, временно до фазы 4
+  ['src/ui/main.tsx', file('fixtures/rounds/feature-start.json'), true],
+  ['src/ui/a.tsx', file('fixtures/other.json'), false],
+  ['src/render/pixi/a.ts', file('fixtures/rounds/a.json'), false],
+  ['src/render/a.ts', file('fixtures/rounds/a.json'), false],
+  ['src/client/a.ts', file('fixtures/rounds/a.json'), false],
+  ['src/core/model/a.ts', file('fixtures/rounds/a.json'), false],
+  ['src/server/a.ts', file('fixtures/rounds/a.json'), false],
+  ['tools/a.ts', file('fixtures/rounds/a.json'), false],
   // audio/** → core/model, core/presentation
   ['src/audio/a.ts', file('src/core/model/b.ts'), true],
   ['src/audio/a.ts', file('src/core/presentation/b.ts'), true],

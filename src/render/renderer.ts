@@ -10,6 +10,8 @@ export type RendererName = 'webgpu' | 'webgl';
 export interface RendererInfo {
   readonly name: RendererName;
   readonly gpu: string;
+  /** Программный рендер (SwiftShader, запасной адаптер WebGPU): на нём производительность не мерят. */
+  readonly software: boolean;
 }
 
 /** Жизненный цикл — для SceneMount. init асинхронный; канвас рендерер создаёт в host сам и сам убирает в destroy. */
@@ -18,9 +20,9 @@ export interface RendererLifecycle {
   destroy(): void;
 }
 
-/** Вьюпорт и reduced motion — для наблюдателя за окном. */
+/** Вьюпорт и reduced motion — для наблюдателя за окном. pixelRatio — devicePixelRatio экрана как есть. */
 export interface ViewportSink {
-  resize(viewport: Viewport): void;
+  resize(viewport: Viewport, pixelRatio: number): void;
   setReducedMotion(on: boolean): void;
 }
 

@@ -4,8 +4,10 @@ import {
   CELL,
   DESIGNS,
   FRAME_BORDER,
+  MAX_RESOLUTION,
   cellRect,
   computeLayout,
+  renderResolution,
   toScreen,
   type Insets,
   type Rect,
@@ -168,5 +170,17 @@ describe('computeLayout — свойства', () => {
         return true;
       }),
     );
+  });
+});
+
+describe('разрешение рендерера', () => {
+  it('не выше 2: DPR 3 телефона даёт 2, меньшие проходят как есть', () => {
+    expect(MAX_RESOLUTION).toBe(2);
+    expect([1, 1.5, 2, 2.625, 3].map(renderResolution)).toStrictEqual([1, 1.5, 2, 2, 2]);
+  });
+
+  it('масштаб браузера меньше 1 проходит; ноль, минус и не число — 1', () => {
+    expect(renderResolution(0.75)).toBe(0.75);
+    expect([0, -1, Number.NaN, Number.POSITIVE_INFINITY].map(renderResolution)).toStrictEqual([1, 1, 1, 1]);
   });
 });

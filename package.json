@@ -9,11 +9,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:e2e": "vite build --mode e2e --outDir dist-e2e",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "e2e": "playwright test",
+    "shots": "playwright test -c playwright.gpu.config.ts",
     "hello": "node tools/hello.ts",
     "math": "node tools/math/simulate.ts",
     "math:quick": "node tools/math/quick.ts",

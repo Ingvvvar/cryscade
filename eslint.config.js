@@ -51,11 +51,11 @@ const boundary = (files, patterns) => ({
 // ООП (CLAUDE.md): приватное — через #, не private.
 const NO_PRIVATE = { selector: '[accessibility="private"]', message: 'Приватное — через #, не private.' };
 
-const CORE_LEAVE = leave(['protocol', 'server', 'client', 'render', 'ui', 'audio', 'tools']);
+const CORE_LEAVE = leave(['protocol', 'server', 'client', 'render', 'ui', 'audio', 'tools', 'fixtures']);
 const CORE_PURE = ['src/core/model/**', 'src/core/fsm/**', 'src/core/presentation/**', 'src/core/money.ts', 'src/core/jurisdiction.ts'];
 
 export default defineConfig([
-  globalIgnores(['dist/', 'playwright-report/', 'test-results/', 'blob-report/', 'coverage/', 'reports/']),
+  globalIgnores(['dist/', 'dist-e2e/', 'playwright-report/', 'test-results/', 'blob-report/', 'coverage/', 'reports/']),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -74,24 +74,24 @@ export default defineConfig([
     CORE_LEAVE,
     pattern('(^|/)(engine|rng)(/|$)', 'Граница §3: model, money, jurisdiction, fsm, presentation не импортируют engine и rng.'),
   ]),
-  boundary(['src/protocol/**'], [packagesExcept([]), leave(['server', 'client', 'render', 'ui', 'audio', 'tools']), coreOnly('model/')]),
-  boundary(['src/server/**'], [packagesExcept([]), leave(['client', 'render', 'ui', 'audio', 'tools'])]),
+  boundary(['src/protocol/**'], [packagesExcept([]), leave(['server', 'client', 'render', 'ui', 'audio', 'tools', 'fixtures']), coreOnly('model/')]),
+  boundary(['src/server/**'], [packagesExcept([]), leave(['client', 'render', 'ui', 'audio', 'tools', 'fixtures'])]),
   boundary(['src/client/**'], [
     packagesExcept([]),
-    leave(['server', 'render', 'ui', 'audio', 'tools']),
+    leave(['server', 'render', 'ui', 'audio', 'tools', 'fixtures']),
     coreOnly('(model|fsm|presentation)/|(jurisdiction|money)\\.ts$'),
   ]),
   // Pixi — только в render/pixi/: остальной render/ без пакетов и без render/pixi/. Блок render/pixi/** идёт
   // следом и для своих файлов заменяет правило целиком.
-  boundary(['src/render/**'], [packagesExcept([]), leave(['server', 'client', 'ui', 'audio', 'tools', 'pixi']), coreOnly('(model|presentation)/')]),
-  boundary(['src/render/pixi/**'], [packagesExcept(['pixi\\.js']), leave(['server', 'client', 'ui', 'audio', 'tools']), coreOnly('(model|presentation)/')]),
+  boundary(['src/render/**'], [packagesExcept([]), leave(['server', 'client', 'ui', 'audio', 'tools', 'fixtures', 'pixi']), coreOnly('(model|presentation)/')]),
+  boundary(['src/render/pixi/**'], [packagesExcept(['pixi\\.js']), leave(['server', 'client', 'ui', 'audio', 'tools', 'fixtures']), coreOnly('(model|presentation)/')]),
   boundary(['src/ui/**'], [
     packagesExcept(['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope']),
     leave(['server', 'tools']),
     coreOnly('model/'),
   ]),
-  boundary(['src/audio/**'], [packagesExcept([]), leave(['server', 'client', 'render', 'ui', 'tools']), coreOnly('(model|presentation)/')]),
-  boundary(['tools/**'], [packagesExcept(['node:[^/]+']), leave(['client', 'render', 'ui', 'audio'])]),
+  boundary(['src/audio/**'], [packagesExcept([]), leave(['server', 'client', 'render', 'ui', 'tools', 'fixtures']), coreOnly('(model|presentation)/')]),
+  boundary(['tools/**'], [packagesExcept(['node:[^/]+']), leave(['client', 'render', 'ui', 'audio', 'fixtures'])]),
 
   {
     // ООП в коде игры (CLAUDE.md). tests/ и tools/ не затрагивает.

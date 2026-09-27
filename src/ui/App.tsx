@@ -1,10 +1,9 @@
-import { gameTitle } from '../core/model/game.ts';
+import { SceneHost, type SceneHostProps } from './scene-host.tsx';
 
-export function App() {
+export function App(props: SceneHostProps) {
   return (
-    <main className="stub">
-      <h1>{gameTitle()}</h1>
-      <p>Каркас гри. Кристали з'являться згодом.</p>
+    <main className="app">
+      <SceneHost {...props} />
     </main>
   );
 }

@@ -7,7 +7,9 @@
     "types": ["vite/client"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    // Сетка фикстуры в срезе фазы 3 — JSON из fixtures/rounds/ (временное ребро ui → fixtures, §3).
+    "resolveJsonModule": true
   },
   "include": ["src/**/*"],
   "exclude": ["src/server/**/*"]

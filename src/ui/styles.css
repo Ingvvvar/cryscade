@@ -1,8 +1,14 @@
+/* Палитра §9. Размеры панели — в единицах дизайна: --u = CSS-пикселей на единицу, ставит муляж панели. */
 :root {
   color-scheme: dark;
-  --bg: #0b0f1a;
-  --fg: #e8ecf5;
-  --muted: #9aa6bf;
+  --cave-0: #050814;
+  --cave-1: #0b1230;
+  --cave-2: #13204a;
+  --glow: #3fe0d0;
+  --frame: #9fb4e8;
+  --warm: #ffc46b;
+  --text: #eef3ff;
+  --muted: #8a97c4;
   font-family: 'Manrope Variable', system-ui, sans-serif;
 }
 
@@ -10,29 +16,153 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--fg);
+  overflow: hidden;
+  background: var(--cave-0);
+  color: var(--text);
 }
 
-#root {
-  min-height: 100%;
-  display: grid;
-  place-items: center;
+#root,
+.app,
+.scene,
+.scene-host {
+  position: fixed;
+  inset: 0;
 }
 
-.stub {
-  padding: 16px;
-  text-align: center;
+.scene-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
 }
 
-.stub h1 {
-  margin: 0 0 0.5em;
+/* env() из JS не читается: отступы безопасной зоны — вычисленные поля скрытого элемента. */
+.safe-area-probe {
+  position: fixed;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Оверлей над живой сценой пропускает тап на канвас; интерактивным детям — auto (§11). */
+.panel {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.zone {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 16);
+}
+
+.panel button {
+  pointer-events: auto;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  background: rgb(11 18 48 / 0.82);
+  border: calc(var(--u) * 1.5) solid rgb(159 180 232 / 0.35);
+  border-radius: calc(var(--u) * 16);
+}
+
+.panel button:focus-visible {
+  outline: calc(var(--u) * 3) solid var(--glow);
+  outline-offset: calc(var(--u) * 3);
+}
+
+.zone-top {
+  justify-content: space-between;
+  padding: 0 calc(var(--u) * 28);
+}
+
+.title {
+  margin: 0;
   font-family: 'Unbounded Variable', system-ui, sans-serif;
   font-weight: 700;
-  font-size: clamp(2rem, 8vw, 4rem);
+  font-size: calc(var(--u) * 34);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.stub p {
-  margin: 0;
+.icon {
+  width: calc(var(--u) * 60);
+  height: calc(var(--u) * 60);
+  font-size: calc(var(--u) * 28);
+}
+
+.label {
   color: var(--muted);
+  font-size: calc(var(--u) * 22);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.label-warm {
+  color: var(--warm);
+}
+
+.value {
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: calc(var(--u) * 28);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-landscape .zone-win,
+.panel-landscape .zone-balance,
+.panel-landscape .zone-betValue {
+  flex-direction: column;
+  gap: calc(var(--u) * 6);
+}
+
+.panel-landscape .zone-betValue .label {
+  font-size: calc(var(--u) * 16);
+}
+
+.step {
+  width: 100%;
+  height: 100%;
+  font-size: calc(var(--u) * 44);
+  font-weight: 700;
+}
+
+.spin {
+  width: 100%;
+  height: 100%;
+  border-radius: 50% !important;
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: calc(var(--u) * 30);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: radial-gradient(circle at 50% 32%, rgb(63 224 208 / 0.9) 0%, var(--cave-2) 72%) !important;
+  border-color: rgb(63 224 208 / 0.7) !important;
+  box-shadow: 0 0 calc(var(--u) * 28) rgb(63 224 208 / 0.35);
+}
+
+.toggle {
+  flex: 1;
+  height: 100%;
+  font-size: calc(var(--u) * 22);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scene-error {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 40%;
+  margin: 0;
+  text-align: center;
+  font-size: 1.25rem;
 }

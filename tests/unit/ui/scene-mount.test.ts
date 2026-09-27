@@ -5,7 +5,7 @@ import { SceneMount } from '../../../src/ui/scene-mount.ts';
 
 // Поддельный рендерер: init ждёт, пока тест не разрешит или не отвергнет его. Двойной destroy — ошибка.
 const HOST = {} as HTMLElement;
-const INFO: RendererInfo = { name: 'webgl', gpu: 'fake' };
+const INFO: RendererInfo = { name: 'webgl', gpu: 'fake', software: false };
 
 class InjectedFailure extends Error {}
 

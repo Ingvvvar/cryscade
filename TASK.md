@@ -90,7 +90,7 @@
 | `client/**` | `core/{model,fsm,presentation,jurisdiction,money}`, `protocol/**` | `core/engine`, `core/rng`, `server/**`, React, Pixi |
 | `render/**` вне `render/pixi/` | `render/**` вне `render/pixi/`, `core/model`, `core/presentation` | `pixi.js` и `render/pixi/**`, `core/engine`, `core/rng`, `server/**`, `client/**`, React |
 | `render/pixi/**` | `pixi.js`, `render/**`, `core/model`, `core/presentation` | `core/engine`, `core/rng`, `server/**`, `client/**`, React |
-| `ui/**` | `client/**`, `render/**`, `audio/**`, `core/model`, `protocol/**` | `core/engine`, `core/rng`, `server/**`, прямой `pixi.js` |
+| `ui/**` | `client/**`, `render/**`, `audio/**`, `core/model`, `protocol/**`; временно, до фазы 4 — `fixtures/rounds/*.json` (`// wiring`, срез фазы 3) | `core/engine`, `core/rng`, `server/**`, прямой `pixi.js` |
 | `audio/**` | `core/model`, `core/presentation` | `core/engine`, `server/**`, React, Pixi |
 | `tools/**` | `core/**`, `server/**` | `client/`, `ui/`, `render/`, `audio/` |
 
@@ -503,6 +503,7 @@ type RoundEvent =
 - `managedTextures` содержит пустые записи — считать непустые.
 - У Pixi два тикера: при замере времени кадра не смешивать их кадры.
 - WebGL-`destroy` теряет контекст канваса (`loseContext`): новый рендерер — только на новом канвасе.
+- Группы привязок батча WebGPU (`getTextureBatchBindGroup`) — модульный кэш, `releaseGlobalResources` его не чистит: уничтожение источника текстуры, побывавшей в батче, даёт предупреждение и после `app.destroy`. Источник атласа не уничтожать — его GPU-память уходит с рендерером.
 - Батч рвётся на `maxBatchableTextures` (16) разных текстурах, а не на первой новой: контроль счётчика draw-call — больше 16 разных текстур.
 
 ---
@@ -669,6 +670,7 @@ type RoundEvent =
 - Полный e2e §14, пустая консоль на всех путях.
 - Мутационное тестирование StrykerJS (§14); список выживших мутантов — без правок до моего решения.
 - Аудит: до трёх read-only агентов — расхождение ТЗ и кода, мёртвый код, холостые тесты. Только после моего подтверждения, что лимита не меньше половины.
+- Из фазы 3: на Linux без GPU браузер сам пишет в консоль «No available adapters.» (откат спрашивает WebGPU) и «GPU stall due to ReadPixels» (headless shell читает кадр WebGL на SwiftShader) — решить, как смоук CI относится к сообщениям среды; тест отката их уже различает.
 - CI: плюс `math:quick` и e2e; `npx playwright install --with-deps chromium webkit` — нужен полный Chromium, не shell; WebKit — для повтора из фазы 6. Репозиторий через `gh`, Pages через API, деплой, проверка живого адреса. `git push` — с моего слова.
 - README: архитектура и её границы, ООП-устройство с картой классов и паттернов, почему книга (с интервалом Монте-Карло из фазы 2), честность и её пределы в браузере, пресеты, стратегия тестов, правила замеров, ссылка на повтор максимального выигрыша.
 - Чек-лист для проверки на телефоне.
