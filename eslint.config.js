@@ -132,6 +132,39 @@ export default defineConfig([
   },
 
   {
+    // Браузер, время и случайность в server/ — только в worker.ts (§3); логика сервера — на портах.
+    // Зеркало скана tests/unit/boundaries/server-globals.test.ts.
+    files: ['src/server/**'],
+    ignores: ['src/server/worker.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...[
+          'Date',
+          'performance',
+          'crypto',
+          'window',
+          'document',
+          'navigator',
+          'self',
+          'globalThis',
+          'indexedDB',
+          'IDBKeyRange',
+          'BroadcastChannel',
+          'postMessage',
+          'importScripts',
+          'location',
+          'caches',
+          'fetch',
+          'setTimeout',
+          'setInterval',
+        ].map((name) => ({ name, message: 'В server/ браузер, время и случайность — только в worker.ts, остальное — через порты.' })),
+      ],
+      'no-restricted-properties': ['error', { object: 'Math', property: 'random', message: 'В server/ случайность — через порт Entropy.' }],
+    },
+  },
+
+  {
     // Детерминизм между движками JS (§4.7): книгу строит V8, повтор может пересчитать Safari.
     files: ['src/core/engine/**', 'src/core/rng/**', 'src/core/money.ts'],
     rules: { 'cryscade/deterministic-math': 'error' },

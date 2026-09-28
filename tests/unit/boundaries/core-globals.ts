@@ -1,9 +1,36 @@
 import ts from 'typescript';
 
-// Запрещённые глобалы в core/: время, случайность, crypto, корни DOM.
-// Весь DOM целиком отсекает tsconfig.core.json (lib без DOM); здесь — то, что есть и в lib ES.
+// Запрещённые глобалы по модулям (§3). Math.random запрещён везде, где идёт скан: случайность приходит портом.
 
-const FORBIDDEN = new Set(['Date', 'performance', 'crypto', 'window', 'document', 'navigator', 'self', 'globalThis']);
+/** core/: время, случайность, crypto, корни DOM. Весь DOM целиком отсекает tsconfig.core.json (lib без DOM). */
+export const CORE_FORBIDDEN: ReadonlySet<string> = new Set([
+  'Date',
+  'performance',
+  'crypto',
+  'window',
+  'document',
+  'navigator',
+  'self',
+  'globalThis',
+]);
+
+/**
+ * server/ вне worker.ts: сверх core/ — браузер воркера и таймеры. lib WebWorker их типизирует, поэтому держит скан:
+ * IndexedDB, Web Locks (через navigator), BroadcastChannel, crypto, сеть и время — только в worker.ts, логика на портах.
+ */
+export const SERVER_FORBIDDEN: ReadonlySet<string> = new Set([
+  ...CORE_FORBIDDEN,
+  'indexedDB',
+  'IDBKeyRange',
+  'BroadcastChannel',
+  'postMessage',
+  'importScripts',
+  'location',
+  'caches',
+  'fetch',
+  'setTimeout',
+  'setInterval',
+]);
 
 export interface Finding {
   readonly name: string;
@@ -11,7 +38,7 @@ export interface Finding {
 }
 
 /** Идентификатор стоит на месте имени свойства, а не ссылки на глобал. */
-function isPropertyName(node: ts.Identifier): boolean {
+export function isPropertyName(node: ts.Identifier): boolean {
   const parent = node.parent;
   return (
     (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
@@ -28,7 +55,7 @@ function isPropertyName(node: ts.Identifier): boolean {
   );
 }
 
-export function findForbiddenGlobals(fileName: string, text: string): Finding[] {
+export function findForbiddenGlobals(fileName: string, text: string, forbidden: ReadonlySet<string> = CORE_FORBIDDEN): Finding[] {
   const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
   const findings: Finding[] = [];
   const report = (node: ts.Node, name: string): void => {
@@ -37,7 +64,7 @@ export function findForbiddenGlobals(fileName: string, text: string): Finding[] 
 
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && !isPropertyName(node)) {
-      if (FORBIDDEN.has(node.text)) {
+      if (forbidden.has(node.text)) {
         report(node, node.text);
       } else if (node.text === 'Math') {
         // Math можно только как `Math.<не random>`: иначе random уходит через деструктуризацию или индекс.

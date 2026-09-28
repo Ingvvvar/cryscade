@@ -31,6 +31,8 @@ export interface RoundFacts {
   /** Ядер на сетке в конце основного спина — и тогда, когда его оборвал кап. */
   readonly baseCores: number;
   readonly baseCapped: boolean;
+  /** Сетка на поле, когда раунд показан до конца: последний спин после последнего шага, на капе — до взрыва. */
+  readonly finalGrid: readonly number[];
 }
 
 export class ModelMismatch extends Error {
@@ -150,6 +152,7 @@ class RoundModel {
       largestCoreGroup: this.#largestCoreGroup,
       baseCores,
       baseCapped: !baseDone,
+      finalGrid: [...this.#grid],
     };
   }
 
