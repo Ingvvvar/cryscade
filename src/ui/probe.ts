@@ -12,6 +12,8 @@ export class PageProbe implements MountObserver {
   #created = 0;
   readonly #errors: string[] = [];
   #remount: (() => void) | null = null;
+  /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
+  readonly warmUp = new URLSearchParams(window.location.search).get('warmup') !== 'off';
 
   noteAttach(): void {
     this.#attaches += 1;
@@ -49,6 +51,13 @@ export class PageProbe implements MountObserver {
       renderOnce: () => {
         scene.renderOnce();
       },
+      pinAmbient: (seconds) => {
+        scene.pinAmbient(seconds);
+      },
+      backgroundOnly: (on) => {
+        scene.backgroundOnly(on);
+      },
+      atlasPng: () => scene.atlasPng(),
       stopTicker: () => {
         scene.stopTicker();
       },

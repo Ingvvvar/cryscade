@@ -7,6 +7,8 @@ import type { RendererInfo } from '../render/renderer.ts';
 export interface ProbeSceneInfo extends RendererInfo {
   readonly maxBatchableTextures: number;
   readonly resolution: number;
+  /** document.fonts видел Unbounded, когда ставился BitmapFont. */
+  readonly fontReady: boolean;
 }
 
 export interface MountCounts {
@@ -30,6 +32,10 @@ export interface CryscadeProbe {
   cells(): Rect[];
   settled(): boolean;
   renderOnce(): void;
+  /** Закрепить время декора (фон, блик рамки); null — снять. */
+  pinAmbient(seconds: number | null): void;
+  backgroundOnly(on: boolean): void;
+  atlasPng(): Promise<string | null>;
   stopTicker(): void;
   startTicker(): void;
   addControlSprites(count: number, kind: ControlSprites): void;

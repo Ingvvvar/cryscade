@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
 import { installDrawCounter, type DrawCounts } from './support/draw-counter.ts';
+import { PINNED_AMBIENT_S } from './support/frame.ts';
 
 // Draw-call в покое (§13: WebGL ≤ 15). Кадр — один app.render() при остановленном тикере; счёт — на границе API.
 // Сначала положительный контроль: батч рвётся на maxBatchableTextures разных текстур, поэтому 3 × max разных
@@ -29,9 +30,12 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     const info = await sceneInfo(page);
     expect(info.name).toBe(renderer);
     expect(info.software, `на программном рендере не мерим: ${info.gpu}`).toBe(false);
-    await page.evaluate(() => {
-      (window as ProbeWindow).__cryscadeProbe?.stopTicker();
-    });
+    // Худший покой: декор закреплён на моменте, когда аддитивный блик рамки виден.
+    await page.evaluate((seconds) => {
+      const probe = (window as ProbeWindow).__cryscadeProbe;
+      probe?.stopTicker();
+      probe?.pinAmbient(seconds);
+    }, PINNED_AMBIENT_S);
     const draws = async (): Promise<number> => {
       const counts = await frameDraws(page);
       expect(counts.executeBundles, 'бандлы рендера: счёт был бы неполным').toBe(0);

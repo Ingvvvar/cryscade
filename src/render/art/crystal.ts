@@ -5,7 +5,7 @@
 import { SCATTER, SYMBOL, type SymbolId } from '../../core/model/symbols.ts';
 import { brighten, mix } from './color.ts';
 import { cutFacets, type CutOptions, type FacetShape } from './facets.ts';
-import { centroid, dot3, scalePoints, type Point } from './geometry.ts';
+import { centroid, clipHalfPlane, dot3, scalePoints, signedArea, type Point } from './geometry.ts';
 import { LIGHTING, shade } from './light.ts';
 import { DISPERSION, PALETTE, SYMBOL_COLORS } from './palette.ts';
 import { SILHOUETTES } from './silhouettes.ts';
@@ -30,6 +30,12 @@ export const CUTS: Readonly<Record<CrystalId, CutOptions>> = {
   [SYMBOL.diamond]: { tableScale: 0.45, tableLift: 0.05, tilt: 0.82, subdivide: 3 },
 };
 
+/** Полоса градиента: часть грани плоским цветом. */
+export interface Band {
+  readonly points: readonly Point[];
+  readonly color: number;
+}
+
 export interface FacetArt {
   readonly points: readonly Point[];
   /** Градиент грани: от внешнего ребра к внутреннему. */
@@ -37,6 +43,32 @@ export interface FacetArt {
   readonly inner: Point;
   readonly outerColor: number;
   readonly innerColor: number;
+  /** Тот же градиент полосами поперёк направления outer → inner: выпекается без текстур градиента. */
+  readonly bands: readonly Band[];
+}
+
+/** Полос на грань: лёгкий градиент (§9) без текстур FillGradient — их нельзя уничтожить без предупреждения WebGPU. */
+export const FACET_BANDS = 4;
+/** Кругов в радиальном градиенте сферы Ядра. */
+export const CORE_RINGS = 12;
+
+/**
+ * Многоугольник режется на count полос поперёк направления from → to; крайние полосы открыты наружу, так что
+ * полосы вместе ровно покрывают многоугольник. Цвет полосы — смесь в линейном пространстве в её середине.
+ */
+export function gradientBands(points: readonly Point[], from: Point, to: Point, fromColor: number, toColor: number, count: number): Band[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length2 = dx * dx + dy * dy;
+  const base = dx * from.x + dy * from.y;
+  const bands: Band[] = [];
+  for (let k = 0; k < count; k++) {
+    let part: Point[] = [...points];
+    if (k > 0) part = clipHalfPlane(part, -dx, -dy, -(base + (k / count) * length2));
+    if (k < count - 1) part = clipHalfPlane(part, dx, dy, base + ((k + 1) / count) * length2);
+    if (part.length >= 3 && Math.abs(signedArea(part)) > 1e-9) bands.push({ points: part, color: mix(fromColor, toColor, (k + 0.5) / count) });
+  }
+  return bands;
 }
 
 export interface Glint {
@@ -78,8 +110,24 @@ export interface GradientStop {
 
 export interface CoreArt extends ArtCommon {
   readonly kind: 'core';
-  readonly body: { readonly radius: number; readonly stops: readonly GradientStop[] };
+  /** rings — радиальный градиент стопкой кругов от края к центру: выпекается без текстуры градиента. */
+  readonly body: { readonly radius: number; readonly stops: readonly GradientStop[]; readonly rings: readonly { readonly radius: number; readonly color: number }[] };
   readonly rays: readonly FacetArt[];
+}
+
+/** Цвет градиента по остановкам в точке offset ∈ [0, 1]. */
+export function colorAt(stops: readonly GradientStop[], offset: number): number {
+  const first = stops[0];
+  if (first === undefined) throw new RangeError('градиент без остановок');
+  let previous = first;
+  for (const stop of stops) {
+    if (offset <= stop.offset) {
+      const span = stop.offset - previous.offset;
+      return span <= 0 ? stop.color : mix(previous.color, stop.color, (offset - previous.offset) / span);
+    }
+    previous = stop;
+  }
+  return previous.color;
 }
 
 export type SymbolArt = CrystalArt | CoreArt;
@@ -114,7 +162,16 @@ function crystal(symbol: CrystalId): CrystalArt {
   const facets = shapes.map((shape, i): FacetArt => {
     let base = shade(albedo, shape.normal);
     if (symbol === SYMBOL.diamond && !shape.table) base = mix(base, DISPERSION[i % DISPERSION.length] ?? base, 0.2);
-    return { points: shape.points, outer: shape.outer, inner: shape.inner, outerColor: brighten(base, 0.8), innerColor: brighten(base, 1.12) };
+    const outerColor = brighten(base, 0.8);
+    const innerColor = brighten(base, 1.12);
+    return {
+      points: shape.points,
+      outer: shape.outer,
+      inner: shape.inner,
+      outerColor,
+      innerColor,
+      bands: gradientBands(shape.points, shape.outer, shape.inner, outerColor, innerColor, FACET_BANDS),
+    };
   });
   // Блики — на двух гранях, сильнее всех повёрнутых к ключевому свету.
   const lit = shapes
@@ -146,27 +203,28 @@ function core(): CoreArt {
     const tip = silhouette[k + 1];
     const right = silhouette[k + 2];
     if (left === undefined || tip === undefined || right === undefined) continue;
-    rays.push({
-      points: [left, tip, right, { x: 0, y: 0 }],
-      outer: tip,
-      inner: { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 },
-      outerColor: mix(glow, 0xffffff, 0.15),
-      innerColor: mix(glow, 0xffffff, 0.7),
-    });
+    const points = [left, tip, right, { x: 0, y: 0 }];
+    const inner = { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 };
+    const outerColor = mix(glow, 0xffffff, 0.15);
+    const innerColor = mix(glow, 0xffffff, 0.7);
+    rays.push({ points, outer: tip, inner, outerColor, innerColor, bands: gradientBands(points, tip, inner, outerColor, innerColor, FACET_BANDS) });
   }
   const bodyRadius = Math.min(...silhouette.map((p) => Math.hypot(p.x, p.y)));
+  const stops: GradientStop[] = [
+    { offset: 0, color: 0xffffff },
+    { offset: 0.45, color: mix(0xffffff, glow, 0.35) },
+    { offset: 1, color: brighten(glow, 0.7) },
+  ];
+  // Круг k покрывает радиус (k + 1)/CORE_RINGS; цвет — в середине своего кольца.
+  const rings = Array.from({ length: CORE_RINGS }, (_, i) => {
+    const k = CORE_RINGS - 1 - i;
+    return { radius: (bodyRadius * (k + 1)) / CORE_RINGS, color: colorAt(stops, (k + 0.5) / CORE_RINGS) };
+  });
   return {
     kind: 'core',
     symbol: SCATTER,
     silhouette,
-    body: {
-      radius: bodyRadius,
-      stops: [
-        { offset: 0, color: 0xffffff },
-        { offset: 0.45, color: mix(0xffffff, glow, 0.35) },
-        { offset: 1, color: brighten(glow, 0.7) },
-      ],
-    },
+    body: { radius: bodyRadius, stops, rings },
     rays,
     rim: upperEdges(silhouette),
     rimColor: mix(glow, 0xffffff, 0.8),

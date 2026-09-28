@@ -13,9 +13,15 @@ export interface InspectableScene {
   readonly atlas: CrystalAtlas;
   /** Корень сцены в единицах дизайна: сюда зонд кладёт контрольные спрайты. */
   readonly root: Container;
+  /** document.fonts видел Unbounded, когда ставился BitmapFont. */
+  readonly fontReady: boolean;
   layout(): Layout | null;
   /** Сетка упала и стоит. */
   settled(): boolean;
+  /** Закрепить время декора (фон, блик рамки); null — снять. */
+  pinAmbient(seconds: number | null): void;
+  /** Только фон: для паритета GLSL и WGSL. */
+  backgroundOnly(on: boolean): void;
 }
 
 export interface SceneInspector {

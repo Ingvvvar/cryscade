@@ -106,3 +106,24 @@ export function subdivide(points: readonly Point[], parts: number): Point[] {
 export function scalePoints(points: readonly Point[], factor: number): Point[] {
   return points.map((p) => ({ x: p.x * factor, y: p.y * factor }));
 }
+
+/**
+ * Отсечение полуплоскостью (Сазерленд — Ходжмен, одна плоскость): остаётся часть, где nx·x + ny·y ≤ limit.
+ * Годится и для невыпуклого многоугольника: площадь части сохраняется, лишь бы шов был по прямой.
+ */
+export function clipHalfPlane(points: readonly Point[], nx: number, ny: number, limit: number): Point[] {
+  const out: Point[] = [];
+  const side = (p: Point): number => nx * p.x + ny * p.y - limit;
+  points.forEach((a, i) => {
+    const b = points[(i + 1) % points.length] ?? a;
+    const sa = side(a);
+    const sb = side(b);
+    if (sa <= 0) out.push(a);
+    if ((sa < 0 && sb > 0) || (sa > 0 && sb < 0)) {
+      const t = sa / (sa - sb);
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    }
+  });
+  return out;
+}
+

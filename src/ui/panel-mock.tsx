@@ -1,7 +1,7 @@
 // Муляж панели (§15, фаза 3): статичная разметка по зонам §9 с настоящими шрифтами и палитрой, без логики.
 // Не выбрасывается — в фазе 4 становится минимальной панелью. Зоны — те же, по которым Pixi ставит сетку:
 // раскладка одна на обоих. Оверлей над живой сценой пропускает тап на канвас; кнопкам — pointer-events: auto (§11).
-// Число выигрыша рисует Pixi (§11), здесь — только подпись.
+// Число выигрыша рисует Pixi в зоне winValue (§11), здесь — только подпись в winLabel.
 
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { toScreen, type Layout, type ZoneName } from '../render/layout.ts';
@@ -35,7 +35,7 @@ export function PanelMock({ layout }: { readonly layout: Layout }) {
           ♪
         </button>
       </Zone>
-      <Zone layout={layout} name="win">
+      <Zone layout={layout} name="winLabel">
         <span className="label label-warm">Виграш</span>
       </Zone>
       <Zone layout={layout} name="balance">

@@ -27,7 +27,20 @@ export interface Viewport {
 
 export type Orientation = 'portrait' | 'landscape';
 
-export type ZoneName = 'top' | 'feature' | 'frame' | 'grid' | 'win' | 'balance' | 'betDown' | 'betValue' | 'betUp' | 'spin' | 'toggles';
+/** winLabel — подпись в React, winValue — число выигрыша в Pixi (§11: счётчик крутится в Pixi). */
+export type ZoneName =
+  | 'top'
+  | 'feature'
+  | 'frame'
+  | 'grid'
+  | 'winLabel'
+  | 'winValue'
+  | 'balance'
+  | 'betDown'
+  | 'betValue'
+  | 'betUp'
+  | 'spin'
+  | 'toggles';
 
 export interface Design {
   readonly width: number;
@@ -58,7 +71,8 @@ export const DESIGNS: Readonly<Record<Orientation, Design>> = {
       top: { x: 0, y: 0, width: 720, height: 88 },
       feature: { x: 0, y: 88, width: 720, height: 64 },
       ...framed(42, 160),
-      win: { x: 0, y: 812, width: 720, height: 88 },
+      winLabel: { x: 40, y: 812, width: 300, height: 88 },
+      winValue: { x: 360, y: 812, width: 320, height: 88 },
       balance: { x: 0, y: 900, width: 720, height: 56 },
       betDown: { x: 60, y: 1000, width: 140, height: 104 },
       spin: { x: 250, y: 968, width: 220, height: 168 },
@@ -75,7 +89,8 @@ export const DESIGNS: Readonly<Record<Orientation, Design>> = {
       feature: { x: 24, y: 88, width: 244, height: 200 },
       balance: { x: 24, y: 632, width: 244, height: 64 },
       ...framed(292, 72),
-      win: { x: 952, y: 96, width: 304, height: 136 },
+      winLabel: { x: 952, y: 96, width: 304, height: 48 },
+      winValue: { x: 952, y: 144, width: 304, height: 88 },
       spin: { x: 1024, y: 256, width: 160, height: 160 },
       betDown: { x: 952, y: 440, width: 80, height: 72 },
       betValue: { x: 1040, y: 440, width: 136, height: 72 },

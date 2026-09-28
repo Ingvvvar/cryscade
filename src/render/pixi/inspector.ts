@@ -11,7 +11,11 @@ import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
 export interface SceneInfo extends RendererInfo {
   readonly maxBatchableTextures: number;
   readonly resolution: number;
+  readonly fontReady: boolean;
 }
+
+/** Событие окна: сцена готова и прогрета, первый видимый кадр — следующий. По нему тест снимает счётчики GPU. */
+export const SCENE_READY_EVENT = 'cryscade:scene-ready';
 
 export type ControlKind = 'distinct' | 'atlas';
 
@@ -25,6 +29,7 @@ export class SceneProbe implements SceneInspector {
   attach(scene: InspectableScene): void {
     this.#scene = scene;
     this.#inits += 1;
+    window.dispatchEvent(new Event(SCENE_READY_EVENT));
   }
 
   detach(scene: InspectableScene): void {
@@ -47,7 +52,7 @@ export class SceneProbe implements SceneInspector {
     const scene = this.#scene;
     if (scene === null) return null;
     const { renderer } = scene.app;
-    return { ...scene.info, maxBatchableTextures: renderer.limits.maxBatchableTextures, resolution: renderer.resolution };
+    return { ...scene.info, maxBatchableTextures: renderer.limits.maxBatchableTextures, resolution: renderer.resolution, fontReady: scene.fontReady };
   }
 
   layout(): Layout | null {
@@ -67,6 +72,21 @@ export class SceneProbe implements SceneInspector {
 
   renderOnce(): void {
     this.#scene?.app.render();
+  }
+
+  pinAmbient(seconds: number | null): void {
+    this.#scene?.pinAmbient(seconds);
+  }
+
+  backgroundOnly(on: boolean): void {
+    this.#scene?.backgroundOnly(on);
+  }
+
+  /** Атлас целиком — PNG в data URL, как выпечен. */
+  async atlasPng(): Promise<string | null> {
+    const scene = this.#scene;
+    if (scene === null) return null;
+    return scene.app.renderer.extract.base64(scene.atlas.whole);
   }
 
   stopTicker(): void {

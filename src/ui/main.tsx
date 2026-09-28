@@ -35,7 +35,7 @@ async function mount(): Promise<void> {
   const grid = firstGrid(round);
   const create = (): Renderer => {
     probe?.noteCreated();
-    return new PixiRenderer({ preference: choice.preference, inspector: probe?.scene ?? null });
+    return new PixiRenderer({ preference: choice.preference, inspector: probe?.scene ?? null, warmUp: probe?.warmUp ?? true });
   };
   createRoot(root).render(
     <StrictMode>
