@@ -9,7 +9,8 @@ import { audit } from '../support/wallet-world.ts';
 // ошибки повторяются, и открывается свежая вкладка — она доигрывает брошенное. В конце:
 // - сверка кошелька из шага А: баланс = 1000 − Σ ставок + Σ выигрышей закрытых раундов, ключ → не больше раунда;
 // - активных раундов нет, замок раунда свободен;
-// - каждая вкладка в idle и показывает баланс кошелька — порядок по revision сошёлся у всех.
+// - каждая вкладка в idle и показывает баланс кошелька — порядок по revision сошёлся у всех;
+// - у RgsClient каждой вкладки ни одной ждущей попытки: брошенные не копятся в памяти.
 
 type Action =
   | { readonly kind: 'open'; readonly seeds: readonly number[] }
@@ -167,6 +168,8 @@ async function run(actions: readonly Action[], seen: Seen): Promise<string[]> {
     if (view.balanceMinor !== (wallet?.balanceMinor ?? 100_000)) {
       problems.push(`вкладка показывает ${String(view.balanceMinor)}, кошелёк — ${String(wallet?.balanceMinor)}`);
     }
+    // Потерянные попытки не копятся: всё отыграно — ждущих нет.
+    if (tab.client.pendingAttempts !== 0) problems.push(`у вкладки ${String(tab.client.pendingAttempts)} ждущих попыток`);
   }
   for (const tab of tabs) tab.close();
   return problems;

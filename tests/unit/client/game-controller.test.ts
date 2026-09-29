@@ -358,6 +358,7 @@ describe('повторы и экран ошибки', () => {
       { type: 'play', betMinor: 100, idempotencyKey: 'ak1' },
     ]);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
+    expect(a.client.pendingAttempts).toBe(0);
   });
 
   it('первая попытка шла дольше таймаута и пришла после повтора: раунд один, её ответ брошен, второго списания нет', async () => {
@@ -375,6 +376,7 @@ describe('повторы и экран ошибки', () => {
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
     expect(world.bus.sent.map((message) => message.balanceMinor)).toStrictEqual([99_900, 99_935]);
     expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_935]);
+    expect(a.client.pendingAttempts).toBe(0);
   });
 
   it('повторы кончились — экран ошибки, замок держится; «Повторити» — тот же ключ', async () => {
@@ -389,6 +391,8 @@ describe('повторы и экран ошибки', () => {
     expect(a.state).toStrictEqual({ name: 'error', kind: 'unreachable', retry: { call: 'play', key: 'ak1', betMinor: 100 }, holdsLock: true });
     expect(await world.lockFree()).toBe(false);
     expect(plays(a)).toStrictEqual([]);
+    // Пять потерянных попыток — ни одной в памяти.
+    expect(a.client.pendingAttempts).toBe(0);
     a.lab.set({ requestLoss: 0 });
     a.controller.retry();
     await settle();

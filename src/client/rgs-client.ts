@@ -69,6 +69,14 @@ export class RgsClient implements Rgs {
     });
   }
 
+  /**
+   * Попытки, ждущие ответа. Брошенная — таймаутом, отменой, отказом канала или dispose — снимается сразу: лаборатория
+   * сети теряет попытки нарочно, и каждая оставшаяся висела бы в памяти до конца сессии.
+   */
+  get pendingAttempts(): number {
+    return this.#waiting.size;
+  }
+
   async call<B extends RequestBody>(body: B, signal?: AbortSignal): Promise<CallOutcome<Results[B['type']]>> {
     for (let attempt = 0; ; attempt++) {
       const answer = await this.#attempt(body, signal);

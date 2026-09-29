@@ -81,9 +81,11 @@ describe('конверт и ответ', () => {
     const client = new RgsClient(transport, new TimeoutSleep());
     const call = track(client.call(END));
     expect(transport.sent).toStrictEqual([{ v: 1, id: 1, body: END }]);
+    expect(client.pendingAttempts).toBe(1);
     transport.answer(0, ENDED);
     await vi.advanceTimersByTimeAsync(0);
     expect(call.outcome).toStrictEqual({ kind: 'ok', result: ENDED });
+    expect(client.pendingAttempts).toBe(0);
     // Ответ снял таймер попытки: ни одного висящего таймера.
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -243,5 +245,40 @@ describe('отмена', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(transport.sent).toHaveLength(1);
     expect(await client.call(END)).toStrictEqual({ kind: 'abandoned' });
+  });
+});
+
+describe('ожидающие попытки', () => {
+  it('таймаут снимает попытку: в паузе перед повтором ждущих нет, после последней — тоже', async () => {
+    const transport = new ScriptedTransport();
+    const client = new RgsClient(transport, new TimeoutSleep());
+    const call = track(client.call(PLAY));
+    expect(client.pendingAttempts).toBe(1);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(client.pendingAttempts).toBe(0);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(client.pendingAttempts).toBe(1);
+    await vi.advanceTimersByTimeAsync(15_500);
+    expect([call.outcome, client.pendingAttempts]).toStrictEqual([{ kind: 'unreachable' }, 0]);
+  });
+
+  it('отмена, отказ канала и dispose снимают попытку сразу', async () => {
+    const transport = new ScriptedTransport();
+    const client = new RgsClient(transport, new TimeoutSleep());
+    const stop = new AbortController();
+    void client.call(PLAY, stop.signal);
+    expect(client.pendingAttempts).toBe(1);
+    stop.abort();
+    expect(client.pendingAttempts).toBe(0);
+
+    transport.broken = true;
+    void client.call(END);
+    expect(client.pendingAttempts).toBe(0);
+    transport.broken = false;
+
+    await vi.advanceTimersByTimeAsync(250);
+    expect(client.pendingAttempts).toBe(1);
+    client.dispose();
+    expect(client.pendingAttempts).toBe(0);
   });
 });
