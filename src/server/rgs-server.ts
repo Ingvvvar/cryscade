@@ -22,6 +22,7 @@ import { COMMIT_ATTEMPTS, DEMO_SEED, HISTORY_LIMIT, SERVER_MAX_REQUESTS } from '
 import type { Broadcast, Clock, Entropy, Lock, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
 import {
   RECORD_LIMIT,
+  RESUME_LIMIT,
   checkKey,
   checkRound,
   checkWallet,
@@ -39,6 +40,8 @@ import {
   type LatestRound,
   type Read,
   type RoundRead,
+  type SeqScan,
+  type StrayRound,
 } from './repositories.ts';
 import { LiveRoundSource, type RoundSource } from './round-source.ts';
 import { WALLET_ID } from './schema.ts';
@@ -113,12 +116,13 @@ function unchanged(state: Loaded): (stored: unknown) => boolean {
   return (stored) => isWallet(stored) && stored.revision === revision;
 }
 
-/** Ревизия, с которой продолжить счёт: у испорченного кошелька — его, если она годится и +1 не выводит за границу. */
+/** Ревизия, с которой починка продолжает счёт: прежняя, если она целая и не выше RESUME_LIMIT, иначе — с начала. */
 function revisionOf(read: Read<WalletRecord>): number {
-  if (read.kind === 'ok') return read.value.revision;
-  if (read.kind === 'damaged' && isRecord(read.raw) && isIntIn(read.raw['revision'], 0, RECORD_LIMIT - 1)) return read.raw['revision'];
-  return 0;
+  const revision = read.kind === 'ok' ? read.value.revision : read.kind === 'damaged' && isRecord(read.raw) ? read.raw['revision'] : 0;
+  return isIntIn(revision, 0, RESUME_LIMIT) ? revision : 0;
 }
+
+const NO_ROOM = 'кошельку не хватает запаса до границы записей';
 
 /** Своя запись под тем же гардом, что при чтении; null — годится. Карантин хранит сырое как есть. */
 function ownProblem(op: WriteOp): string | null {
@@ -153,6 +157,8 @@ export class RgsServer {
   readonly #keys: IdempotencyRepository;
   readonly #seeded: SeededRounds;
   readonly #source: RoundSource;
+  /** Наибольший выигрыш одного спина — наибольшая ставка на кап: запас баланса до границы записей. */
+  readonly #maxWin: number;
 
   constructor(ports: RgsServerPorts, options: RgsServerOptions) {
     this.#storage = ports.storage;
@@ -166,6 +172,7 @@ export class RgsServer {
     this.#keys = new IdempotencyRepository(ports.storage);
     this.#seeded = new SeededRounds(options.config, options.maxRequests ?? SERVER_MAX_REQUESTS);
     this.#source = new LiveRoundSource(ports.entropy, this.#seeded);
+    this.#maxWin = this.#price(Math.max(...BET_LEVELS_MINOR), options.config.capX100);
   }
 
   /** Запрос → ответ. Не бросает: любой сбой — INTERNAL, а транзакция либо записана целиком, либо не записана. */
@@ -325,27 +332,42 @@ export class RgsServer {
     return ok({ balanceMinor: START_BALANCE_MINOR, wallet: walletView(next, state.repaired) });
   }
 
-  /** Кошелёк и активный раунд через гарды. Испорченное чинится здесь же, отдельной транзакцией, до самой операции. */
+  /**
+   * Кошелёк и активный раунд через гарды, индекс seq — сверху вниз до первого годного. Испорченное и несогласованное
+   * чинится здесь же, отдельной транзакцией, до самой операции.
+   */
   async #load(): Promise<Loaded> {
-    const [walletRead, latest] = await Promise.all([this.#wallets.read(), this.#rounds.latest(1)]);
-    const newest = latest[0] ?? null;
-    const newestSeq = newest?.seq ?? 0;
-    if (walletRead.kind === 'absent' && newest === null) return { wallet: freshWallet(), stored: false, active: null, repaired: false };
+    const [walletRead, scan] = await Promise.all([this.#wallets.read(), this.#rounds.descend()]);
+    if (walletRead.kind === 'absent' && scan.newest === null && scan.above.length === 0) {
+      return { wallet: freshWallet(), stored: false, active: null, repaired: false };
+    }
     if (walletRead.kind !== 'ok') {
       const reason = walletRead.kind === 'absent' ? 'кошелька нет, а раунды есть' : walletRead.reason;
-      return this.#repair(walletRead, this.#orphan(newest), newestSeq, reason);
+      return this.#repair(walletRead, this.#orphan(scan.newest), scan, reason);
     }
     const wallet = walletRead.value;
     const activeId = wallet.activeRoundId;
     const activeRead: RoundRead = activeId === null ? { kind: 'absent' } : await this.#rounds.read(activeId);
     const drop = activeId === null ? null : { key: activeId, read: activeRead };
-    if (newestSeq >= wallet.nextSeq) return this.#repair(walletRead, drop, newestSeq, 'nextSeq кошелька не впереди раундов');
-    if (activeId === null) return { wallet, stored: true, active: null, repaired: false };
+    if (scan.highest >= wallet.nextSeq) return this.#repair(walletRead, drop, scan, 'nextSeq кошелька не впереди раундов');
+    if (activeId === null) {
+      return this.#roomy(wallet, null) ? { wallet, stored: true, active: null, repaired: false } : this.#repair(walletRead, null, scan, NO_ROOM);
+    }
     const active = this.#usable(activeRead);
     if (active?.status !== 'active' || active.balanceAfterBet !== wallet.balanceMinor) {
-      return this.#repair(walletRead, drop, newestSeq, activeRead.kind === 'damaged' ? activeRead.reason : 'активный раунд не сходится с кошельком');
+      return this.#repair(walletRead, drop, scan, activeRead.kind === 'damaged' ? activeRead.reason : 'активный раунд не сходится с кошельком');
     }
-    return { wallet, stored: true, active, repaired: false };
+    return this.#roomy(wallet, active) ? { wallet, stored: true, active, repaired: false } : this.#repair(walletRead, drop, scan, NO_ROOM);
+  }
+
+  /**
+   * Запас до границы записей на следующий шаг (§6.6). Без активного раунда кошелёк вмещает целый спин: seq нового
+   * раунда, две записи и наибольший выигрыш; с активным — его закрытие. Без запаса своя запись упёрлась бы в гард —
+   * INTERNAL на каждый спин. Честной игрой запас не кончается: такой кошелёк испорчен.
+   */
+  #roomy(wallet: WalletRecord, active: RoundRecord | null): boolean {
+    if (active !== null) return wallet.revision + 1 <= RECORD_LIMIT && active.balanceAfterBet + active.winMinor <= RECORD_LIMIT;
+    return wallet.nextSeq + 1 <= RECORD_LIMIT && wallet.revision + 2 <= RECORD_LIMIT && wallet.balanceMinor + this.#maxWin <= RECORD_LIMIT;
   }
 
   /** Кошелька нет или он испорчен: последний раунд снимается, если он не закрыт и цел, — его ставка без кошелька ничья. */
@@ -355,26 +377,29 @@ export class RgsServer {
   }
 
   /**
-   * Путь «испорчено» (§6.6): сырые записи — в карантин, снятый раунд уходит вместе с ключами, баланс — 1000,
-   * resetSeq — с этого места. Одна транзакция; условие — кошелёк в том виде, в каком прочитан.
+   * Путь «испорчено» (§6.6): сырые записи — в карантин; всё выше годного seq и снятый раунд уходят вместе с ключами;
+   * баланс — 1000; nextSeq — годный + 1, годных нет — 1; resetSeq — с этого места. Одна транзакция; условие —
+   * кошелёк в том виде, в каком прочитан.
    */
   async #repair(
     walletRead: Read<WalletRecord>,
     drop: { readonly key: StoreKey; readonly read: RoundRead } | null,
-    newestSeq: number,
+    scan: SeqScan,
     reason: string,
   ): Promise<Loaded> {
     const at = this.#clock.now();
     const ops: WriteOp[] = [];
     if (walletRead.kind === 'damaged') ops.push(quarantined('wallet', walletRead.raw, reason, at));
-    if (drop !== null) {
-      const raw = drop.read.kind === 'ok' ? drop.read.value : drop.read.kind === 'damaged' ? drop.read.raw : undefined;
-      if (raw !== undefined) ops.push(quarantined('rounds', raw, reason, at));
-      ops.push({ op: 'delete', store: 'rounds', key: drop.key });
-      for (const stale of await this.#keys.ofRound(drop.key)) ops.push({ op: 'delete', store: 'keys', key: stale });
+    const removed: StrayRound[] = [...scan.above];
+    if (drop !== null && !scan.above.some((stray) => stray.key === drop.key)) {
+      removed.push({ key: drop.key, raw: drop.read.kind === 'ok' ? drop.read.value : drop.read.kind === 'damaged' ? drop.read.raw : undefined });
     }
-    const valid = walletRead.kind === 'ok' ? walletRead.value : null;
-    const nextSeq = Math.max(newestSeq + 1, valid?.nextSeq ?? 1);
+    for (const { key, raw } of removed) {
+      if (raw !== undefined) ops.push(quarantined('rounds', raw, reason, at));
+      ops.push({ op: 'delete', store: 'rounds', key });
+      for (const stale of await this.#keys.ofRound(key)) ops.push({ op: 'delete', store: 'keys', key: stale });
+    }
+    const nextSeq = scan.newest === null ? 1 : scan.newest.seq + 1;
     const repaired: WalletRecord = {
       id: WALLET_ID,
       balanceMinor: START_BALANCE_MINOR,

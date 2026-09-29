@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RECORD_LIMIT, checkKey, checkRound, checkRoundCore, checkWallet } from '../../../src/server/records.ts';
+import { RECORD_LIMIT, RESUME_LIMIT, checkKey, checkRound, checkRoundCore, checkWallet, isResumableSeq, isSeq } from '../../../src/server/records.ts';
 import { fixtureRound } from '../../support/fixture-rounds.ts';
 
 // Гарды записей IndexedDB: каждое правило — своя литеральная поломка с точным текстом проблемы.
@@ -27,6 +27,37 @@ const KEY = { key: 'k7', roundId: 'r7', betMinor: 100 };
 describe('граница записей', () => {
   it('2^52 — независимо от кода: 4 503 599 627 370 496', () => {
     expect(RECORD_LIMIT).toBe(2 ** 52);
+  });
+
+  it('граница продолжения счёта — 2^51: 2 251 799 813 685 248', () => {
+    expect(RESUME_LIMIT).toBe(2 ** 51);
+  });
+});
+
+describe('seq: безопасное целое в границах', () => {
+  it.each([1.0000000000000004, 7.5, 0.5])('seq %s — раунд испорчен', (seq) => {
+    expect(checkRoundCore({ ...ROUND, seq })).toBe('раунд: seq или betMinor — не положительные целые до 2^52');
+  });
+
+  it.each([1.0000000000000004, 7.5, 0.5])('nextSeq %s — кошелёк испорчен', (nextSeq) => {
+    expect(checkWallet({ ...WALLET, nextSeq, resetSeq: 0.5 })).toBe('кошелёк: nextSeq или resetSeq не по порядку');
+  });
+
+  it('isSeq — до 2^52, isResumableSeq — до 2^51; дробное, 2^53 и не число — нет', () => {
+    const values: unknown[] = [1, 2 ** 51, 2 ** 51 + 1, 2 ** 52, 2 ** 52 + 1, 2 ** 53, 0, 7.5, 1.0000000000000004, '7', Number.POSITIVE_INFINITY];
+    expect(values.map((value) => [isSeq(value), isResumableSeq(value)])).toStrictEqual([
+      [true, true],
+      [true, true],
+      [true, false],
+      [true, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+      [false, false],
+    ]);
   });
 });
 

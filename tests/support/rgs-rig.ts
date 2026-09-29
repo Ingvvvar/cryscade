@@ -79,6 +79,8 @@ export interface RigOptions {
   /** Обёртка над хранилищем, которое видит сервер: сбои записи, подмена между чтением и записью. */
   readonly wrap?: (inner: MemoryStorage) => Storage;
   readonly lock?: Lock;
+  /** Часы сервера; по умолчанию стоят на T0. */
+  readonly clock?: Clock;
   readonly maxRequests?: number;
   readonly config?: GameConfig;
 }
@@ -97,7 +99,7 @@ export class Rig {
     const ports = {
       storage: options.wrap?.(this.storage) ?? this.storage,
       lock: options.lock ?? new MemoryLock(),
-      clock: new FixedClock(T0),
+      clock: options.clock ?? new FixedClock(T0),
       entropy: this.entropy,
       broadcast: this.broadcast,
     };

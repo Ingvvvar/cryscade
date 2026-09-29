@@ -395,6 +395,10 @@ class FlakyStorage implements Storage {
     return this.#inner.lastByIndex(...args);
   }
 
+  descend(...args: Parameters<Storage['descend']>): ReturnType<Storage['descend']> {
+    return this.#inner.descend(...args);
+  }
+
   commit(batch: CommitBatch): Promise<CommitOutcome> {
     const step = this.#script.shift();
     if (step === 'conflict') return Promise.resolve('conflict');

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryStorage, StorageError, type CommitBatch, type WriteOp } from '../../../src/server/index.ts';
+import { NON_KEYS, ORDERED_KEYS, buildKey, buildNonKey, describeKey, returnedSpec } from '../../support/key-order-table.ts';
 
 // Хранилище в памяти держит семантику IndexedDB, на которую опирается сервер: транзакция «всё или ничего» с условием
 // по кошельку внутри неё, add не перезаписывает, уникальный индекс, порядок ключей и индексов, копии на входе и выходе.
@@ -162,3 +163,78 @@ describe('MemoryStorage', () => {
     return expect(promise).rejects.toThrow('нет индекса seq');
   });
 });
+
+describe('MemoryStorage: ключи всех типов IndexedDB (таблица пробы Chrome 153)', () => {
+  /** Порядок вставки перемешан: порядок индекса — от ключей, а не от вставки. */
+  const shuffled = ORDERED_KEYS.map((spec, index) => ({ spec, index })).sort((a, b) => ((a.index * 7) % 37) - ((b.index * 7) % 37));
+
+  async function indexed(): Promise<MemoryStorage> {
+    const storage = new MemoryStorage();
+    const ops: WriteOp[] = shuffled.map(({ spec, index }) => ({ op: 'add', store: 'rounds', value: { roundId: `k${String(index)}`, seq: buildKey(spec) } }));
+    ops.push(...NON_KEYS.map((name): WriteOp => ({ op: 'add', store: 'rounds', value: { roundId: `n-${name.replaceAll(' ', '-')}`, seq: buildNonKey(name) } })));
+    await commit(storage, ops);
+    return storage;
+  }
+
+  it('descend: весь индекс сверху вниз в порядке таблицы; не-ключи хранятся, но индексу не видны', async () => {
+    const storage = await indexed();
+    const found = await storage.descend('rounds', 'seq', () => false);
+    expect(found.map((entry) => describeKey(entry.indexKey))).toStrictEqual(ORDERED_KEYS.map(returnedSpec).reverse());
+    expect(found.map((entry) => entry.key)).toStrictEqual(ORDERED_KEYS.map((_spec, index) => `k${String(index)}`).reverse());
+    expect(storage.snapshot().rounds).toHaveLength(ORDERED_KEYS.length + NON_KEYS.length);
+  });
+
+  it('descend останавливается на первой записи, где stop — да, включительно', async () => {
+    const storage = await indexed();
+    const seen: unknown[] = [];
+    const found = await storage.descend('rounds', 'seq', (key) => {
+      seen.push(describeKey(key));
+      return typeof key === 'number';
+    });
+    expect(found.map((entry) => describeKey(entry.indexKey))).toStrictEqual(seen);
+    expect(found.at(-1)?.indexKey).toBe(Number.POSITIVE_INFINITY);
+    expect(found).toHaveLength(ORDERED_KEYS.length - 13);
+  });
+
+  it('первичные ключи всех типов: запись находится равным ключом-копией, снимок — в порядке таблицы', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, shuffled.map(({ spec, index }): WriteOp => ({ op: 'put', store: 'rounds', value: { roundId: buildKey(spec), seq: index } })));
+    const found = await Promise.all(ORDERED_KEYS.map((spec) => storage.get('rounds', buildKey(spec) as IDBValidKey)));
+    expect(found.map((value) => (value as { seq: number }).seq)).toStrictEqual(ORDERED_KEYS.map((_spec, index) => index));
+    expect(storage.snapshot().rounds.map(([key]) => describeKey(key))).toStrictEqual(ORDERED_KEYS.map(returnedSpec));
+  });
+
+  it('не-ключ как ключ записи — ошибка, как DataError', async () => {
+    for (const name of NON_KEYS) {
+      await expect(commit(new MemoryStorage(), [{ op: 'put', store: 'rounds', value: { roundId: buildNonKey(name), seq: 1 } }])).rejects.toThrow(StorageError);
+    }
+  });
+
+  it.each([
+    ['массив [0] — второй такой же массив', [0], [0]],
+    ['−0 и 0', -0, 0],
+    ['две даты с одним временем', new Date(0), new Date(0)],
+    ['Uint8Array и ArrayBuffer с теми же байтами', new Uint8Array([1]), new Uint8Array([1]).buffer],
+  ])('уникальный индекс по значению ключа: %s', async (_what, first, second) => {
+    const storage = new MemoryStorage();
+    await commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'a', seq: first } }]);
+    await expect(commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'b', seq: second } }])).rejects.toThrow('индекс seq');
+  });
+
+  it('ключи раунда по индексу roundId — и для ключа-массива', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, [
+      { op: 'add', store: 'keys', value: { key: 'k1', roundId: [7, 'x'] } },
+      { op: 'add', store: 'keys', value: { key: 'k2', roundId: [7, 'y'] } },
+    ]);
+    expect(await storage.keysByIndex('keys', 'roundId', { lower: [7, 'x'], upper: [7, 'x'] })).toStrictEqual(['k1']);
+  });
+
+  it('delete по равному ключу-копии', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, [{ op: 'put', store: 'rounds', value: { roundId: [1, new Date(2)], seq: 1 } }]);
+    await commit(storage, [{ op: 'delete', store: 'rounds', key: [1, new Date(2)] }]);
+    expect(storage.snapshot().rounds).toStrictEqual([]);
+  });
+});
+

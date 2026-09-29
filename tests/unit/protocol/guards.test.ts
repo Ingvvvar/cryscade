@@ -27,6 +27,14 @@ describe('кирпичи гардов', () => {
     expect([0, -1, 1.5].map(isPositive)).toStrictEqual([false, false, false]);
   });
 
+  it('isIntIn: безопасное целое даже при границах шире 2^53', () => {
+    expect([isIntIn(2 ** 53, 0, Number.POSITIVE_INFINITY), isIntIn(2 ** 53 - 1, 0, Number.POSITIVE_INFINITY), isIntIn(7.5, 0, 100)]).toStrictEqual([
+      false,
+      true,
+      false,
+    ]);
+  });
+
   it('isIntIn: целое в границах включительно', () => {
     expect([isIntIn(0, 0, 7), isIntIn(7, 0, 7), isIntIn(-1, 0, 7), isIntIn(8, 0, 7), isIntIn(3.5, 0, 7), isIntIn('3', 0, 7)]).toStrictEqual([
       true,

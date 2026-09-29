@@ -1,5 +1,6 @@
 // Кирпичи гардов. Всё, что пришло через границу — postMessage, IndexedDB, BroadcastChannel, — unknown,
-// пока гард не сказал иначе. Гарды не бросают: на любом входе отвечают да или нет.
+// пока гард не сказал иначе. Гарды не бросают: на любом входе отвечают да или нет. Целое по смыслу поле — всегда
+// безопасное целое плюс свои границы: дробное и 2^53 не проходят ни одно.
 
 export function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -15,9 +16,9 @@ export function isPositive(value: unknown): value is number {
   return isNat(value) && value > 0;
 }
 
-/** Целое от min до max включительно. */
+/** Безопасное целое от min до max включительно. */
 export function isIntIn(value: unknown, min: number, max: number): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max;
 }
 
 /** Строка-идентификатор: ключ идемпотентности, id раунда. От 1 до 64 знаков из [0-9A-Za-z_-]. */

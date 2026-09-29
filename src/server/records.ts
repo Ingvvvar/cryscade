@@ -61,10 +61,23 @@ const U32_MAX = 0xffff_ffff;
  */
 export const RECORD_LIMIT = 4_503_599_627_370_496;
 
-/** Деньги и счётчики с нуля: целое от 0 до RECORD_LIMIT. */
+/**
+ * Граница, до которой починка продолжает счёт seq и revision, — 2^51. Выше — счёт с начала: после починки до границы
+ * записей остаётся не меньше 2^51, и следующий спин снова не упрётся в неё. Продолжай починка счёт у самой границы,
+ * через раунд кошелёк снова остался бы без запаса — и так по кругу.
+ */
+export const RESUME_LIMIT = 2_251_799_813_685_248;
+
+/** Деньги и счётчики с нуля: безопасное целое от 0 до RECORD_LIMIT. */
 const isAmount = (value: unknown): value is number => isIntIn(value, 0, RECORD_LIMIT);
-/** Номера и ставки: целое от 1 до RECORD_LIMIT. */
+/** Номера и ставки: безопасное целое от 1 до RECORD_LIMIT. */
 const isOrdinal = (value: unknown): value is number => isIntIn(value, 1, RECORD_LIMIT);
+
+/** seq в границах записей: такой seq может занять следующий раунд — с ним сверяется nextSeq кошелька. */
+export const isSeq = isOrdinal;
+
+/** Годный seq: безопасное целое от 1 до RESUME_LIMIT — с него починка продолжает счёт. */
+export const isResumableSeq = (value: unknown): value is number => isIntIn(value, 1, RESUME_LIMIT);
 
 export function checkWallet(value: unknown): string | null {
   if (!isRecord(value)) return 'кошелёк — не объект';

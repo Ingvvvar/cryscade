@@ -83,6 +83,10 @@ class FailingCommits implements Storage {
     return this.#inner.lastByIndex(...args);
   }
 
+  descend(...args: Parameters<Storage['descend']>): ReturnType<Storage['descend']> {
+    return this.#inner.descend(...args);
+  }
+
   commit(batch: CommitBatch): Promise<CommitOutcome> {
     if (this.#failures === 0) return this.#inner.commit(batch);
     this.#failures -= 1;

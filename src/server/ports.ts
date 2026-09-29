@@ -5,8 +5,11 @@ import type { WalletChanged } from '../protocol/index.ts';
 
 export type StoreName = 'wallet' | 'rounds' | 'keys' | 'quarantine';
 export type IndexName = 'seq' | 'roundId';
-/** Ключ записи и значение индекса: строка или конечное число. */
-export type StoreKey = string | number;
+/**
+ * Ключ записи и значение индекса — любой ключ IndexedDB: число, дата, строка, двоичные данные, массив ключей.
+ * Сервер пишет только строки и целые, но в испорченном хранилище лежит что угодно, и читать его надо как есть.
+ */
+export type StoreKey = IDBValidKey;
 
 /** Границы включительно. */
 export interface KeyRange {
@@ -47,6 +50,12 @@ export interface Storage {
   keysByIndex(store: StoreName, index: IndexName, range: KeyRange): Promise<StoreKey[]>;
   /** Записи с наибольшими значениями индекса в диапазоне, по убыванию, не больше limit. */
   lastByIndex(store: StoreName, index: IndexName, range: KeyRange, limit: number): Promise<IndexedRecord[]>;
+  /**
+   * Индекс сверху вниз по всем ключам, без границ, до первой записи, на которой stop ответит да, включительно; одно
+   * чтение. Порядок — IndexedDB: массивы, двоичные, строки и даты стоят выше любого числа. Запись, чьё значение
+   * индекса не ключ (NaN, объект, boolean), индексу не видна.
+   */
+  descend(store: StoreName, index: IndexName, stop: (indexKey: StoreKey) => boolean): Promise<IndexedRecord[]>;
   /** Одна транзакция readwrite на все хранилища: условие, затем операции по порядку — всё или ничего. */
   commit(batch: CommitBatch): Promise<CommitOutcome>;
 }

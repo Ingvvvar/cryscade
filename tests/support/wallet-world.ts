@@ -185,6 +185,10 @@ class ScheduledStorage implements Storage {
     return this.#step(`lastByIndex ${args[0]}`, () => this.#inner.lastByIndex(...args));
   }
 
+  descend(...args: Parameters<Storage['descend']>): ReturnType<Storage['descend']> {
+    return this.#step(`descend ${args[0]}`, () => this.#inner.descend(...args));
+  }
+
   commit(batch: CommitBatch): Promise<CommitOutcome> {
     return this.#step('commit', async () => {
       const outcome = await this.#inner.commit(batch);

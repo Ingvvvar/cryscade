@@ -1,26 +1,22 @@
+import { compareKeys, keyId, toKey } from './key-order.ts';
 import type { CommitBatch, CommitOutcome, IndexedRecord, IndexName, KeyRange, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
 import { migrate, WALLET_ID, type StoreOptions, type UpgradeTarget } from './schema.ts';
 
 // Хранилище в памяти — прод-код: режим «IndexedDB недоступна» и опора всех тестов сервера. Держит ту же семантику,
 // что IndexedDB: схема — из тех же миграций; commit — одна транзакция «всё или ничего» с условием по кошельку;
-// add не перезаписывает; уникальный индекс не пускает дубль; ключ — строка или число; записи копируются структурно
-// на входе и на выходе, так что снаружи их не изменить.
+// add не перезаписывает; уникальный индекс не пускает дубль; ключи — все типы IndexedDB в её порядке (key-order.ts),
+// не-ключ в индекс не попадает; записи копируются структурно на входе и на выходе, так что снаружи их не изменить.
 
 /** Нарушение ограничения хранилища — как ConstraintError и DataError в IndexedDB: транзакция откатывается. */
 export class StorageError extends Error {
   override readonly name = 'StorageError';
 }
 
-function isKey(value: unknown): value is StoreKey {
-  return typeof value === 'string' || (typeof value === 'number' && !Number.isNaN(value));
-}
-
-/** Порядок ключей IndexedDB для наших типов: числа раньше строк, строки — по кодовым единицам. */
-function compareKeys(a: StoreKey, b: StoreKey): number {
-  if (typeof a === 'number' && typeof b === 'number') return a < b ? -1 : a > b ? 1 : 0;
-  if (typeof a === 'number') return -1;
-  if (typeof b === 'number') return 1;
-  return a < b ? -1 : a > b ? 1 : 0;
+/** Ключ, переданный хранилищу, — как DataError в IndexedDB: не ключ — ошибка. */
+function keyOf(value: StoreKey, what: string): StoreKey {
+  const key = toKey(value);
+  if (key === null) throw new StorageError(`${what}: не ключ IndexedDB`);
+  return key;
 }
 
 function inRange(key: StoreKey, range: KeyRange): boolean {
@@ -36,14 +32,27 @@ interface IndexDef {
   readonly unique: boolean;
 }
 
+/** Запись под своим ключом; карта хранилища — по тождеству ключа (keyId), а не по ссылке. */
+interface Entry {
+  readonly key: StoreKey;
+  readonly value: unknown;
+}
+
+/** Запись индекса: ключ записи, значение индекса и сама запись — ещё не скопированная. */
+interface IndexEntry {
+  readonly key: StoreKey;
+  readonly indexKey: StoreKey;
+  readonly value: unknown;
+}
+
 class MemoryStore {
   readonly #name: StoreName;
   readonly #options: StoreOptions;
   readonly #indexes: Map<IndexName, IndexDef>;
-  readonly #records: Map<StoreKey, unknown>;
+  readonly #records: Map<string, Entry>;
   #nextKey: number;
 
-  constructor(name: StoreName, options: StoreOptions, indexes = new Map<IndexName, IndexDef>(), records = new Map<StoreKey, unknown>(), nextKey = 1) {
+  constructor(name: StoreName, options: StoreOptions, indexes = new Map<IndexName, IndexDef>(), records = new Map<string, Entry>(), nextKey = 1) {
     this.#name = name;
     this.#options = options;
     this.#indexes = indexes;
@@ -61,51 +70,79 @@ class MemoryStore {
   }
 
   get(key: StoreKey): unknown {
-    return structuredClone(this.#records.get(key));
+    return structuredClone(this.#records.get(keyId(keyOf(key, `${this.#name}: get`)))?.value);
   }
 
   write(value: object, overwrite: boolean): void {
     const keyPath = this.#options.keyPath;
-    const key: unknown = keyPath === null ? this.#nextKey : field(value, keyPath);
-    if (!isKey(key)) throw new StorageError(`${this.#name}: у записи нет ключа ${keyPath ?? ''}`);
-    if (!overwrite && this.#records.has(key)) throw new StorageError(`${this.#name}: запись ${String(key)} уже есть`);
+    const key = keyPath === null ? this.#nextKey : toKey(field(value, keyPath));
+    if (key === null) throw new StorageError(`${this.#name}: у записи нет ключа ${keyPath ?? ''}`);
+    const id = keyId(key);
+    if (!overwrite && this.#records.has(id)) throw new StorageError(`${this.#name}: запись ${keyId(key)} уже есть`);
     for (const [index, { keyPath: path, unique }] of this.#indexes) {
-      const indexKey = field(value, path);
-      if (!unique || !isKey(indexKey)) continue;
-      for (const [other, stored] of this.#records) {
-        if (other !== key && field(stored, path) === indexKey) {
-          throw new StorageError(`${this.#name}: индекс ${index} уже занят значением ${String(indexKey)}`);
+      const indexKey = toKey(field(value, path));
+      if (!unique || indexKey === null) continue;
+      for (const [otherId, other] of this.#records) {
+        const taken = toKey(field(other.value, path));
+        if (otherId !== id && taken !== null && compareKeys(taken, indexKey) === 0) {
+          throw new StorageError(`${this.#name}: индекс ${index} уже занят значением ${keyId(indexKey)}`);
         }
       }
     }
-    this.#records.set(key, structuredClone(value));
+    this.#records.set(id, { key, value: structuredClone(value) });
     if (keyPath === null) this.#nextKey += 1;
   }
 
   delete(key: StoreKey): void {
-    this.#records.delete(key);
+    this.#records.delete(keyId(keyOf(key, `${this.#name}: delete`)));
   }
 
-  /** Записи со значением индекса в диапазоне, по возрастанию индекса, при равенстве — ключа. Значения — копии. */
-  byIndex(index: IndexName, range: KeyRange): IndexedRecord[] {
+  /** Записи индекса по возрастанию значения индекса, при равенстве — ключа; не-ключ в индекс не попадает. */
+  #indexed(index: IndexName): IndexEntry[] {
     const def = this.#indexes.get(index);
     if (def === undefined) throw new StorageError(`${this.#name}: нет индекса ${index}`);
-    const entries: IndexedRecord[] = [];
-    for (const [key, value] of this.#records) {
-      const indexKey = field(value, def.keyPath);
-      if (isKey(indexKey) && inRange(indexKey, range)) entries.push({ key, indexKey, value });
+    const entries: IndexEntry[] = [];
+    for (const { key, value } of this.#records.values()) {
+      const indexKey = toKey(field(value, def.keyPath));
+      if (indexKey !== null) entries.push({ key, indexKey, value });
     }
-    return entries
-      .sort((a, b) => compareKeys(a.indexKey, b.indexKey) || compareKeys(a.key, b.key))
-      .map((entry) => ({ ...entry, value: structuredClone(entry.value) }));
+    return entries.sort((a, b) => compareKeys(a.indexKey, b.indexKey) || compareKeys(a.key, b.key));
+  }
+
+  /** Записи со значением индекса в диапазоне, по возрастанию. Значения и ключи — копии. */
+  byIndex(index: IndexName, range: KeyRange): IndexedRecord[] {
+    const bounds = { lower: keyOf(range.lower, 'нижняя граница'), upper: keyOf(range.upper, 'верхняя граница') };
+    return this.#indexed(index)
+      .filter((entry) => inRange(entry.indexKey, bounds))
+      .map(copied);
+  }
+
+  /** Индекс сверху вниз до первой записи, где stop — да, включительно: как курсор prev в IndexedDB. */
+  descend(index: IndexName, stop: (indexKey: StoreKey) => boolean): IndexedRecord[] {
+    const found: IndexedRecord[] = [];
+    for (const entry of this.#indexed(index).reverse()) {
+      const record = copied(entry);
+      found.push(record);
+      if (stop(record.indexKey)) break;
+    }
+    return found;
   }
 
   /** Все записи по возрастанию ключа — простые данные для снимка. */
   entries(): [StoreKey, unknown][] {
-    return [...this.#records]
-      .sort(([a], [b]) => compareKeys(a, b))
-      .map(([key, value]): [StoreKey, unknown] => [key, structuredClone(value)]);
+    return [...this.#records.values()]
+      .sort((a, b) => compareKeys(a.key, b.key))
+      .map(({ key, value }): [StoreKey, unknown] => [copyKey(key), structuredClone(value)]);
   }
+}
+
+/** Копия ключа: у дат, двоичных и массивов — новый объект, как отдаёт курсор IndexedDB. */
+function copyKey(key: StoreKey): StoreKey {
+  return toKey(key) ?? key;
+}
+
+function copied(entry: IndexEntry): IndexedRecord {
+  return { key: copyKey(entry.key), indexKey: copyKey(entry.indexKey), value: structuredClone(entry.value) };
 }
 
 export type StorageSnapshot = Readonly<Record<StoreName, readonly (readonly [StoreKey, unknown])[]>>;
@@ -145,6 +182,10 @@ export class MemoryStorage implements Storage {
 
   lastByIndex(store: StoreName, index: IndexName, range: KeyRange, limit: number): Promise<IndexedRecord[]> {
     return this.#run(() => this.#store(this.#stores, store).byIndex(index, range).reverse().slice(0, limit));
+  }
+
+  descend(store: StoreName, index: IndexName, stop: (indexKey: StoreKey) => boolean): Promise<IndexedRecord[]> {
+    return this.#run(() => this.#store(this.#stores, store).descend(index, stop));
   }
 
   commit(batch: CommitBatch): Promise<CommitOutcome> {

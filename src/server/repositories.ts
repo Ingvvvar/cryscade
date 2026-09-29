@@ -5,6 +5,8 @@ import {
   checkRound,
   checkRoundCore,
   checkWallet,
+  isResumableSeq,
+  isSeq,
   type KeyRecord,
   type RoundCore,
   type RoundRecord,
@@ -32,6 +34,22 @@ export interface LatestRound {
   /** Значение индекса seq — целое: диапазон индекса числовой. */
   readonly seq: number;
   readonly read: RoundRead;
+}
+
+/** Запись выше годного seq: снимается при починке целиком — с ключами, как есть. */
+export interface StrayRound {
+  readonly key: StoreKey;
+  readonly raw: unknown;
+}
+
+/** Индекс seq сверху вниз до первого годного (§6.6). */
+export interface SeqScan {
+  /** Записи выше годного: seq не число, дробный, за границей продолжения счёта. */
+  readonly above: readonly StrayRound[];
+  /** Раунд с первым годным seq сверху; null — годных нет. */
+  readonly newest: LatestRound | null;
+  /** Наибольший seq в границах записей — следующий раунд не должен на него наступить; 0 — таких нет. */
+  readonly highest: number;
 }
 
 /** seq вне границы записей — испорченная запись: для индекса её нет, как и записи с нечисловым seq. */
@@ -90,6 +108,25 @@ export class RoundRepository {
   async latest(limit: number): Promise<LatestRound[]> {
     const found = await this.#storage.lastByIndex('rounds', 'seq', SEQ_RANGE, limit);
     return found.map(({ key, indexKey, value }) => ({ key, seq: Number(indexKey), read: classifyRound(value) }));
+  }
+
+  /**
+   * Ключи индекса seq сверху вниз до первого годного — на всём индексе, а не в числовом диапазоне: строка, дата или
+   * массив в seq стоят выше любого числа. Годный seq — безопасное целое от 1 до RESUME_LIMIT (records.ts).
+   */
+  async descend(): Promise<SeqScan> {
+    const found = await this.#storage.descend('rounds', 'seq', isResumableSeq);
+    const last = found.at(-1);
+    const newest = last !== undefined && isResumableSeq(last.indexKey) ? { key: last.key, seq: last.indexKey, read: classifyRound(last.value) } : null;
+    const above = (newest === null ? found : found.slice(0, -1)).map(({ key, value }) => ({ key, raw: value }));
+    let highest = 0;
+    for (const { indexKey } of found) {
+      if (isSeq(indexKey)) {
+        highest = indexKey;
+        break;
+      }
+    }
+    return { above, newest, highest };
   }
 
   /** Ключи записей с seq от 1 до upper — кандидаты на вытеснение. */
