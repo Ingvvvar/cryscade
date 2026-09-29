@@ -116,7 +116,7 @@ export function moduleOf(file: string): ModuleId | null {
     if (file.startsWith(`src/${dir}/`)) return dir;
   }
   if (file.startsWith('tools/')) return 'tools';
-  // Записанные раунды — данные; до фазы 4 их импортирует срез в ui/ (временное ребро, // wiring).
+  // Записанные раунды — данные для тестов и инструментов: в граф src/ им хода нет.
   if (/^fixtures\/rounds\/[^/]+\.json$/.test(file)) return 'fixtures';
   return null;
 }
@@ -185,8 +185,7 @@ export const RULES: Readonly<Record<ModuleId, Rule>> = {
   render: { modules: ['render', 'core/model', 'core/presentation'], packages: NO_PACKAGES },
   'render/pixi': { modules: ['render', 'render/pixi', 'core/model', 'core/presentation'], packages: (name) => name === 'pixi.js' },
   ui: {
-    // fixtures — временно, до фазы 4: срез показывает первую сетку записанного раунда (§15, фаза 3).
-    modules: ['ui', 'client', 'render', 'render/pixi', 'audio', 'core/model', 'protocol', 'fixtures'],
+    modules: ['ui', 'client', 'render', 'render/pixi', 'audio', 'core/model', 'protocol'],
     packages: (name) =>
       ['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope'].includes(name),
   },

@@ -13,6 +13,7 @@ const QUEUE: Command = { type: 'queueForLock' };
 const STEAL: Command = { type: 'stealLock' };
 const RELEASE: Command = { type: 'releaseLock' };
 const ABANDON: Command = { type: 'abandon' };
+const RESET_BALANCE: Command = { type: 'callResetBalance' };
 
 function stay(state: ClientState): Transition {
   return { state, commands: [], ignored: true };
@@ -23,6 +24,8 @@ function to(state: ClientState, ...commands: Command[]): Transition {
 }
 
 type Failure = Extract<ClientEvent, { readonly type: 'rejected' | 'unreachable' | 'unusable' }>;
+
+const REFILL: RetryTarget = { call: 'resetBalance' };
 
 /**
  * Запрос не дал результата. Сбой транспорта, ошибка сервера и негодный ответ — экран ошибки с «Повторити» того же
@@ -80,6 +83,8 @@ export class BootingState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -117,6 +122,8 @@ export class AuthenticatingState implements ClientState {
       case 'played':
       case 'presented':
       case 'ended':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -146,6 +153,8 @@ export class IdleState implements ClientState {
     switch (event.type) {
       case 'spin':
         return to(new RequestingState('lock', event.key, event.betMinor), TAKE_LOCK);
+      case 'refill':
+        return to(new RefillingState(), RESET_BALANCE);
       case 'start':
       case 'retry':
       case 'takeOver':
@@ -159,6 +168,7 @@ export class IdleState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -205,6 +215,8 @@ export class RequestingState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -232,6 +244,8 @@ export class RequestingState implements ClientState {
       case 'authenticated':
       case 'presented':
       case 'ended':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -291,6 +305,8 @@ export class PresentingState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -332,6 +348,8 @@ export class EndingState implements ClientState {
       case 'authenticated':
       case 'played':
       case 'presented':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -380,6 +398,8 @@ export class RestoringState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -420,6 +440,45 @@ export class WaitingForTabState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
+        return stay(this);
+      default:
+        event satisfies never;
+        return stay(this);
+    }
+  }
+}
+
+/**
+ * «Поповнити»: resetBalance в пути, без замка раунда. Активный раунд есть — сервер ответит ROUND_ACTIVE: сверка, как
+ * при запуске, решит, доигрывать его или ждать вкладку, которая его показывает.
+ */
+export class RefillingState implements ClientState {
+  readonly view: StateView = { name: 'refilling' };
+  readonly holdsLock = false;
+
+  on(event: ClientEvent): Transition {
+    switch (event.type) {
+      case 'refilled':
+        return to(new IdleState(null));
+      case 'rejected':
+        return event.code === 'ROUND_ACTIVE' ? to(new AuthenticatingState(false), AUTHENTICATE) : failed(REFILL, false, event);
+      case 'unreachable':
+      case 'unusable':
+        return failed(REFILL, false, event);
+      case 'start':
+      case 'spin':
+      case 'retry':
+      case 'takeOver':
+      case 'refill':
+      case 'lockGranted':
+      case 'lockBusy':
+      case 'lockLost':
+      case 'authenticated':
+      case 'played':
+      case 'presented':
+      case 'ended':
         return stay(this);
       default:
         event satisfies never;
@@ -463,6 +522,8 @@ export class ErrorState implements ClientState {
       case 'rejected':
       case 'unreachable':
       case 'unusable':
+      case 'refill':
+      case 'refilled':
         return stay(this);
       default:
         event satisfies never;
@@ -480,6 +541,8 @@ export class ErrorState implements ClientState {
         return to(new RequestingState('play', retry.key, retry.betMinor), { type: 'callPlay', key: retry.key, betMinor: retry.betMinor });
       case 'endRound':
         return to(new EndingState(retry.roundId), { type: 'callEndRound', roundId: retry.roundId });
+      case 'resetBalance':
+        return to(new RefillingState(), RESET_BALANCE);
     }
   }
 }

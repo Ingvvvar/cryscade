@@ -6,6 +6,7 @@ import {
   ErrorState,
   IdleState,
   PresentingState,
+  RefillingState,
   RequestingState,
   RestoringState,
   WaitingForTabState,
@@ -40,10 +41,12 @@ const STATES: Readonly<Record<string, () => ClientState>> = {
   'restoring: показ': () => new RestoringState(ROUND),
   waitingForTab: () => new WaitingForTabState(false),
   'waitingForTab: перехват': () => new WaitingForTabState(true),
+  refilling: () => new RefillingState(),
   'error: authenticate без замка': () => new ErrorState('unreachable', { call: 'authenticate' }, false),
   'error: authenticate под замком': () => new ErrorState('server', { call: 'authenticate' }, true),
   'error: play': () => new ErrorState('unreachable', { call: 'play', key: 'k1', betMinor: 100 }, true),
   'error: endRound': () => new ErrorState('invalid', { call: 'endRound', roundId: 'r1' }, true),
+  'error: resetBalance': () => new ErrorState('unreachable', { call: 'resetBalance' }, false),
   'error: перезагрузка': () => new ErrorState('version', null, false),
 };
 
@@ -63,6 +66,7 @@ const EVENTS: Readonly<Record<string, ClientEvent>> = {
   spin: { type: 'spin', key: 'k2', betMinor: 200 },
   retry: { type: 'retry' },
   takeOver: { type: 'takeOver' },
+  refill: { type: 'refill' },
   lockGranted: { type: 'lockGranted' },
   lockBusy: { type: 'lockBusy' },
   lockLost: { type: 'lockLost' },
@@ -71,6 +75,7 @@ const EVENTS: Readonly<Record<string, ClientEvent>> = {
   played: { type: 'played', round: OTHER },
   presented: { type: 'presented' },
   ended: { type: 'ended' },
+  refilled: { type: 'refilled' },
   ...Object.fromEntries(CODES.map((code) => [`rejected ${code}`, { type: 'rejected', code }])),
   unreachable: { type: 'unreachable' },
   'unusable: version': { type: 'unusable', reason: 'version' },
@@ -81,6 +86,7 @@ const AUTH: Command = { type: 'callAuthenticate' };
 const RELEASE: Command = { type: 'releaseLock' };
 const QUEUE: Command = { type: 'queueForLock' };
 const ABANDON: Command = { type: 'abandon' };
+const RESET: Command = { type: 'callResetBalance' };
 
 const IDLE: StateView = { name: 'idle', refusal: null };
 const WAITING: StateView = { name: 'waitingForTab', stealing: false };
@@ -88,6 +94,8 @@ const AUTH_HELD: StateView = { name: 'authenticating', holdsLock: true };
 const RETRY_AUTH = { call: 'authenticate' } as const;
 const RETRY_PLAY = { call: 'play', key: 'k1', betMinor: 100 } as const;
 const RETRY_END = { call: 'endRound', roundId: 'r1' } as const;
+const RETRY_RESET = { call: 'resetBalance' } as const;
+const REFILLING: StateView = { name: 'refilling' };
 const error = (kind: string, retry: unknown, holdsLock: boolean): StateView => ({ name: 'error', kind, retry, holdsLock }) as StateView;
 
 type Row = readonly [state: string, event: string, next: StateView, commands: readonly Command[]];
@@ -126,6 +134,18 @@ const TABLE: readonly Row[] = [
 
   ['idle', 'spin', { name: 'requesting', stage: 'lock', key: 'k2', betMinor: 200 }, [{ type: 'takeLock' }]],
   ['idle после отказа', 'spin', { name: 'requesting', stage: 'lock', key: 'k2', betMinor: 200 }, [{ type: 'takeLock' }]],
+  // «Поповнити» — без замка раунда: при активном раунде сервер ответит ROUND_ACTIVE.
+  ['idle', 'refill', REFILLING, [RESET]],
+  ['idle после отказа', 'refill', REFILLING, [RESET]],
+  ['refilling', 'refilled', IDLE, []],
+  ['refilling', 'rejected ROUND_ACTIVE', { name: 'authenticating', holdsLock: false }, [AUTH]],
+  ...unexpected('refilling', ['INSUFFICIENT_FUNDS', 'ROUND_NOT_FOUND', 'INVALID_BET', 'IDEMPOTENCY_CONFLICT'], RETRY_RESET, false),
+  ['refilling', 'rejected BAD_REQUEST', error('client', null, false), []],
+  ['refilling', 'rejected VERSION_MISMATCH', error('version', null, false), []],
+  ['refilling', 'rejected INTERNAL', error('server', RETRY_RESET, false), []],
+  ['refilling', 'unreachable', error('unreachable', RETRY_RESET, false), []],
+  ['refilling', 'unusable: version', error('version', null, false), []],
+  ['refilling', 'unusable: invalid', error('invalid', RETRY_RESET, false), []],
 
   // Замок занят — play не уходит.
   ['requesting: замок', 'lockGranted', { name: 'requesting', stage: 'play', key: 'k1', betMinor: 100 }, [
@@ -178,6 +198,7 @@ const TABLE: readonly Row[] = [
   ['error: play', 'lockLost', WAITING, [QUEUE]],
   ['error: endRound', 'retry', { name: 'ending', roundId: 'r1' }, [{ type: 'callEndRound', roundId: 'r1' }]],
   ['error: endRound', 'lockLost', WAITING, [QUEUE]],
+  ['error: resetBalance', 'retry', REFILLING, [RESET]],
 ];
 
 const EXPECTED = new Map(TABLE.map(([state, event, next, commands]) => [`${state} × ${event}`, { next, commands }] as const));
@@ -191,7 +212,7 @@ describe('таблица переходов', () => {
   });
 
   it(`покрыто ${String(Object.keys(STATES).length)} × ${String(Object.keys(EVENTS).length)} пар`, () => {
-    expect(PAIRS.length).toBe(18 * 23);
+    expect(PAIRS.length).toBe(20 * 25);
   });
 
   it.each(PAIRS)('%s × %s', (stateName, eventName) => {
@@ -235,7 +256,9 @@ describe('состояния', () => {
     ['error: authenticate под замком', true],
     ['error: play', true],
     ['error: endRound', true],
+    ['error: resetBalance', false],
     ['error: перезагрузка', false],
+    ['refilling', false],
   ] as const)('%s: замок у вкладки — %s', (stateName, holds) => {
     expect(STATES[stateName]?.().holdsLock).toBe(holds);
   });

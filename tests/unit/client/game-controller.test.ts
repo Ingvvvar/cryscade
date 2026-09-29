@@ -240,7 +240,7 @@ const PLAY_RESULT = {
 };
 
 function manualController(rgs: Rgs, roundLock: RoundLock): GameController {
-  return new GameController({ rgs, roundLock, localLock: new MemoryRoundLock(), channel: QUIET, keys: { next: () => 'k1' } });
+  return new GameController({ rgs, roundLock, localLock: new MemoryRoundLock(), channel: QUIET, notices: QUIET, keys: { next: () => 'k1' } });
 }
 
 beforeEach(() => {
@@ -323,6 +323,60 @@ describe('запуск и спин', () => {
     expect(a.snapshot).toMatchObject({ state: { name: 'idle', refusal: 'INSUFFICIENT_FUNDS' }, balanceMinor: 50 });
     expect(roundsIn(world)).toStrictEqual([]);
     expect(await world.lockFree()).toBe(true);
+  });
+
+  it('«Поповнити» после отказа: resetBalance без замка раунда, баланс 1000, спин проходит', async () => {
+    const world = new ClientWorld();
+    await plant(world.storage, [
+      { op: 'put', store: 'wallet', value: { id: 'main', balanceMinor: 50, activeRoundId: null, nextSeq: 1, revision: 3, resetSeq: 1 } },
+    ]);
+    const a = world.open('a');
+    await settle();
+    a.controller.spin();
+    await settle();
+    a.controller.refill();
+    expect(a.state).toStrictEqual({ name: 'refilling' });
+    expect(await world.lockFree()).toBe(true);
+    await settle();
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_000 });
+    a.controller.spin();
+    await settle();
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.calls).toStrictEqual(['authenticate', 'play', 'resetBalance', 'play', 'endRound']);
+  });
+
+  it('«Поповнити», пока другая вкладка показывает раунд: ROUND_ACTIVE — сверка, вкладка ждёт хозяина, баланс не тронут', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    const b = world.open('b');
+    await settle();
+    a.lab.holdNextEndRound();
+    a.controller.spin();
+    await settle();
+    expect(a.state).toStrictEqual({ name: 'ending', roundId: 'ar1' });
+    b.controller.refill();
+    await settle();
+    expect(b.state).toStrictEqual(WAITING);
+    expect(b.calls).toStrictEqual(['authenticate', 'resetBalance', 'authenticate']);
+    expect(world.storage.snapshot().wallet[0]?.[1]).toMatchObject({ balanceMinor: 99_900, activeRoundId: 'ar1' });
+    a.lab.releaseHeld();
+    await settle();
+    expect([a.state, b.state]).toStrictEqual([IDLE, IDLE]);
+  });
+
+  it('«Поповнити» без связи — экран ошибки с повтором resetBalance; «Повторити» доходит', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.lab.set({ requestLoss: 1 });
+    a.controller.refill();
+    await settle(20_000);
+    expect(a.state).toStrictEqual({ name: 'error', kind: 'unreachable', retry: { call: 'resetBalance' }, holdsLock: false });
+    a.lab.set({ requestLoss: 0 });
+    a.controller.retry();
+    await settle();
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_000 });
+    expect(a.calls).toStrictEqual(['authenticate', 'resetBalance']);
   });
 
   it('снимок — тот же объект, пока ничего не изменилось; подписка снимается', async () => {
@@ -489,6 +543,7 @@ describe('повторы и экран ошибки', () => {
       roundLock: lock,
       localLock: new MemoryRoundLock(),
       channel: { listen: () => () => undefined },
+      notices: { listen: () => () => undefined },
       keys: { next: () => 'k' },
     });
     controller.start();
@@ -816,6 +871,57 @@ describe('баланс и уведомления', () => {
     await settle();
     expect(a.snapshot.balanceMinor).toBe(99_870);
     expect(v.snapshot.balanceMinor).toBe(100_005);
+  });
+
+  it('хранилище в памяти: «Поповнити» — баланс из ответа resetBalance, оповещений нет вовсе', async () => {
+    const world = new ClientWorld();
+    const storage = new MemoryStorage({ durable: false });
+    await plant(storage, [{ op: 'put', store: 'wallet', value: { id: 'main', balanceMinor: 50, activeRoundId: null, nextSeq: 1, revision: 3, resetSeq: 1 } }]);
+    const v = world.open('v', { storage, silent: true });
+    await settle();
+    expect(v.snapshot).toMatchObject({ balanceMinor: 50, notice: 'volatile' });
+    v.controller.refill();
+    await settle();
+    expect(v.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_000 });
+    expect(world.bus.sent).toStrictEqual([]);
+  });
+});
+
+describe('хранилище закрыто другой вкладкой', () => {
+  it('storageClosed своего воркера — полоса versionchange поверх остальных; чужое и мусор — мимо', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.port.push({ v: 1, type: 'storageClosed', reason: 'other' });
+    a.port.push({ v: 2, type: 'storageClosed', reason: 'versionchange' });
+    a.port.push('storageClosed');
+    await settle();
+    expect(a.snapshot.notice).toBeNull();
+    a.port.push({ v: 1, type: 'storageClosed', reason: 'versionchange' });
+    await settle();
+    expect(a.snapshot).toMatchObject({ state: IDLE, notice: 'versionchange' });
+  });
+
+  it('versionchange — и поверх volatile: воркер, поднятый заново после падения, открыл базу, и её обновили', async () => {
+    const world = new ClientWorld();
+    const v = world.open('v', { storage: new MemoryStorage({ durable: false }), silent: true });
+    await settle();
+    expect(v.snapshot.notice).toBe('volatile');
+    v.port.push({ v: 1, type: 'storageClosed', reason: 'versionchange' });
+    await settle();
+    expect(v.snapshot.notice).toBe('versionchange');
+  });
+
+  it('после закрытия вкладки уведомления не слушаются', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    const published = a.snapshots.length;
+    a.close();
+    a.port.push({ v: 1, type: 'storageClosed', reason: 'versionchange' });
+    await settle();
+    expect(a.snapshots.length).toBe(published);
+    expect(a.controller.getSnapshot().notice).toBeNull();
   });
 });
 

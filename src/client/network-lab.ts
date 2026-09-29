@@ -138,13 +138,14 @@ export class NetworkLabTransport implements Transport {
 
   #fromServer(message: unknown): void {
     if (this.#frozen) return;
-    if (this.#loseNextResponse) {
+    const id = idOf(message);
+    // «Потерять следующий ответ» — именно ответ: сообщение воркера без id (storageClosed) его не расходует.
+    if (this.#loseNextResponse && id !== null) {
       this.#loseNextResponse = false;
       return;
     }
     if (this.#lost(this.#settings.responseLoss)) return;
     for (const listener of [...this.#listeners]) listener(message);
-    const id = idOf(message);
     if (id !== null && this.#reloadAfter?.has(id) === true) {
       this.#reloadAfter = null;
       this.#frozen = true;

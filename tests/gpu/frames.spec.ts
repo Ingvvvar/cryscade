@@ -1,10 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 import { PALETTE } from '../../src/render/art/palette.ts';
 import type { Insets, Rect } from '../../src/render/layout.ts';
-import { firstGrid } from '../../src/ui/fixture-grid.ts';
+import { fixtureFirstGrid } from '../support/fixture-rounds.ts';
 import { encodePng, luminance, decodePng, type Image } from '../support/png.ts';
 import type { ProbeWindow } from '../support/page-probe.ts';
 import { difference, fakeSafeArea, openStill, snapshot } from './support/frame.ts';
@@ -19,7 +19,8 @@ import { MIN_CONTRAST, MIN_PIXELS, backingColour, readCell, repaintBody, type Ce
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OUT = `${ROOT}reports/phase-3/`;
-const GRID = firstGrid(JSON.parse(readFileSync(`${ROOT}fixtures/rounds/feature-start.json`, 'utf8')));
+// Сетка покоя нового кошелька — fill сида 48, первая сетка фикстуры feature-start (§6.1, limits.ts DEMO_SEED).
+const GRID = fixtureFirstGrid('feature-start');
 const NAMES = ['Кварц', 'Аметист', 'Цитрин', 'Изумруд', 'Сапфир', 'Рубин', 'Бриллиант', 'Ядро'];
 
 interface Frame {

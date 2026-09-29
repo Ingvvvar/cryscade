@@ -5,6 +5,9 @@ import { isNat, isRecord, isToken } from './guards.ts';
 // revision растёт с каждой записью — по ней получатель отбрасывает запоздавшее. notice: 'reset' — запись была
 // починкой испорченного хранилища, игроку показывается полоса.
 
+/** Имя общего канала вкладок: в него пишет воркер каждой вкладки, его слушает каждая страница. */
+export const TAB_CHANNEL = 'cryscade';
+
 export interface WalletChanged {
   readonly v: typeof PROTOCOL_VERSION;
   readonly type: 'walletChanged';

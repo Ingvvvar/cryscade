@@ -78,6 +78,12 @@ export class WorkerPort implements Transport {
     this.#closed = true;
   }
 
+  /** Сообщение воркера без запроса — например, storageClosed. Доходит и до закрытого порта: слушать его — дело вкладки. */
+  push(message: unknown): void {
+    const copy: unknown = structuredClone(message);
+    for (const listener of [...this.#listeners]) listener(copy);
+  }
+
   async #handle(message: unknown): Promise<void> {
     if (!this.#open()) return;
     if (isRecord(message)) this.received.push(message['body'] as RequestBody);
@@ -189,6 +195,7 @@ export class Tab {
       roundLock: options.wrapLock?.(world.roundLock) ?? world.roundLock,
       localLock: new MemoryRoundLock(),
       channel: world.bus.channel(),
+      notices: this.port,
       keys: new SequentialKeys(name),
     });
     this.controller.subscribe(() => {

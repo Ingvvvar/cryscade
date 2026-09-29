@@ -137,6 +137,16 @@ describe('разовые действия', () => {
     expect(got).toStrictEqual([response(2)]);
   });
 
+  it('сообщение воркера без id ответом не считается: оно доходит, а потеряется следующий ответ', () => {
+    const { inner, lab, got } = rig();
+    const closed = { v: 1, type: 'storageClosed', reason: 'versionchange' };
+    lab.loseNextResponse();
+    inner.reply(closed);
+    inner.reply(response(1));
+    inner.reply(response(2));
+    expect(got).toStrictEqual([closed, response(2)]);
+  });
+
   it('задержать следующий endRound: остальное идёт, endRound — после releaseHeld; следующий endRound не держится', () => {
     const { inner, lab } = rig();
     lab.holdNextEndRound();

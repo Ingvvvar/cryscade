@@ -129,8 +129,8 @@ const EDGES: [string, Target, boolean][] = [
   ['src/ui/a.tsx', file('src/core/rng/b.ts'), false],
   ['src/ui/a.tsx', file('src/server/b.ts'), false],
   ['src/ui/a.tsx', pkg('pixi.js'), false],
-  // fixtures/rounds/*.json — только ui/, временно до фазы 4
-  ['src/ui/main.tsx', file('fixtures/rounds/feature-start.json'), true],
+  // fixtures/rounds/*.json — данные тестов: нельзя всем модулям src/ и tools/ (ребро ui → fixtures ушло в фазе 4)
+  ['src/ui/main.tsx', file('fixtures/rounds/feature-start.json'), false],
   ['src/ui/a.tsx', file('fixtures/other.json'), false],
   ['src/render/pixi/a.ts', file('fixtures/rounds/a.json'), false],
   ['src/render/a.ts', file('fixtures/rounds/a.json'), false],

@@ -1,10 +1,10 @@
-// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна. Рендерер, дошедший до
-// готовности, получает текущий вьюпорт, reduced motion и сетку; до готовности всё копится здесь.
-// Раскладку отдаёт React-панели: она ставит муляж по тем же зонам, что Pixi — сетку.
+// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна и игры. Рендерер, дошедший до
+// готовности, получает текущий вьюпорт, reduced motion, сетку и число выигрыша; до готовности всё копится здесь.
+// Раскладку отдаёт React-панели: она ставит кнопки по тем же зонам, что Pixi — сетку.
 
 import type { SymbolId } from '../core/model/symbols.ts';
 import { computeLayout, type Layout, type Viewport } from '../render/layout.ts';
-import type { Renderer, ViewportSink } from '../render/renderer.ts';
+import type { GridSink, Renderer, ViewportSink, WinSink } from '../render/renderer.ts';
 import { SceneMount } from './scene-mount.ts';
 
 /** Счётчики монтирований для тестового зонда. */
@@ -18,17 +18,19 @@ export interface MountObserver {
 
 export interface SceneSessionOptions {
   readonly create: () => Renderer;
-  readonly grid: readonly SymbolId[];
   readonly onLayout: (layout: Layout) => void;
   readonly onError: (error: unknown) => void;
   readonly observer: MountObserver | null;
 }
 
-export class SceneSession implements ViewportSink {
+export class SceneSession implements ViewportSink, GridSink, WinSink {
   readonly #options: SceneSessionOptions;
   readonly #mount: SceneMount<Renderer>;
   #viewport: { readonly viewport: Viewport; readonly pixelRatio: number } | null = null;
   #reducedMotion = false;
+  /** Сетку присылает authenticate: до его ответа сетки нет. */
+  #grid: readonly SymbolId[] | null = null;
+  #win: string | null = null;
 
   constructor(options: SceneSessionOptions) {
     this.#options = options;
@@ -70,9 +72,20 @@ export class SceneSession implements ViewportSink {
     this.#mount.renderer?.setReducedMotion(on);
   }
 
+  showGrid(grid: readonly SymbolId[]): void {
+    this.#grid = grid;
+    this.#mount.renderer?.showGrid(grid);
+  }
+
+  showWin(text: string): void {
+    this.#win = text;
+    this.#mount.renderer?.showWin(text);
+  }
+
   #ready(renderer: Renderer): void {
     if (this.#viewport !== null) renderer.resize(this.#viewport.viewport, this.#viewport.pixelRatio);
     renderer.setReducedMotion(this.#reducedMotion);
-    renderer.showGrid(this.#options.grid);
+    if (this.#grid !== null) renderer.showGrid(this.#grid);
+    if (this.#win !== null) renderer.showWin(this.#win);
   }
 }

@@ -69,6 +69,7 @@ export class PixiRenderer implements Renderer {
   #viewport: { readonly viewport: Viewport; readonly pixelRatio: number } | null = null;
   #reducedMotion = false;
   #pendingGrid: readonly SymbolId[] | null = null;
+  #pendingWin: string | null = null;
   #inspected: InspectableScene | null = null;
 
   constructor(options: PixiRendererOptions) {
@@ -102,6 +103,7 @@ export class PixiRenderer implements Renderer {
     const grid = new GridView(atlas);
     this.#root.addChild(frame.view, grid.view);
     const counter = new WinCounter(this.#root);
+    if (this.#pendingWin !== null) counter.text = this.#pendingWin;
     this.#scene = { atlas, background, frame, grid, counter };
     app.stage.addChild(background.view, this.#root);
     grid.setReducedMotion(this.#reducedMotion);
@@ -151,6 +153,11 @@ export class PixiRenderer implements Renderer {
   showGrid(grid: readonly SymbolId[]): void {
     this.#pendingGrid = grid;
     this.#scene?.grid.show(grid);
+  }
+
+  showWin(text: string): void {
+    this.#pendingWin = text;
+    if (this.#scene !== null) this.#scene.counter.text = text;
   }
 
   /** Безопасен в любом состоянии: и после неудачного init, и повторно. */

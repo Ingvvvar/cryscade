@@ -11,5 +11,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["tools/**/*", "lint/**/*", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.gpu.config.ts", "eslint.config.js"]
+  "include": ["tools/**/*", "lint/**/*", "vite.config.ts", "vite.budget-control.config.ts", "vitest.config.ts", "playwright.config.ts", "playwright.gpu.config.ts", "eslint.config.js"]
 }

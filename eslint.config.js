@@ -87,7 +87,7 @@ export default defineConfig([
   boundary(['src/render/pixi/**'], [packagesExcept(['pixi\\.js']), leave(['server', 'client', 'ui', 'audio', 'tools', 'fixtures']), coreOnly('(model|presentation)/')]),
   boundary(['src/ui/**'], [
     packagesExcept(['react', 'react-dom', '@fontsource-variable/unbounded', '@fontsource-variable/manrope']),
-    leave(['server', 'tools']),
+    leave(['server', 'tools', 'fixtures']),
     coreOnly('model/'),
   ]),
   boundary(['src/audio/**'], [packagesExcept([]), leave(['server', 'client', 'render', 'ui', 'tools', 'fixtures']), coreOnly('(model|presentation)/')]),

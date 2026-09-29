@@ -1,6 +1,7 @@
 import { initialState, type ClientEvent, type ClientState, type Command, type ShownRound, type StateView } from '../core/fsm/index.ts';
 import { finalGrid } from '../core/presentation/final-grid.ts';
 import {
+  checkStorageClosed,
   checkWalletChanged,
   type AuthenticateResult,
   type ClientConfig,
@@ -20,8 +21,13 @@ export interface GameControllerPorts {
   /** Замок внутри вкладки: хранилище недоступно — вкладки независимы, общий замок им только мешал бы. */
   readonly localLock: RoundLock;
   readonly channel: TabChannel;
+  /** Сообщения своего воркера без запроса: storageClosed — базу обновила другая вкладка. */
+  readonly notices: TabChannel;
   readonly keys: KeySource;
 }
+
+/** Полоса над игрой: хранилище в памяти, починка, база обновлена другой вкладкой. */
+export type ClientNotice = StorageNotice | 'versionchange';
 
 /** Снимок для ui/ (useSyncExternalStore): новый объект — только когда что-то в нём изменилось. */
 export interface ControllerSnapshot {
@@ -34,7 +40,7 @@ export interface ControllerSnapshot {
   readonly grid: readonly number[] | null;
   /** Выигрыш последнего показанного раунда. */
   readonly winMinor: number | null;
-  readonly notice: StorageNotice | null;
+  readonly notice: ClientNotice | null;
 }
 
 const DEFAULT_BET_MINOR = 100;
@@ -76,6 +82,7 @@ export class GameController {
   readonly #listeners = new Set<() => void>();
   readonly #inbox: ClientEvent[] = [];
   readonly #unlisten: () => void;
+  readonly #unlistenNotices: () => void;
   #state: ClientState = initialState();
   #snapshot: ControllerSnapshot;
   #draining = false;
@@ -84,6 +91,8 @@ export class GameController {
   #volatile = false;
   /** Хранилище чинилось — баланс восстановлен до 1000. */
   #reset = false;
+  /** Воркер закрыл хранилище: другая вкладка открыла базу новой версии — играть дальше можно только после перезагрузки. */
+  #storageClosed = false;
   /** Оповещения до первого authenticate: ещё не известно, наш ли это кошелёк. */
   #early: unknown[] | null = [];
   #config: ClientConfig | null = null;
@@ -104,6 +113,11 @@ export class GameController {
     this.#snapshot = this.#compose();
     this.#unlisten = ports.channel.listen((message) => {
       this.#fromTab(message);
+    });
+    this.#unlistenNotices = ports.notices.listen((message) => {
+      if (this.#storageClosed || checkStorageClosed(message) !== null) return;
+      this.#storageClosed = true;
+      if (!this.#draining) this.#publish();
     });
   }
 
@@ -138,6 +152,11 @@ export class GameController {
     this.#dispatch({ type: 'takeOver' });
   }
 
+  /** «Поповнити»: баланс снова 1000. */
+  refill(): void {
+    this.#dispatch({ type: 'refill' });
+  }
+
   betUp(): void {
     this.#stepBet(1);
   }
@@ -153,6 +172,7 @@ export class GameController {
     this.#call?.abort();
     this.#releaseLock();
     this.#unlisten();
+    this.#unlistenNotices();
     this.#listeners.clear();
   }
 
@@ -187,6 +207,12 @@ export class GameController {
           return { type: 'ended' };
         });
         break;
+      case 'callResetBalance':
+        this.#request({ type: 'resetBalance' }, (result) => {
+          this.#applyWallet(result.wallet);
+          return { type: 'refilled' };
+        });
+        break;
       case 'takeLock':
         void this.#takeLock();
         break;
@@ -205,6 +231,8 @@ export class GameController {
       case 'startPresentation':
         this.#present(command.round);
         break;
+      default:
+        command satisfies never;
     }
   }
 
@@ -342,7 +370,7 @@ export class GameController {
       betLevelsMinor: this.#config?.betLevelsMinor ?? [],
       grid: this.#grid,
       winMinor: this.#winMinor,
-      notice: this.#volatile ? 'volatile' : this.#reset ? 'reset' : null,
+      notice: this.#storageClosed ? 'versionchange' : this.#volatile ? 'volatile' : this.#reset ? 'reset' : null,
     };
   }
 

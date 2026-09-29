@@ -31,4 +31,9 @@ export interface GridSink {
   showGrid(grid: readonly SymbolId[]): void;
 }
 
-export interface Renderer extends RendererLifecycle, ViewportSink, GridSink {}
+/** Число выигрыша — готовой строкой из ui: в render/ текста нет, формат и язык — забота ui. */
+export interface WinSink {
+  showWin(text: string): void;
+}
+
+export interface Renderer extends RendererLifecycle, ViewportSink, GridSink, WinSink {}

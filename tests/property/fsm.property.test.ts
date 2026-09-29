@@ -25,7 +25,7 @@ const CODES: readonly RejectCode[] = [
   'INTERNAL',
 ];
 
-type Call = 'authenticate' | 'play' | 'endRound';
+type Call = 'authenticate' | 'play' | 'endRound' | 'resetBalance';
 
 class World {
   held = false;
@@ -41,13 +41,21 @@ class World {
   /** Ввод игрока — возможен всегда. */
   user(): ClientEvent[] {
     this.#keys += 1;
-    return [{ type: 'start' }, { type: 'spin', key: `k${String(this.#keys)}`, betMinor: 100 }, { type: 'retry' }, { type: 'takeOver' }];
+    return [
+      { type: 'start' },
+      { type: 'spin', key: `k${String(this.#keys)}`, betMinor: 100 },
+      { type: 'retry' },
+      { type: 'takeOver' },
+      { type: 'refill' },
+    ];
   }
 
   /** Ответы окружения, возможные сейчас. */
-  environment(pick: number): ClientEvent[] {
+  environment(pick: number, codePick: number): ClientEvent[] {
     const round = ROUNDS[pick % ROUNDS.length] ?? null;
-    const code = CODES[pick % CODES.length] ?? 'INTERNAL';
+    // Код отказа — своим числом: от pick зависит и выбор события, и тогда редкие пары (отказ ROUND_ACTIVE на
+    // «Поповнити») выпадали бы не в каждом прогоне.
+    const code = CODES[codePick % CODES.length] ?? 'INTERNAL';
     const events: ClientEvent[] = [];
     if (this.lockRequest === 'try') events.push({ type: 'lockGranted' }, { type: 'lockBusy' });
     if (this.lockRequest === 'queue' || this.lockRequest === 'steal') events.push({ type: 'lockGranted' });
@@ -57,6 +65,7 @@ class World {
     if (this.call === 'authenticate') events.push({ type: 'authenticated', activeRound: pick % 3 === 0 ? null : round });
     if (this.call === 'play' && round !== null) events.push({ type: 'played', round });
     if (this.call === 'endRound') events.push({ type: 'ended' });
+    if (this.call === 'resetBalance') events.push({ type: 'refilled' });
     return events;
   }
 
@@ -79,6 +88,7 @@ class World {
       case 'authenticated':
       case 'played':
       case 'ended':
+      case 'refilled':
       case 'rejected':
       case 'unreachable':
       case 'unusable':
@@ -102,6 +112,7 @@ class World {
       case 'authenticated':
       case 'played':
       case 'ended':
+      case 'refilled':
       case 'rejected':
       case 'unreachable':
       case 'unusable':
@@ -133,6 +144,10 @@ class World {
         if (!this.held) this.violations.push('endRound без замка');
         this.call = 'endRound';
         break;
+      case 'callResetBalance':
+        busy();
+        this.call = 'resetBalance';
+        break;
       case 'takeLock':
       case 'queueForLock':
         if (this.held || this.lockRequest !== 'none') this.violations.push(`${command.type}: замок уже у вкладки или запрошен`);
@@ -163,13 +178,14 @@ describe('FSM против окружения', () => {
   it('замок, запросы и ключи сходятся с моделью на любой последовательности', () => {
     const coverage = new Set<string>();
     // Шаг — ввод игрока (дорожка 0) или ответ окружения (1–3), если он возможен: так прогон доходит до глубоких путей.
-    const step = fc.record({ lane: fc.nat(3), pick: fc.nat(1_000) });
+    const step = fc.record({ lane: fc.nat(3), pick: fc.nat(1_000), code: fc.nat(CODES.length - 1) });
     fc.assert(
-      fc.property(fc.array(step, { minLength: 1, maxLength: 150 }), (script) => {
+      // size medium: по умолчанию (small) сценарии — около десятка шагов, и глубокие пути выпадают не в каждом прогоне.
+      fc.property(fc.array(step, { minLength: 1, maxLength: 150, size: 'medium' }), (script) => {
         const world = new World();
         let state = initialState();
-        for (const { lane, pick } of script) {
-          const environment = world.environment(pick);
+        for (const { lane, pick, code } of script) {
+          const environment = world.environment(pick, code);
           const events = lane === 0 || environment.length === 0 ? world.user() : environment;
           const event = events[Math.floor(pick / 8) % events.length];
           if (event === undefined) throw new Error('пустой выбор');
@@ -194,7 +210,18 @@ describe('FSM против окружения', () => {
       { numRuns: 5000 },
     );
     // Положительный контроль охвата: прогоны дошли до всех команд и до перехвата с доигрыванием.
-    for (const reached of ['callPlay', 'callEndRound', 'stealLock', 'abandon', 'releaseLock', 'waitingForTab → authenticating', 'restoring → ending']) {
+    for (const reached of [
+      'callPlay',
+      'callEndRound',
+      'callResetBalance',
+      'stealLock',
+      'abandon',
+      'releaseLock',
+      'waitingForTab → authenticating',
+      'restoring → ending',
+      'refilling → idle',
+      'refilling → authenticating',
+    ]) {
       expect(coverage.has(reached), reached).toBe(true);
     }
   });

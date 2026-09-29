@@ -40,6 +40,10 @@ class FakeRenderer implements Renderer {
   showGrid(grid: readonly SymbolId[]): void {
     this.calls.push(`grid ${String(grid.length)}`);
   }
+
+  showWin(text: string): void {
+    this.calls.push(`win ${text}`);
+  }
 }
 
 class Counter implements MountObserver {
@@ -70,7 +74,6 @@ function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: L
       renderers.push(renderer);
       return renderer;
     },
-    grid: GRID,
     onLayout: (layout) => layouts.push(layout),
     onError: () => undefined,
     observer,
@@ -79,15 +82,29 @@ function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: L
 }
 
 describe('SceneSession', () => {
-  it('состояние окна до готовности копится и уходит рендереру по готовности: вьюпорт, reduced motion, сетка', async () => {
+  it('состояние окна и игры до готовности копится и уходит рендереру по готовности: вьюпорт, reduced motion, сетка, выигрыш', async () => {
     const { session, renderers } = setup();
     session.attach(HOST);
     session.resize(PORTRAIT, 3);
     session.setReducedMotion(true);
+    session.showGrid(GRID);
+    session.showWin('0,35');
     await flush();
     renderers[0]?.finishInit();
     await flush();
-    expect(renderers[0]?.calls).toStrictEqual(['resize 390@3', 'motion true', 'grid 49']);
+    expect(renderers[0]?.calls).toStrictEqual(['resize 390@3', 'motion true', 'grid 49', 'win 0,35']);
+  });
+
+  it('до ответа authenticate сетки нет — рендерер её не получает; потом сетка и выигрыш идут сразу', async () => {
+    const { session, renderers } = setup();
+    session.attach(HOST);
+    await flush();
+    renderers[0]?.finishInit();
+    await flush();
+    expect(renderers[0]?.calls).toStrictEqual(['motion false']);
+    session.showGrid(GRID);
+    session.showWin('1,05');
+    expect(renderers[0]?.calls).toStrictEqual(['motion false', 'grid 49', 'win 1,05']);
   });
 
   it('после готовности изменения окна идут рендереру сразу', async () => {
@@ -113,6 +130,7 @@ describe('SceneSession', () => {
     session.detach();
     session.attach(HOST);
     session.resize(PORTRAIT, 2);
+    session.showGrid(GRID);
     await flush();
     expect(renderers).toHaveLength(1);
     renderers[0]?.finishInit();

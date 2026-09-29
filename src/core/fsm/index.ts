@@ -6,6 +6,7 @@ export {
   ErrorState,
   IdleState,
   PresentingState,
+  RefillingState,
   RequestingState,
   RestoringState,
   WaitingForTabState,

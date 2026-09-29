@@ -173,3 +173,94 @@ body {
   text-align: center;
   font-size: 1.25rem;
 }
+
+.panel button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* «Поповнити» — рядом с балансом: баланс не упирается в ноль навсегда (§4.6). */
+.refill {
+  padding: calc(var(--u) * 6) calc(var(--u) * 18);
+  font-size: calc(var(--u) * 18);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Полосы о хранилище и отказе спину — поверх верха сцены, тап не перехватывают. */
+.notices {
+  position: absolute;
+  left: 50%;
+  top: max(12px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(92vw, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgb(11 18 48 / 0.92);
+  border: 1px solid rgb(159 180 232 / 0.4);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.notice-reset,
+.notice-versionchange {
+  border-color: var(--warm);
+}
+
+.notice-volatile {
+  border-color: var(--glow);
+}
+
+/* Экран ошибки и ожидание чужой вкладки: сцена стоит, тап перехватывается. */
+.status-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 16px;
+  background: rgb(5 8 20 / 0.72);
+}
+
+.status-text {
+  margin: 0;
+  max-width: 480px;
+  text-align: center;
+  font-size: 1.2rem;
+  line-height: 1.4;
+}
+
+.status-action {
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  cursor: pointer;
+  padding: 12px 28px;
+  background: var(--cave-2);
+  border: 2px solid var(--glow);
+  border-radius: 16px;
+}
+
+.status-action:focus-visible {
+  outline: 3px solid var(--glow);
+  outline-offset: 3px;
+}
+
+.status-action:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

@@ -88,8 +88,9 @@ export class GridView {
     this.#place();
   }
 
+  /** Сетка показана и упала. До первой сетки покоя нет: её присылает authenticate. */
   get settled(): boolean {
-    return this.#timeMs >= gridSettleMs(this.#profile);
+    return this.#shown.length > 0 && this.#timeMs >= gridSettleMs(this.#profile);
   }
 
   destroy(): void {

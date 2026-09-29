@@ -21,6 +21,8 @@ export default defineConfig({
     // Headless shell: WebGPU нет, WebGL — SwiftShader. Проверка отката и видимой ошибки принудительного выбора.
     { name: 'fallback', testMatch: 'fallback.spec.ts', use: { ...devices['Desktop Chrome'], baseURL: url(E2E) } },
     { name: 'bundle', testMatch: 'bundle.spec.ts' },
+    // Игра на e2e-сборке: зонд видит контроллер и лабораторию сети; вкладки одного профиля делят IndexedDB и замки.
+    { name: 'game', testMatch: /(game|resilience|storage)\.spec\.ts$/, use: { ...chrome, baseURL: url(E2E) } },
   ],
   webServer: [
     {

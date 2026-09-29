@@ -32,6 +32,8 @@ export type ClientEvent =
   | { readonly type: 'retry' }
   /** «Грати тут»: отнять замок раунда у другой вкладки. */
   | { readonly type: 'takeOver' }
+  /** «Поповнити»: баланс снова 1000 (§4.6). */
+  | { readonly type: 'refill' }
   /** Замок раунда выдан: сразу, из очереди или перехватом. */
   | { readonly type: 'lockGranted' }
   /** Замок держит другая вкладка. */
@@ -43,6 +45,8 @@ export type ClientEvent =
   /** Показ раунда закончен. */
   | { readonly type: 'presented' }
   | { readonly type: 'ended' }
+  /** resetBalance прошёл. */
+  | { readonly type: 'refilled' }
   /** Сервер ответил ошибкой. */
   | { readonly type: 'rejected'; readonly code: RejectCode }
   /** Все попытки потеряны: таймауты и потери транспорта. */
@@ -56,12 +60,14 @@ export type ClientEventType = ClientEvent['type'];
 export type RetryTarget =
   | { readonly call: 'authenticate' }
   | { readonly call: 'play'; readonly key: string; readonly betMinor: number }
-  | { readonly call: 'endRound'; readonly roundId: string };
+  | { readonly call: 'endRound'; readonly roundId: string }
+  | { readonly call: 'resetBalance' };
 
 export type Command =
   | { readonly type: 'callAuthenticate' }
   | { readonly type: 'callPlay'; readonly key: string; readonly betMinor: number }
   | { readonly type: 'callEndRound'; readonly roundId: string }
+  | { readonly type: 'callResetBalance' }
   /** Взять замок раунда, если свободен (ifAvailable). Ответ — lockGranted или lockBusy. */
   | { readonly type: 'takeLock' }
   /** Встать в очередь на замок. Ответ — lockGranted, когда хозяин отпустит или закроется. */
@@ -88,6 +94,8 @@ export type StateView =
   | { readonly name: 'restoring'; readonly stage: 'lock'; readonly roundId: null }
   | { readonly name: 'restoring'; readonly stage: 'show'; readonly roundId: string }
   | { readonly name: 'waitingForTab'; readonly stealing: boolean }
+  /** resetBalance в пути. Замок раунда не нужен: при активном раунде сервер ответит ROUND_ACTIVE. */
+  | { readonly name: 'refilling' }
   | { readonly name: 'error'; readonly kind: ErrorKind; readonly retry: RetryTarget | null; readonly holdsLock: boolean };
 
 export type StateName = StateView['name'];
