@@ -18,7 +18,8 @@ const SMALL = fixtureRound('small-win');
 const ROUND = { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events };
 const GRID = new Array<number>(49).fill(3);
 const CONFIG = { betLevelsMinor: [20, 40, 100], capX100: 500_000 };
-const AUTH = { balanceMinor: 100_000, config: CONFIG, activeRound: null, idleGrid: GRID, notice: null };
+const WALLET = { balanceMinor: 99_900, revision: 7, notice: null };
+const AUTH = { balanceMinor: 100_000, config: CONFIG, activeRound: null, idleGrid: GRID, notice: null, wallet: WALLET };
 
 describe('parseRequest', () => {
   it('годный конверт', () => {
@@ -110,13 +111,22 @@ describe('checkResult', () => {
     ['authenticate', { ...AUTH, activeRound: undefined }, 'authenticate: активный раунд — не объект'],
     ['authenticate', { ...AUTH, idleGrid: GRID.slice(1) }, 'authenticate: idleGrid — не 49 символов'],
     ['authenticate', { ...AUTH, notice: 'broken' }, 'authenticate: неизвестное уведомление'],
-    ['play', { round: ROUND, balanceMinor: 99_900 }, null],
-    ['play', { round: ROUND, balanceMinor: -1 }, 'play: balanceMinor — не целое'],
-    ['play', { round: { ...ROUND, events: [{ t: 'end', payX100: 35 }] }, balanceMinor: 0 }, 'play: раунд: событие 0: end не на месте'],
-    ['endRound', { balanceMinor: 99_935 }, null],
-    ['endRound', { balanceMinor: '99935' }, 'endRound: balanceMinor — не целое'],
-    ['resetBalance', { balanceMinor: 100_000 }, null],
-    ['resetBalance', {}, 'resetBalance: balanceMinor — не целое'],
+    ['authenticate', { ...AUTH, wallet: { ...WALLET, revision: 0, notice: 'reset' } }, null],
+    ['authenticate', { ...AUTH, wallet: undefined }, 'authenticate: wallet — не объект'],
+    ['authenticate', { ...AUTH, wallet: { ...WALLET, revision: -1 } }, 'authenticate: wallet: balanceMinor или revision — не целые'],
+    ['authenticate', { ...AUTH, wallet: { ...WALLET, notice: 'volatile' } }, 'authenticate: wallet: неизвестное уведомление'],
+    ['play', { round: ROUND, balanceMinor: 99_900, wallet: WALLET }, null],
+    ['play', { round: ROUND, balanceMinor: -1, wallet: WALLET }, 'play: balanceMinor — не целое'],
+    ['play', { round: { ...ROUND, events: [{ t: 'end', payX100: 35 }] }, balanceMinor: 0, wallet: WALLET }, 'play: раунд: событие 0: end не на месте'],
+    ['play', { round: ROUND, balanceMinor: 99_900 }, 'play: wallet — не объект'],
+    ['play', { round: ROUND, balanceMinor: 99_900, wallet: { ...WALLET, balanceMinor: 0.5 } }, 'play: wallet: balanceMinor или revision — не целые'],
+    ['endRound', { balanceMinor: 99_935, wallet: WALLET }, null],
+    ['endRound', { balanceMinor: '99935', wallet: WALLET }, 'endRound: balanceMinor — не целое'],
+    ['endRound', { balanceMinor: 99_935, wallet: { ...WALLET, revision: '7' } }, 'endRound: wallet: balanceMinor или revision — не целые'],
+    ['endRound', { balanceMinor: 99_935, wallet: [] }, 'endRound: wallet — не объект'],
+    ['resetBalance', { balanceMinor: 100_000, wallet: { balanceMinor: 100_000, revision: 1, notice: null } }, null],
+    ['resetBalance', { wallet: WALLET }, 'resetBalance: balanceMinor — не целое'],
+    ['resetBalance', { balanceMinor: 100_000, wallet: { ...WALLET, notice: 'ok' } }, 'resetBalance: wallet: неизвестное уведомление'],
     ['play', 'ok', 'результат — не объект'],
   ] as const)('%s %#', (type, result, problem) => {
     expect(checkResult(type, result)).toBe(problem);
@@ -149,8 +159,9 @@ describe('checkError', () => {
 
 describe('parseResponse', () => {
   it('результат под тип запроса', () => {
-    const raw = responseEnvelope(5, { ok: true, result: { balanceMinor: 99_935 } });
-    expect(parseResponse('endRound', raw)).toStrictEqual({ kind: 'result', id: 5, result: { balanceMinor: 99_935 } });
+    const result = { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 8, notice: null } };
+    const raw = responseEnvelope(5, { ok: true, result });
+    expect(parseResponse('endRound', raw)).toStrictEqual({ kind: 'result', id: 5, result });
   });
 
   it('ошибка — с id или без, если запрос не прочитан', () => {
@@ -174,7 +185,7 @@ describe('parseResponse', () => {
     ['испорченная ошибка', { v: 1, id: 1, body: { ok: false, error: { code: 'ROUND_ACTIVE' } } }, 'ROUND_ACTIVE: roundId — не id'],
     [
       'испорченные события',
-      { v: 1, id: 1, body: { ok: true, result: { round: { ...ROUND, events: SMALL.events.slice(1) }, balanceMinor: 0 } } },
+      { v: 1, id: 1, body: { ok: true, result: { round: { ...ROUND, events: SMALL.events.slice(1) }, balanceMinor: 0, wallet: WALLET } } },
       'play: раунд: событие 0: win не после сетки',
     ],
   ])('%s → invalid', (_what, raw, problem) => {

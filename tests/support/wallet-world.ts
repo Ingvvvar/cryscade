@@ -116,8 +116,8 @@ interface KeyLike {
   readonly betMinor: number;
 }
 
-/** Сверка одного состояния хранилища: деньги, ключи, активный раунд, seq. */
-function audit(snapshot: StorageSnapshot): string[] {
+/** Сверка одного состояния хранилища: деньги, ключи, активный раунд, seq. Сиды раундов — из фикстур: 1, 0, 2, 512, 48. */
+export function audit(snapshot: StorageSnapshot): string[] {
   const wallet = snapshot.wallet[0]?.[1] as WalletLike | undefined;
   if (wallet === undefined) return snapshot.rounds.length > 0 ? ['раунды есть, кошелька нет'] : [];
   const problems: string[] = [];

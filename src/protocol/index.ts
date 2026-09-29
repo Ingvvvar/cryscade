@@ -28,6 +28,7 @@ export {
   type Results,
   type RoundView,
   type StorageNotice,
+  type WalletView,
 } from './messages.ts';
 export { checkRoundEvents, isRoundEvents, isSymbolGrid } from './round-events.ts';
 export { checkWalletChanged, type WalletChanged } from './wallet-changed.ts';

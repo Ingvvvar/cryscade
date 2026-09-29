@@ -49,6 +49,7 @@ describe('новый кошелёк', () => {
         activeRound: null,
         idleGrid: firstGrid(FEATURE.events),
         notice: null,
+        wallet: { balanceMinor: 100_000, revision: 0, notice: null },
       },
     });
     expect(rig.storage.snapshot()).toStrictEqual(EMPTY);
@@ -67,7 +68,11 @@ describe('play и endRound', () => {
     const rig = new Rig({ seeds: [0] });
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
-      result: { round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events }, balanceMinor: 99_900 },
+      result: {
+        round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        balanceMinor: 99_900,
+        wallet: { balanceMinor: 99_900, revision: 1, notice: null },
+      },
     });
     const active = {
       roundId: 'r1',
@@ -90,7 +95,10 @@ describe('play и endRound', () => {
       quarantine: [],
     });
 
-    expect(await rig.send(endRound('r1'))).toStrictEqual({ ok: true, result: { balanceMinor: 99_935 } });
+    expect(await rig.send(endRound('r1'))).toStrictEqual({
+      ok: true,
+      result: { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 2, notice: null } },
+    });
     expect(rig.storage.snapshot()).toStrictEqual({
       wallet: [['main', { id: 'main', balanceMinor: 99_935, activeRoundId: null, nextSeq: 2, revision: 2, resetSeq: 1 }]],
       rounds: [['r1', { ...active, status: 'closed', balanceAfterEnd: 99_935 }]],
@@ -117,9 +125,14 @@ describe('play и endRound', () => {
       const played = await rig.send(play(bet, `k${String(index + 1)}`));
       expect(played.ok).toBe(true);
       if (!played.ok) return;
-      const result = played.result as { round: { roundId: string; payX100: number; winMinor: number }; balanceMinor: number };
+      const result = played.result as { round: { roundId: string; payX100: number; winMinor: number }; balanceMinor: number; wallet: unknown };
       expect([result.round.payX100, result.round.winMinor, result.balanceMinor]).toStrictEqual([payX100, win, afterBet]);
-      expect(await rig.send(endRound(result.round.roundId))).toStrictEqual({ ok: true, result: { balanceMinor: afterEnd } });
+      // Две записи на раунд: play — нечётная ревизия, endRound — чётная.
+      expect(result.wallet).toStrictEqual({ balanceMinor: afterBet, revision: 2 * index + 1, notice: null });
+      expect(await rig.send(endRound(result.round.roundId))).toStrictEqual({
+        ok: true,
+        result: { balanceMinor: afterEnd, wallet: { balanceMinor: afterEnd, revision: 2 * index + 2, notice: null } },
+      });
     }
     expect(rig.storage.snapshot().wallet).toStrictEqual([
       ['main', { id: 'main', balanceMinor: 90_992, activeRoundId: null, nextSeq: 6, revision: 10, resetSeq: 1 }],
@@ -154,12 +167,19 @@ describe('идемпотентность', () => {
     expect(rig.broadcast.messages).toHaveLength(1);
   });
 
-  it('повтор play после закрытия раунда — тот же раунд и баланс после его ставки, без списания', async () => {
+  it('повтор play после закрытия раунда — тот же раунд и баланс после его ставки, без списания; кошелёк — сегодняшний', async () => {
     const rig = new Rig({ seeds: [0] });
-    const first = await rig.send(play(100, 'k1'));
+    await rig.send(play(100, 'k1'));
     await rig.send(endRound('r1'));
     const written = rig.storage.snapshot();
-    expect(await rig.send(play(100, 'k1'))).toStrictEqual(first);
+    expect(await rig.send(play(100, 'k1'))).toStrictEqual({
+      ok: true,
+      result: {
+        round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        balanceMinor: 99_900,
+        wallet: { balanceMinor: 99_935, revision: 2, notice: null },
+      },
+    });
     expect(rig.storage.snapshot()).toStrictEqual(written);
   });
 
@@ -174,11 +194,25 @@ describe('идемпотентность', () => {
   it('повтор endRound — тот же ответ, без второго зачисления и без оповещения', async () => {
     const rig = new Rig({ seeds: [2] });
     await rig.send(play(1000, 'k1'));
-    expect(await rig.send(endRound('r1'))).toStrictEqual({ ok: true, result: { balanceMinor: 100_050 } });
+    const ended = { ok: true, result: { balanceMinor: 100_050, wallet: { balanceMinor: 100_050, revision: 2, notice: null } } };
+    expect(await rig.send(endRound('r1'))).toStrictEqual(ended);
     const written = rig.storage.snapshot();
-    expect(await rig.send(endRound('r1'))).toStrictEqual({ ok: true, result: { balanceMinor: 100_050 } });
+    expect(await rig.send(endRound('r1'))).toStrictEqual(ended);
     expect(rig.storage.snapshot()).toStrictEqual(written);
     expect(rig.broadcast.messages).toHaveLength(2);
+  });
+
+  it('повтор endRound после новых записей — баланс после зачисления того раунда, кошелёк — сегодняшний', async () => {
+    const rig = new Rig({ seeds: [2, 1] });
+    await rig.send(play(1000, 'k1'));
+    await rig.send(endRound('r1'));
+    await rig.send(play(100, 'k2'));
+    const written = rig.storage.snapshot();
+    expect(await rig.send(endRound('r1'))).toStrictEqual({
+      ok: true,
+      result: { balanceMinor: 100_050, wallet: { balanceMinor: 99_950, revision: 3, notice: null } },
+    });
+    expect(rig.storage.snapshot()).toStrictEqual(written);
   });
 
   it('новый ключ при активном раунде — ROUND_ACTIVE с его id', async () => {
@@ -279,7 +313,10 @@ describe('resetBalance', () => {
     expect(await rig.send(RESET)).toStrictEqual({ ok: false, error: { code: 'ROUND_ACTIVE', roundId: 'r2' } });
     expect(rig.storage.snapshot()).toStrictEqual(written);
     await rig.send(endRound('r2'));
-    expect(await rig.send(RESET)).toStrictEqual({ ok: true, result: { balanceMinor: 100_000 } });
+    expect(await rig.send(RESET)).toStrictEqual({
+      ok: true,
+      result: { balanceMinor: 100_000, wallet: { balanceMinor: 100_000, revision: 5, notice: null } },
+    });
     expect(rig.storage.snapshot().wallet).toStrictEqual([
       ['main', { id: 'main', balanceMinor: 100_000, activeRoundId: null, nextSeq: 3, revision: 5, resetSeq: 3 }],
     ]);
@@ -287,7 +324,10 @@ describe('resetBalance', () => {
 
   it('на новом кошельке — запись с resetSeq 1', async () => {
     const rig = new Rig();
-    expect(await rig.send(RESET)).toStrictEqual({ ok: true, result: { balanceMinor: 100_000 } });
+    expect(await rig.send(RESET)).toStrictEqual({
+      ok: true,
+      result: { balanceMinor: 100_000, wallet: { balanceMinor: 100_000, revision: 1, notice: null } },
+    });
     expect(rig.storage.snapshot().wallet).toStrictEqual([
       ['main', { id: 'main', balanceMinor: 100_000, activeRoundId: null, nextSeq: 1, revision: 1, resetSeq: 1 }],
     ]);
@@ -308,6 +348,7 @@ describe('authenticate', () => {
         activeRound: { roundId: 'r2', betMinor: 100, payX100: 105, winMinor: 105, events: BASE.events },
         idleGrid: verifyRound(DEFAULT_CONFIG, SMALL.events).finalGrid,
         notice: null,
+        wallet: { balanceMinor: 99_835, revision: 3, notice: null },
       },
     });
   });
@@ -377,7 +418,11 @@ describe('сбои записи', () => {
     const rig = new Rig({ seeds: [0, 2], wrap: (inner) => new FlakyStorage(inner, ['conflict']) });
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
-      result: { round: { roundId: 'r2', betMinor: 100, payX100: 105, winMinor: 105, events: BASE.events }, balanceMinor: 99_900 },
+      result: {
+        round: { roundId: 'r2', betMinor: 100, payX100: 105, winMinor: 105, events: BASE.events },
+        balanceMinor: 99_900,
+        wallet: { balanceMinor: 99_900, revision: 1, notice: null },
+      },
     });
     expect(rig.broadcast.messages).toHaveLength(1);
   });

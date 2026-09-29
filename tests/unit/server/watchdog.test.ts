@@ -28,7 +28,11 @@ describe('сторож сервера', () => {
 
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k1' })).toStrictEqual({
       ok: true,
-      result: { round: { roundId: 'r1', betMinor: 100, payX100: 0, winMinor: 0, events: fixtureRound('loss').events }, balanceMinor: 99_900 },
+      result: {
+        round: { roundId: 'r1', betMinor: 100, payX100: 0, winMinor: 0, events: fixtureRound('loss').events },
+        balanceMinor: 99_900,
+        wallet: { balanceMinor: 99_900, revision: 1, notice: null },
+      },
     });
   });
 });

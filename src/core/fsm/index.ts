@@ -1,1 +1,26 @@
-// Заглушка фазы 0. Машина состояний клиента — фаза 4.
+// Машина состояний клиента (§8.1): переходы и команды — данные, исполняет их контроллер.
+export {
+  AuthenticatingState,
+  BootingState,
+  EndingState,
+  ErrorState,
+  IdleState,
+  PresentingState,
+  RequestingState,
+  RestoringState,
+  WaitingForTabState,
+  initialState,
+} from './states.ts';
+export type {
+  ClientEvent,
+  ClientEventType,
+  ClientState,
+  Command,
+  ErrorKind,
+  RejectCode,
+  RetryTarget,
+  ShownRound,
+  StateName,
+  StateView,
+  Transition,
+} from './types.ts';

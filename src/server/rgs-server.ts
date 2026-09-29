@@ -16,6 +16,7 @@ import {
   type ResponseBody,
   type ResponseEnvelope,
   type RoundView,
+  type WalletView,
 } from '../protocol/index.ts';
 import { COMMIT_ATTEMPTS, DEMO_SEED, HISTORY_LIMIT, SERVER_MAX_REQUESTS } from './limits.ts';
 import type { Broadcast, Clock, Entropy, Lock, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
@@ -89,6 +90,11 @@ function messageOf(error: unknown): string {
 
 function viewOf(round: RoundRecord): RoundView {
   return { roundId: round.roundId, betMinor: round.betMinor, payX100: round.payX100, winMinor: round.winMinor, events: round.events };
+}
+
+/** Кошелёк в ответе — прочитанный под замком или только что записанный: по revision клиент упорядочивает ответы с оповещениями. */
+function walletView(wallet: WalletRecord, repaired: boolean): WalletView {
+  return { balanceMinor: wallet.balanceMinor, revision: wallet.revision, notice: repaired ? 'reset' : null };
 }
 
 /** Испорченная запись — в карантин (§6.6): сырые данные и причина, чтобы разобраться потом. */
@@ -208,6 +214,7 @@ export class RgsServer {
       activeRound: state.active === null ? null : viewOf(state.active),
       idleGrid: await this.#idleGrid(),
       notice: !this.#storage.durable ? 'volatile' : state.repaired ? 'reset' : null,
+      wallet: walletView(state.wallet, state.repaired),
     });
   }
 
@@ -215,9 +222,9 @@ export class RgsServer {
     const state = await this.#load();
     // Сначала ключ: повтор play, чей ответ потерялся, получает свой раунд, а не ROUND_ACTIVE.
     const known = await this.#keys.read(key);
-    if (known.kind === 'ok') return this.#replay(known.value, betMinor);
+    if (known.kind === 'ok') return this.#replay(known.value, betMinor, state);
     const owner = known.kind === 'damaged' ? await this.#ownerOf(key) : null;
-    if (owner !== null) return this.#replay(owner, betMinor);
+    if (owner !== null) return this.#replay(owner, betMinor, state);
     if (state.active !== null) return fail({ code: 'ROUND_ACTIVE', roundId: state.active.roundId });
     const { wallet } = state;
     if (wallet.balanceMinor < betMinor) return fail({ code: 'INSUFFICIENT_FUNDS', balanceMinor: wallet.balanceMinor });
@@ -249,9 +256,16 @@ export class RgsServer {
     // Хранятся последние HISTORY_LIMIT раундов вместе с новым; старшие уходят со своими ключами.
     const evicted = await this.#rounds.upToSeq(seq - HISTORY_LIMIT);
     const evictedKeys = (await Promise.all(evicted.map((roundId) => this.#keys.ofRound(roundId)))).flat();
+    const next: WalletRecord = {
+      ...wallet,
+      balanceMinor: round.balanceAfterBet,
+      activeRoundId: round.roundId,
+      nextSeq: seq + 1,
+      revision: wallet.revision + 1,
+    };
     await this.#commit(
       unchanged(state),
-      { ...wallet, balanceMinor: round.balanceAfterBet, activeRoundId: round.roundId, nextSeq: seq + 1, revision: wallet.revision + 1 },
+      next,
       [
         { op: 'add', store: 'rounds', value: round },
         ...keyOps,
@@ -259,15 +273,18 @@ export class RgsServer {
         ...evictedKeys.map((stale): WriteOp => ({ op: 'delete', store: 'keys', key: stale })),
       ],
     );
-    return ok({ round: viewOf(round), balanceMinor: round.balanceAfterBet });
+    return ok({ round: viewOf(round), balanceMinor: round.balanceAfterBet, wallet: walletView(next, state.repaired) });
   }
 
-  /** Повтор play с известным ключом: сохранённый раунд и баланс после его ставки, без нового списания. */
-  async #replay(known: KeyRecord, betMinor: number): Promise<ResponseBody<PlayResult>> {
+  /**
+   * Повтор play с известным ключом: сохранённый раунд и баланс после его ставки, без нового списания. Кошелёк в ответе —
+   * сегодняшний: раунд мог закрыться, и баланс после его ставки — уже прошлое.
+   */
+  async #replay(known: KeyRecord, betMinor: number, state: Loaded): Promise<ResponseBody<PlayResult>> {
     if (known.betMinor !== betMinor) return fail({ code: 'IDEMPOTENCY_CONFLICT' });
     const round = this.#usable(await this.#rounds.read(known.roundId));
     if (round?.idempotencyKey !== known.key) return fail({ code: 'ROUND_NOT_FOUND', roundId: known.roundId });
-    return ok({ round: viewOf(round), balanceMinor: round.balanceAfterBet });
+    return ok({ round: viewOf(round), balanceMinor: round.balanceAfterBet, wallet: walletView(state.wallet, state.repaired) });
   }
 
   /** Запись ключа испорчена, но ключ хранит и сам раунд: раунд с этим ключом ищется среди хранимых. */
@@ -285,17 +302,17 @@ export class RgsServer {
     if (active?.roundId === roundId) {
       const balanceAfterEnd = wallet.balanceMinor + active.winMinor;
       const closed: RoundRecord = { ...active, status: 'closed', balanceAfterEnd };
-      await this.#commit(
-        unchanged(state),
-        { ...wallet, balanceMinor: balanceAfterEnd, activeRoundId: null, revision: wallet.revision + 1 },
-        [{ op: 'put', store: 'rounds', value: closed }],
-      );
-      return ok({ balanceMinor: balanceAfterEnd });
+      const next: WalletRecord = { ...wallet, balanceMinor: balanceAfterEnd, activeRoundId: null, revision: wallet.revision + 1 };
+      await this.#commit(unchanged(state), next, [{ op: 'put', store: 'rounds', value: closed }]);
+      return ok({ balanceMinor: balanceAfterEnd, wallet: walletView(next, state.repaired) });
     }
-    // Повтор: раунд уже закрыт — тот же ответ, без второго зачисления. Для ответа хватает цельной части записи.
+    // Повтор: раунд уже закрыт — тот же баланс после зачисления, без второго зачисления; кошелёк — сегодняшний.
+    // Для ответа хватает цельной части записи.
     const read = await this.#rounds.read(roundId);
     const core = read.kind === 'ok' ? read.value : read.kind === 'damaged' ? read.core : null;
-    if (core?.status === 'closed' && core.balanceAfterEnd !== null) return ok({ balanceMinor: core.balanceAfterEnd });
+    if (core?.status === 'closed' && core.balanceAfterEnd !== null) {
+      return ok({ balanceMinor: core.balanceAfterEnd, wallet: walletView(wallet, state.repaired) });
+    }
     return fail({ code: 'ROUND_NOT_FOUND', roundId });
   }
 
@@ -303,12 +320,9 @@ export class RgsServer {
     const state = await this.#load();
     const { wallet, active } = state;
     if (active !== null) return fail({ code: 'ROUND_ACTIVE', roundId: active.roundId });
-    await this.#commit(
-      unchanged(state),
-      { ...wallet, balanceMinor: START_BALANCE_MINOR, resetSeq: wallet.nextSeq, revision: wallet.revision + 1 },
-      [],
-    );
-    return ok({ balanceMinor: START_BALANCE_MINOR });
+    const next: WalletRecord = { ...wallet, balanceMinor: START_BALANCE_MINOR, resetSeq: wallet.nextSeq, revision: wallet.revision + 1 };
+    await this.#commit(unchanged(state), next, []);
+    return ok({ balanceMinor: START_BALANCE_MINOR, wallet: walletView(next, state.repaired) });
   }
 
   /** Кошелёк и активный раунд через гарды. Испорченное чинится здесь же, отдельной транзакцией, до самой операции. */

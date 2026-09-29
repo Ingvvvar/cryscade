@@ -31,6 +31,16 @@ export interface ClientConfig {
 /** volatile — IndexedDB недоступна, игра идёт в памяти; reset — данные были испорчены, баланс восстановлен до 1000. */
 export type StorageNotice = 'volatile' | 'reset';
 
+/**
+ * Кошелёк в момент ответа (§6.3). По revision клиент упорядочивает ответы вместе с оповещениями walletChanged.
+ * notice 'reset' — в этом запросе хранилище чинилось, и revision могла начаться заново: такое принимается без сравнения.
+ */
+export interface WalletView {
+  readonly balanceMinor: number;
+  readonly revision: number;
+  readonly notice: 'reset' | null;
+}
+
 export interface AuthenticateResult {
   readonly balanceMinor: number;
   readonly config: ClientConfig;
@@ -38,17 +48,20 @@ export interface AuthenticateResult {
   /** Сетка покоя: итоговая сетка последнего закрытого раунда, у нового кошелька — заставка. */
   readonly idleGrid: readonly number[];
   readonly notice: StorageNotice | null;
+  readonly wallet: WalletView;
 }
 
-/** Баланс — после списания ставки. */
+/** balanceMinor — после списания ставки этого раунда; wallet — кошелёк сейчас. У повтора закрытого раунда они расходятся. */
 export interface PlayResult {
   readonly round: RoundView;
   readonly balanceMinor: number;
+  readonly wallet: WalletView;
 }
 
-/** endRound — баланс после зачисления, resetBalance — после сброса. */
+/** endRound — баланс после зачисления, resetBalance — после сброса; wallet — кошелёк сейчас, как у play. */
 export interface BalanceResult {
   readonly balanceMinor: number;
+  readonly wallet: WalletView;
 }
 
 export interface Results {
@@ -112,6 +125,13 @@ function configProblem(value: unknown): string | null {
   return isPositive(value['capX100']) ? null : 'config: capX100 — не положительное целое';
 }
 
+function walletProblem(value: unknown): string | null {
+  if (!isRecord(value)) return 'wallet — не объект';
+  if (!isNat(value['balanceMinor']) || !isNat(value['revision'])) return 'wallet: balanceMinor или revision — не целые';
+  const notice = value['notice'];
+  return notice === null || notice === 'reset' ? null : 'wallet: неизвестное уведомление';
+}
+
 function authenticateProblem(value: Readonly<Record<string, unknown>>): string | null {
   if (!isNat(value['balanceMinor'])) return 'authenticate: balanceMinor — не целое';
   const config = configProblem(value['config']);
@@ -123,7 +143,16 @@ function authenticateProblem(value: Readonly<Record<string, unknown>>): string |
   }
   if (!isSymbolGrid(value['idleGrid'])) return 'authenticate: idleGrid — не 49 символов';
   const notice = value['notice'];
-  return notice === null || notice === 'volatile' || notice === 'reset' ? null : 'authenticate: неизвестное уведомление';
+  if (notice !== null && notice !== 'volatile' && notice !== 'reset') return 'authenticate: неизвестное уведомление';
+  const wallet = walletProblem(value['wallet']);
+  return wallet === null ? null : `authenticate: ${wallet}`;
+}
+
+/** Баланс результата и кошелёк в момент ответа. */
+function balanceProblem(type: RequestType, value: Readonly<Record<string, unknown>>): string | null {
+  if (!isNat(value['balanceMinor'])) return `${type}: balanceMinor — не целое`;
+  const wallet = walletProblem(value['wallet']);
+  return wallet === null ? null : `${type}: ${wallet}`;
 }
 
 /** Клиент: результат под тип запроса, который он отправил. */
@@ -134,12 +163,11 @@ export function checkResult(type: RequestType, value: unknown): string | null {
       return authenticateProblem(value);
     case 'play': {
       const problem = checkRoundView(value['round']);
-      if (problem !== null) return `play: ${problem}`;
-      return isNat(value['balanceMinor']) ? null : 'play: balanceMinor — не целое';
+      return problem === null ? balanceProblem(type, value) : `play: ${problem}`;
     }
     case 'endRound':
     case 'resetBalance':
-      return isNat(value['balanceMinor']) ? null : `${type}: balanceMinor — не целое`;
+      return balanceProblem(type, value);
   }
 }
 
