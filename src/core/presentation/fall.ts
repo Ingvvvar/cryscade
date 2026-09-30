@@ -70,3 +70,11 @@ export function columnStartMs(profile: FallProfile, column: number): number {
 export function gridSettleMs(profile: FallProfile): number {
   return columnStartMs(profile, GRID_SIDE - 1) + settleMs(profile);
 }
+
+/**
+ * Высоты колонок в момент localMs от старта падения — в долях высоты старта (высота линейна по ней), в out[колонка].
+ * Для кадра без аллокаций: результат — в массив, а не возвратом дробного числа.
+ */
+export function fillColumnHeights(profile: FallProfile, localMs: number, out: Float64Array): void {
+  for (let column = 0; column < GRID_SIDE; column++) out[column] = fallHeight(profile, 1, localMs - columnStartMs(profile, column));
+}
