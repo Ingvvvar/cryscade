@@ -7,13 +7,15 @@ import type { Rect } from '../../src/render/layout.ts';
 import type { ScheduleSummary } from '../../src/ui/probe-api.ts';
 import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
 import { fixtureShown, spotRound } from '../support/shown-rounds.ts';
+import { DRAW_BUDGET, DRAW_CEILING } from './support/draw-ceilings.ts';
 import { installDrawCounter, type DrawCounts } from './support/draw-counter.ts';
 import { PINNED_AMBIENT_S, openStill, snapshot } from './support/frame.ts';
 import { MIN_CONTRAST, MIN_PIXELS, backingColour, readCell, repaintBody } from './support/readability.ts';
 
 // Презентация раунда на сцене (фаза 5, подход Б): кадры ставит зонд (still — показ стоит на моменте t).
-// 1. Draw-call на ключевых кадрах (§13, WebGL): каскад ≤ 25, большой выигрыш ≤ 35 — середина каждого сегмента трёх
-//    раундов фикстур; сначала положительный контроль счётчика — разные текстуры рвут батч.
+// 1. Draw-call на ключевых кадрах — середина каждого сегмента четырёх раундов фикстур, с первой отрисовки кадра (страницы
+//    глифов грузит прогрев): потолки-храповик DRAW_CEILING на обоих рендерерах, бюджет §13 (WebGL) — внешняя граница;
+//    сначала положительный контроль счётчика — разные текстуры рвут батч.
 // 2. Читаемость на подложках множителей (решение владельца 8): семь уровней × восемь символов на реальном кадре,
 //    медиана символа против p95 подложки ≥ 3:1; плашка числа — не подложка, её рамку от зонда вычитают.
 // 3. Глифы: ни одного недостающего в шрифтах надписей и чисел; контроль — символ вне набора находится.
@@ -21,8 +23,6 @@ import { MIN_CONTRAST, MIN_PIXELS, backingColour, readCell, repaintBody } from '
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OUT = `${ROOT}reports/phase-5/`;
 const NAMES = ['Кварц', 'Аметист', 'Цитрин', 'Изумруд', 'Сапфир', 'Рубин', 'Бриллиант', 'Ядро'];
-const CASCADE_BUDGET = 25;
-const BIG_WIN_BUDGET = 35;
 
 type CountWindow = ProbeWindow & { __drawCounts?: DrawCounts };
 
@@ -37,8 +37,8 @@ async function scheduleOf(page: Page, round: ShownRound): Promise<ScheduleSummar
 }
 
 /**
- * Draw-call кадра: показ стоит на t, тикер остановлен. Считается вторая отрисовка того же кадра: первая загружает
- * новые текстуры (страницы глифов), а WebGPU строит их мипмапы проходами с draw — это разовая загрузка, не кадр.
+ * Draw-call кадра: показ стоит на t, тикер остановлен, счёт — с первой отрисовки кадра. Страницы глифов грузит в GPU
+ * прогрев (§10), и WebGPU не строит их мипмапы проходами с draw посреди кадра.
  */
 async function drawsAt(page: Page, round: ShownRound, t: number, renderer: 'webgl' | 'webgpu'): Promise<number> {
   const counts = await page.evaluate(
@@ -47,7 +47,6 @@ async function drawsAt(page: Page, round: ShownRound, t: number, renderer: 'webg
       const counter = w.__drawCounts;
       if (counter === undefined) throw new Error('счётчик draw-call не установлен');
       w.__cryscadeProbe?.still(shown, at);
-      w.__cryscadeProbe?.renderOnce();
       counter.gl = 0;
       counter.gpu = 0;
       counter.executeBundles = 0;
@@ -86,7 +85,7 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     let cascade: Worst = { draws: 0, round: null, segment: '', t: 0 };
     let bigWin: Worst = { draws: 0, round: null, segment: '', t: 0 };
     let frames = 0;
-    for (const name of ['multiplier-8', 'feature-start', 'biggest'] as const) {
+    for (const name of ['multiplier-8', 'feature-start', 'retrigger', 'biggest'] as const) {
       const round = fixtureShown(name);
       const schedule = await scheduleOf(page, round);
       for (const segment of schedule.segments) {
@@ -120,9 +119,11 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     expect(withControl - cascade.draws, 'положительный контроль: разные текстуры рвут батч').toBeGreaterThanOrEqual(2);
     expect(again, 'контроль убран — счёт вернулся').toBe(cascade.draws);
     if (renderer === 'webgl') {
-      expect(cascade.draws, `бюджет §13: каскад ≤ ${String(CASCADE_BUDGET)}`).toBeLessThanOrEqual(CASCADE_BUDGET);
-      expect(bigWin.draws, `бюджет §13: большой выигрыш ≤ ${String(BIG_WIN_BUDGET)}`).toBeLessThanOrEqual(BIG_WIN_BUDGET);
+      expect(cascade.draws, `бюджет §13: каскад ≤ ${String(DRAW_BUDGET.cascade)}`).toBeLessThanOrEqual(DRAW_BUDGET.cascade);
+      expect(bigWin.draws, `бюджет §13: большой выигрыш ≤ ${String(DRAW_BUDGET.bigWin)}`).toBeLessThanOrEqual(DRAW_BUDGET.bigWin);
     }
+    expect(cascade.draws, `потолок каскада и фичи ${String(DRAW_CEILING.cascade)}: ${describeWorst(cascade)}`).toBeLessThanOrEqual(DRAW_CEILING.cascade);
+    expect(bigWin.draws, `потолок большого выигрыша ${String(DRAW_CEILING.bigWin)}: ${describeWorst(bigWin)}`).toBeLessThanOrEqual(DRAW_CEILING.bigWin);
   });
 }
 

@@ -95,6 +95,11 @@ export class RoundView {
     this.#settled = this.#grid.shown && scene.settled;
   }
 
+  /** Надпись видимой плашки фичи; плашки нет — null. */
+  plaqueText(): string | null {
+    return this.#plaque.text;
+  }
+
   /** Видимые плашки чисел множителей, CSS-пиксели канваса. */
   chipRects(): Rect[] {
     return this.#chips.rects();

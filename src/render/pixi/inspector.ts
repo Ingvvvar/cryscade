@@ -84,6 +84,10 @@ export class SceneProbe implements SceneInspector {
     return this.#scene?.chipRects() ?? [];
   }
 
+  plaqueText(): string | null {
+    return this.#scene?.plaqueText() ?? null;
+  }
+
   pinAmbient(seconds: number | null): void {
     this.#scene?.pinAmbient(seconds);
   }

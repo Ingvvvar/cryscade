@@ -1,5 +1,7 @@
 // Фича (§9): счётчик фриспинов в зоне feature и плашки — начало фриспинов, ретриггер, кап. Надписи — строками от ui
 // (SceneTexts), числа — глифами; ставятся со сменой плашки, не в каждом кадре. Ход плашки — альфа из SceneState.
+// Плашка начала фриспинов — надпись, число и подсказка; ретриггер («+5 фріспінів», число внутри надписи) и кап — одна
+// надпись по центру плашки.
 
 import { BitmapText, Container, NineSliceSprite } from 'pixi.js';
 import { PLAQUE, type SceneState } from '../../core/presentation/index.ts';
@@ -11,7 +13,8 @@ import type { CrystalAtlas } from './atlas.ts';
 import { DIGITS_FONT, LABELS_FONT } from './fonts.ts';
 import { GlyphNumber } from './glyph-number.ts';
 
-const PLUS = 43;
+/** Надпись плашки начала фриспинов — над числом; одна надпись (ретриггер, кап) — по центру. */
+const TITLE_ABOVE = -62;
 
 /** Сколько фриспинов осталось — «Фріспіни 7»; только во фриспинах. */
 export class FreeSpinsView {
@@ -63,7 +66,9 @@ export class PlaqueView {
   readonly #value: GlyphNumber;
   readonly #hint: BitmapText;
   readonly #texts: SceneTexts;
+  /** Показанная плашка: вид и число — смена того или другого ставит надпись заново. */
   #kind = -1;
+  #shown = -1;
 
   constructor(atlas: CrystalAtlas, texts: SceneTexts) {
     this.#texts = texts;
@@ -78,7 +83,7 @@ export class PlaqueView {
     });
     this.#panel.position.set(-220, -118);
     this.#title = new BitmapText({ text: texts.freeSpins, style: { fontFamily: LABELS_FONT, fontSize: 34 }, tint: PALETTE.warm, anchor: 0.5 });
-    this.#title.position.set(0, -62);
+    this.#title.position.set(0, TITLE_ABOVE);
     this.#value = new GlyphNumber({ font: DIGITS_FONT, size: 88, tint: PALETTE.text, anchorX: 0.5, anchorY: 0.5, capacity: 6 });
     this.#value.view.position.set(0, 10);
     this.#hint = new BitmapText({ text: texts.tapToContinue, style: { fontFamily: LABELS_FONT, fontSize: 18 }, tint: PALETTE.muted, anchor: 0.5 });
@@ -91,18 +96,26 @@ export class PlaqueView {
     this.view.position.set(grid.x + grid.width / 2, grid.y + grid.height / 2);
   }
 
+  /** Надпись видимой плашки; плашки нет — null. Для зонда. */
+  get text(): string | null {
+    return this.view.visible ? this.#title.text : null;
+  }
+
   /** still — раунд под reduced motion: плашка проявляется без роста. */
   apply(scene: SceneState, still: boolean): void {
     const kind = scene.plaque;
     this.view.visible = kind !== PLAQUE.none && scene.plaqueAlpha > 0;
     if (!this.view.visible) return;
-    if (kind !== this.#kind) {
+    if (kind !== this.#kind || scene.plaqueValue !== this.#shown) {
       this.#kind = kind;
-      this.#title.text = kind === PLAQUE.cap ? this.#texts.maxWin : kind === PLAQUE.retrigger ? this.#texts.moreFreeSpins : this.#texts.freeSpins;
-      this.#hint.visible = kind === PLAQUE.intro;
-      this.#value.view.visible = kind !== PLAQUE.cap;
+      this.#shown = scene.plaqueValue;
+      const intro = kind === PLAQUE.intro;
+      this.#title.text = kind === PLAQUE.cap ? this.#texts.maxWin : kind === PLAQUE.retrigger ? this.#texts.freeSpinsAdded(scene.plaqueValue) : this.#texts.freeSpins;
+      this.#title.position.y = intro ? TITLE_ABOVE : 0;
+      this.#hint.visible = intro;
+      this.#value.view.visible = intro;
+      if (intro) this.#value.integer(scene.plaqueValue, -1);
     }
-    if (kind !== PLAQUE.cap) this.#value.integer(scene.plaqueValue, kind === PLAQUE.retrigger ? PLUS : -1);
     this.view.alpha = scene.plaqueAlpha;
     this.view.scale.set(still ? 1 : 0.92 + 0.08 * scene.plaqueAlpha);
   }

@@ -44,10 +44,22 @@ export const TEXT = {
   playHere: 'Грати тут',
 } as const;
 
+/** «Фріспін» при числе count: форма — по правилам множини української (Intl.PluralRules): 1, 21 — фріспін; 2–4, 22–24 — фріспіни; 0, 5–20, 25 — фріспінів. */
+function freeSpinsWord(count: number): string {
+  switch (new Intl.PluralRules('uk-UA').select(count)) {
+    case 'one':
+      return 'фріспін';
+    case 'few':
+      return 'фріспіни';
+    default:
+      return 'фріспінів';
+  }
+}
+
 /** Надписи сцены Pixi (§9): рендер получает их строками — в render/ текста нет. */
 export const SCENE_TEXT: SceneTexts = {
   freeSpins: 'Фріспіни',
-  moreFreeSpins: 'Ще фріспіни',
+  freeSpinsAdded: (count) => `+${String(count)} ${freeSpinsWord(count)}`,
   tapToContinue: 'Натисніть, щоб продовжити',
   maxWin: 'Максимальний виграш',
   bigWin: ['Великий виграш', 'Величезний виграш', 'Епічний виграш', 'Максимальний виграш'],

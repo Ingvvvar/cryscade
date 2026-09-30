@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { walletProperty, zeroTotals } from '../support/wallet-world.ts';
 
 // Сверка кошелька (§14), замок держит: две вкладки на общем хранилище и общем замке, потери, дубли, перемежения.
@@ -8,7 +9,7 @@ import { walletProperty, zeroTotals } from '../support/wallet-world.ts';
 describe('сверка кошелька: замок держит', () => {
   it('деньги сходятся до минимальной единицы после каждой записи; конфликтов и INTERNAL нет', async () => {
     const totals = zeroTotals();
-    await fc.assert(walletProperty(true, totals), { numRuns: 300 });
+    await fc.assert(walletProperty(true, totals), { numRuns: 300, timeout: RUN_TIMEOUT_MS });
     // Покрытие: прогон обязан пройти через повторы, перехваты, восстановление, сбросы, нехватку средств, потери
     // и дубли — иначе он проверил не всё.
     expect(totals.replays).toBeGreaterThan(0);

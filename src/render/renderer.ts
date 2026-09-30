@@ -30,8 +30,8 @@ export interface ViewportSink {
 export interface SceneTexts {
   /** Счётчик фриспинов и плашка их начала. */
   readonly freeSpins: string;
-  /** Плашка ретриггера. */
-  readonly moreFreeSpins: string;
+  /** Плашка ретриггера — «+5 фріспінів»: число — из fsRetrigger, форма слова — забота ui. */
+  freeSpinsAdded(count: number): string;
   /** Подсказка featureIntro: показ ждёт тапа или пробела. */
   readonly tapToContinue: string;
   /** Плашка капа. */
@@ -40,9 +40,16 @@ export interface SceneTexts {
   readonly bigWin: readonly [string, string, string, string];
 }
 
+/**
+ * Надпись ретриггера — с числом: набор глифов берёт её на всех числах от 0 до 99. Так в нём все цифры и все формы слова:
+ * форму при целом числе правила множины CLDR выбирают по остаткам от деления на 10 и на 100.
+ */
+const COUNT_SAMPLES = 100;
+
 /** Все строки надписей — для набора глифов и проверки, что ни одного не недостаёт. */
 export function sceneTextList(texts: SceneTexts): string[] {
-  return [texts.freeSpins, texts.moreFreeSpins, texts.tapToContinue, texts.maxWin, ...texts.bigWin];
+  const added = Array.from({ length: COUNT_SAMPLES }, (_, count) => texts.freeSpinsAdded(count));
+  return [texts.freeSpins, texts.tapToContinue, texts.maxWin, ...texts.bigWin, ...added];
 }
 
 /**
@@ -50,6 +57,7 @@ export function sceneTextList(texts: SceneTexts): string[] {
  * не решает. Расписание — чтобы раз на раунд построить контуры по его геометрии.
  */
 export interface SceneSource {
+  /** Ход часов на deltaMs — целые миллисекунды: дробное время тикера округляют часы кадра (frame-clock.ts). */
   tick(deltaMs: number): SceneState;
   readonly schedule: Schedule | null;
   /** Показ дошёл до конца расписания. */

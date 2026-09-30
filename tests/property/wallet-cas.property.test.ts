@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { walletProperty, zeroTotals } from '../support/wallet-world.ts';
 
 // Сверка кошелька (§14), замок подвёл: замок без исключения, обе вкладки пишут одновременно — деньги держит CAS
@@ -8,7 +9,7 @@ import { walletProperty, zeroTotals } from '../support/wallet-world.ts';
 describe('сверка кошелька: замок подвёл', () => {
   it('запись держит CAS: деньги сходятся, починки без порчи нет', async () => {
     const totals = zeroTotals();
-    await fc.assert(walletProperty(false, totals), { numRuns: 300 });
+    await fc.assert(walletProperty(false, totals), { numRuns: 300, timeout: RUN_TIMEOUT_MS });
     // Без исключения записи обязаны сталкиваться: иначе CAS не проверен.
     expect(totals.conflicts).toBeGreaterThan(0);
     expect(totals.replays).toBeGreaterThan(0);

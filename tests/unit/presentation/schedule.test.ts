@@ -105,6 +105,56 @@ describe('расписание фикстур', () => {
   });
 });
 
+describe('единицы пропуска (§8.2): спины и празднование', () => {
+  it('фича: основной спин с плашкой, десять фриспинов, празднование — своя единица', () => {
+    const s = schedule('feature-start');
+    expect(s.groups.map((group) => [group.kind, group.unit])).toStrictEqual([
+      ['fill', 0],
+      ['feature', 0],
+      ['fill', 1],
+      ['cascade', 1],
+      ['fill', 2],
+      ['fill', 3],
+      ['cascade', 3],
+      ['fill', 4],
+      ['fill', 5],
+      ['fill', 6],
+      ['fill', 7],
+      ['cascade', 7],
+      ['fill', 8],
+      ['cascade', 8],
+      ['cascade', 8],
+      ['fill', 9],
+      ['fill', 10],
+      ['cascade', 10],
+      ['cascade', 10],
+      ['bigWin', 11],
+    ]);
+  });
+
+  it('ретриггер — в спине, который его открыл; без большого выигрыша последний спин кончается с раундом', () => {
+    const s = schedule('retrigger');
+    const retrigger = s.groups.find((group) => group.kind === 'retrigger');
+    const opener = s.groups.filter((group) => group.kind === 'fill' && group.startMs < (retrigger?.startMs ?? 0)).at(-1);
+    expect(retrigger?.unit).toBe(opener?.unit);
+    expect(s.groups.some((group) => group.kind === 'bigWin')).toBe(false);
+    expect(s.unitEnds.at(-1)).toBe(s.durationMs);
+  });
+
+  it.each(FIXTURE_NAMES)('%s: единица — заполнения до группы, празднование — за последним спином; конец — начало следующей', (name) => {
+    const s = schedule(name);
+    const events = fixtureRound(name).events;
+    for (const group of s.groups) {
+      const fills = events.slice(0, group.fromEvent + 1).filter((event) => event.t === 'fill').length;
+      expect(group.unit).toBe(group.kind === 'bigWin' ? fills : fills - 1);
+    }
+    expect(s.unitEnds).toHaveLength((s.groups.at(-1)?.unit ?? -1) + 1);
+    s.unitEnds.forEach((end, unit) => {
+      expect(end).toBe(s.groups.find((group) => group.unit === unit + 1)?.startMs ?? s.durationMs);
+    });
+  });
+});
+
 describe('параметры меняют длительности, но не состав групп', () => {
   const variants: ScheduleOptions[] = [
     NORMAL,
@@ -114,8 +164,8 @@ describe('параметры меняют длительности, но не с
     STRICT,
   ];
 
-  it.each(FIXTURE_NAMES)('%s: группы и их события одинаковы при любой скорости, пресете и reduced motion', (name) => {
-    const shapes = variants.map((options) => schedule(name, options).groups.map((group) => [group.kind, group.fromEvent, group.toEvent]));
+  it.each(FIXTURE_NAMES)('%s: группы, их события и единицы пропуска одинаковы при любой скорости, пресете и reduced motion', (name) => {
+    const shapes = variants.map((options) => schedule(name, options).groups.map((group) => [group.kind, group.fromEvent, group.toEvent, group.unit]));
     for (const shape of shapes) expect(shape).toStrictEqual(shapes[0]);
   });
 

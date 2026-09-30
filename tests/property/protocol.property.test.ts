@@ -19,6 +19,7 @@ import { MemoryLock, MemoryStorage, RgsServer } from '../../src/server/index.ts'
 import { checkKey, checkRound, checkRoundCore, checkWallet } from '../../src/server/records.ts';
 import { STRESS_CONFIG } from '../support/configs.ts';
 import { FIXTURE_NAMES, fixtureRound } from '../support/fixture-rounds.ts';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { FixedClock, ScriptedEntropy, T0 } from '../support/rgs-rig.ts';
 import { guarded } from '../support/watchdog.ts';
 
@@ -161,7 +162,7 @@ describe('сервер на мусоре', () => {
         expect(response.body.ok).toBe(false);
         expect(response.body.ok ? null : response.body.error.code).toMatch(/^(BAD_REQUEST|VERSION_MISMATCH)$/);
       }),
-      { numRuns: 1000 },
+      { numRuns: 1000, timeout: RUN_TIMEOUT_MS },
     );
     expect(storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [] });
   });

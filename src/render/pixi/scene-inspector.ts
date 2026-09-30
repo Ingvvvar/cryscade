@@ -24,6 +24,8 @@ export interface InspectableScene {
   missingGlyphs(texts: readonly string[] | null): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели: проверка читаемости меряет подложку мимо них. */
   chipRects(): Rect[];
+  /** Надпись видимой плашки фичи; плашки нет — null. */
+  plaqueText(): string | null;
   /** Закрепить время декора (фон, блик рамки); null — снять. */
   pinAmbient(seconds: number | null): void;
   /** Только фон: для паритета GLSL и WGSL. */

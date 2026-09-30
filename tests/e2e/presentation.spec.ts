@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { PresentationInfo } from '../../src/ui/probe-api.ts';
+import type { ShownRound } from '../../src/client/index.ts';
+import type { PresentationInfo, ScheduleSummary } from '../../src/ui/probe-api.ts';
 import { gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
+import { fixtureShown } from '../support/shown-rounds.ts';
 
 // Показ раунда (фаза 5, подход В): часы показа, featureIntro, пропуск, контрольная точка, скрытая вкладка, турбо и
 // reduced motion — на настоящем воркере с IndexedDB. Нужный раунд задаёт зонд (force: сид следующего раунда мимо
@@ -50,6 +52,18 @@ async function setHidden(page: Page, hidden: boolean): Promise<void> {
   }, hidden);
 }
 
+async function currentSchedule(page: Page): Promise<ScheduleSummary> {
+  const schedule = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.schedule() ?? null);
+  if (schedule === null) throw new Error('показа нет');
+  return schedule;
+}
+
+async function clockNow(page: Page): Promise<PresentationInfo> {
+  const info = await presentation(page);
+  if (info === null) throw new Error('показа нет');
+  return info;
+}
+
 /** Показ идёт и дошёл хотя бы до группы group. */
 async function waitGroup(page: Page, group: number): Promise<PresentationInfo> {
   await expect.poll(async () => (await presentation(page))?.group ?? -1, { timeout: 20_000, message: `показ не дошёл до группы ${String(group)}` }).toBeGreaterThanOrEqual(group);
@@ -82,7 +96,7 @@ test('фича на принудительном раунде: плашка жд
   expect(problems).toEqual([]);
 });
 
-test('пропуск: клик по сцене — к концу группы, «Спін» во время показа — к концу раунда, endRound уходит сразу', async ({ page }) => {
+test('пропуск: клик по сцене — к концу группы, «Спін» во время показа — к концу спина (в основной игре без фичи это конец раунда), endRound уходит сразу', async ({ page }) => {
   const { problems } = collectConsole(page);
   await open(page);
   await force(page, 'multiplier');
@@ -105,6 +119,74 @@ test('пропуск: клик по сцене — к концу группы, �
   expect((await sentBodies(page)).filter((body) => body.type === 'play')).toHaveLength(1);
   const after = await waitForState(page, 'idle');
   expect(after.balanceMinor).toBe(100_000 - BET + 1635);
+  expect(problems).toEqual([]);
+});
+
+test('пропуск во фриспине: два клика — к концу этого фриспина, дальше показ идёт сам; раунд кончается после последнего', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { problems } = collectConsole(page);
+  await page.clock.install({ time: 0 });
+  await open(page);
+  await force(page, 'feature');
+  // Часы страницы стоят: показ двигается только runFor — клики меряются от места, где он стоит, без гонки с тикером.
+  await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
+  await page.keyboard.press('Space');
+  await waitForState(page, 'presenting');
+  await page.clock.runFor(3000);
+  await waitForState(page, 'featureIntro');
+  await page.keyboard.press('Space');
+  const schedule = await currentSchedule(page);
+  const unitStart = (unit: number): number => schedule.groups.find((group) => group.unit === unit)?.startMs ?? schedule.durationMs;
+  // Первый фриспин — единица 1: его заполнение идёт сразу за плашкой.
+  await page.clock.runFor(unitStart(1) - (await clockNow(page)).clock + 100);
+  const first = await clockNow(page);
+  expect(schedule.groups[first.group]?.unit, 'показ — в первом фриспине').toBe(1);
+  await tapScene(page);
+  await tapScene(page);
+  const skipped = await clockNow(page);
+  expect(skipped.clock, 'два клика — конец первого фриспина, а не раунда').toBe(unitStart(2));
+  expect(skipped.finished).toBe(false);
+  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  // Дальше показ идёт сам. В спине из двух групп клик — снова к концу группы: на старте спина счёт с нуля.
+  const long = schedule.groups.find((group, k) => group.kind === 'fill' && group.unit >= 2 && schedule.groups[k + 1]?.unit === group.unit);
+  if (long === undefined) throw new Error('нет фриспина из двух групп');
+  await page.clock.runFor(long.startMs - skipped.clock + 50);
+  expect((await clockNow(page)).clock, 'часы идут сами').toBeGreaterThan(long.startMs);
+  await tapScene(page);
+  expect((await clockNow(page)).clock, 'клик в новом спине — к концу группы').toBe(long.endMs);
+  // Остальные фриспины и празднование — без кликов, поддельным временем: раунд не кончается раньше последнего.
+  await page.clock.runFor(schedule.durationMs - long.endMs - 500);
+  const late = await clockNow(page);
+  expect(schedule.groups[late.group]?.kind, 'все фриспины показаны, идёт празднование').toBe('bigWin');
+  expect(late.finished).toBe(false);
+  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  await page.clock.resume();
+  const after = await waitForState(page, 'idle');
+  const done = await clockNow(page);
+  expect([done.finished, done.clock]).toStrictEqual([true, schedule.durationMs]);
+  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play', 'endRound']);
+  expect(after.balanceMinor).toBe(100_000 - BET + 2585);
+  expect(problems).toEqual([]);
+});
+
+test('надпись ретриггера — число из fsRetrigger: «+5 фріспінів» на фикстуре, «+3 фріспіни» на раунде с добавкой 3', async ({ page }) => {
+  const { problems } = collectConsole(page);
+  await open(page);
+  const fixture = fixtureShown('retrigger');
+  const plusThree: ShownRound = { ...fixture, roundId: 'plus-3', events: fixture.events.map((event) => (event.t === 'fsRetrigger' ? { t: 'fsRetrigger', add: 3 } : event)) };
+  const texts = await page.evaluate((rounds) => {
+    const probe = (window as ProbeWindow).__cryscadeProbe;
+    if (probe === undefined) throw new Error('нет зонда');
+    return rounds.map((round) => {
+      probe.still(round, 0);
+      const shown = probe.schedule()?.segments.find((segment) => segment.kind === 'plaqueShow');
+      if (shown === undefined) return null;
+      probe.still(round, Math.floor((shown.startMs + shown.endMs) / 2));
+      probe.renderOnce();
+      return probe.plaqueText();
+    });
+  }, [fixture, plusThree]);
+  expect(texts).toStrictEqual(['+5 фріспінів', '+3 фріспіни']);
   expect(problems).toEqual([]);
 });
 
@@ -152,6 +234,31 @@ test('скрытая вкладка: часы показа стоят; вкла�
   expect((await presentation(page))?.clock).toBe(stopped);
   await setHidden(page, false);
   await expect.poll(async () => (await presentation(page))?.clock ?? 0).toBeGreaterThan(stopped ?? 0);
+  await autoSkip(page);
+  await waitForState(page, 'idle');
+  expect(problems).toEqual([]);
+});
+
+test('часы кадра на месте: тикер даёт дробные дельты, а часы показа — целые миллисекунды', async ({ page }) => {
+  const { problems } = collectConsole(page);
+  await open(page);
+  await force(page, 'multiplier');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await waitGroup(page, 1);
+  const sampled = await page.evaluate(async () => {
+    const probe = (window as ProbeWindow).__cryscadeProbe;
+    const stamps: number[] = [];
+    const clocks: number[] = [];
+    for (let k = 0; k < 30; k++) {
+      stamps.push(await new Promise<number>((resolve) => requestAnimationFrame(resolve)));
+      clocks.push(probe?.presentation()?.clock ?? Number.NaN);
+    }
+    return { stamps, clocks };
+  });
+  const deltas = sampled.stamps.slice(1).map((stamp, k) => stamp - (sampled.stamps[k] ?? stamp));
+  expect(deltas.some((delta) => !Number.isInteger(delta)), 'контроль: дельты кадров здесь дробные').toBe(true);
+  expect(new Set(sampled.clocks).size, 'часы показа шли').toBeGreaterThan(1);
+  expect(sampled.clocks.filter((clock) => !Number.isInteger(clock)), 'часы показа — целые мс').toStrictEqual([]);
   await autoSkip(page);
   await waitForState(page, 'idle');
   expect(problems).toEqual([]);

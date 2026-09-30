@@ -13,7 +13,7 @@ import { DEFAULT_CONFIG } from '../../../src/core/model/config.ts';
 import { EMPTY_CELL, buildSchedule, type ScheduleOptions } from '../../../src/core/presentation/index.ts';
 import { fixtureFirstGrid } from '../../support/fixture-rounds.ts';
 import { verifyRound } from '../../support/round-model.ts';
-import { fixtureShown } from '../../support/shown-rounds.ts';
+import { fixtureShown, seedShown } from '../../support/shown-rounds.ts';
 
 // Часы показа (§8.2): расписание раунда, время и кадр. Кадр — sampleScene в свой SceneState; здесь — то, что добавляет
 // Presenter: прежняя сетка следующего раунда, ход и упор часов, стоянка на featureIntro, пропуск, скрытая вкладка,
@@ -191,12 +191,25 @@ describe('Presenter: featureIntro', () => {
   });
 });
 
+/** Начало первой группы единицы unit — конец предыдущей единицы; единицы нет — конец раунда. */
+function unitStart(show: Presenter, unit: number): number {
+  return show.schedule?.groups.find((group) => group.unit === unit)?.startMs ?? show.schedule?.durationMs ?? -1;
+}
+
+/** Показ фичи после плашки: часы на точке удержания, игрок продолжил. */
+function pastIntro(show: Presenter): void {
+  show.play(FEATURE, false);
+  show.tick(show.schedule?.holds[0] ?? 0);
+  show.resume();
+}
+
 describe('Presenter: пропуск', () => {
-  it('первый — к концу текущей группы, второй — к концу раунда', () => {
+  it('основная игра без фичи и большого выигрыша: первый тап — к концу группы, второй — к концу спина, он же конец раунда', () => {
     const { presenter: show, heard } = presenter();
     show.play(CASCADES, false);
     const groups = show.schedule?.groups ?? [];
     expect(groups.length).toBeGreaterThan(3);
+    expect(groups.every((group) => group.unit === 0)).toBe(true);
     show.tick((groups[1]?.startMs ?? 0) + 10);
     show.skip();
     expect(show.clock).toBe(groups[1]?.endMs);
@@ -206,7 +219,55 @@ describe('Presenter: пропуск', () => {
     expect(heard.finished).toBe(1);
   });
 
-  it('точку удержания пропуск не перепрыгивает: к концу раунда — только после продолжения', () => {
+  it('во фриспине второй тап — к концу этого фриспина, дальше часы идут сами; на старте следующего спина счёт с нуля', () => {
+    const { presenter: show, heard } = presenter();
+    pastIntro(show);
+    const groups = show.schedule?.groups ?? [];
+    const first = groups.findIndex((group) => group.unit === 1);
+    expect(groups[first]?.kind).toBe('fill');
+    show.tick((groups[first]?.startMs ?? 0) + 10 - show.clock);
+    show.skip();
+    expect(show.clock).toBe(groups[first]?.endMs);
+    show.skip();
+    expect(show.clock).toBe(unitStart(show, 2));
+    expect([show.finished, heard.finished]).toStrictEqual([false, 0]);
+    show.tick(40);
+    expect(show.clock).toBe(unitStart(show, 2) + 40);
+    // Спин из двух групп и больше: первый тап в нём — к концу группы, а не спина.
+    const long = groups.find((group, k) => group.kind === 'fill' && group.unit >= 2 && groups[k + 1]?.unit === group.unit);
+    if (long === undefined) throw new Error('нет фриспина из двух групп');
+    show.tick(long.startMs - show.clock);
+    show.skip();
+    expect(show.clock).toBe(long.endMs);
+    expect(long.endMs).toBeLessThan(unitStart(show, long.unit + 1));
+  });
+
+  it.each([
+    ['последний фриспин', FEATURE],
+    ['основной спин без фичи', seedShown(1590)],
+  ])('%s: второй тап останавливает показ на начале празднования, празднование — своим тапом', (_name, round) => {
+    const { presenter: show, heard } = presenter();
+    show.play(round, false);
+    const hold = show.schedule?.holds[0];
+    if (hold !== undefined) {
+      show.tick(hold);
+      show.resume();
+    }
+    const groups = show.schedule?.groups ?? [];
+    const celebration = groups.at(-1);
+    expect(celebration?.kind).toBe('bigWin');
+    const lastSpin = groups.find((group) => group.unit === (celebration?.unit ?? 0) - 1 && group.startMs >= show.clock);
+    show.tick((lastSpin?.startMs ?? 0) + 10 - show.clock);
+    show.skip();
+    show.skip();
+    expect(show.clock).toBe(celebration?.startMs);
+    expect([show.finished, heard.finished]).toStrictEqual([false, 0]);
+    show.skip();
+    expect(show.clock).toBe(show.schedule?.durationMs);
+    expect(heard.finished).toBe(1);
+  });
+
+  it('точку удержания пропуск не перепрыгивает; после продолжения тап — к концу основного спина, а не раунда', () => {
     const { presenter: show, heard } = presenter();
     show.play(FEATURE, false);
     const hold = show.schedule?.holds[0] ?? -1;
@@ -218,8 +279,8 @@ describe('Presenter: пропуск', () => {
     expect(show.clock).toBe(hold);
     show.resume();
     show.skip();
-    expect(show.clock).toBe(show.schedule?.durationMs);
-    expect(heard).toStrictEqual({ held: 1, finished: 1 });
+    expect(show.clock).toBe(unitStart(show, 1));
+    expect(heard).toStrictEqual({ held: 1, finished: 0 });
   });
 
   it('пресет без пропуска (строгий): тап ничего не пропускает', () => {

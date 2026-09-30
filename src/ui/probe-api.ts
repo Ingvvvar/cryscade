@@ -45,7 +45,8 @@ export interface StillOptions {
 /** Расписание показа простыми данными: тест выбирает момент кадра по группам и сегментам. */
 export interface ScheduleSummary {
   readonly durationMs: number;
-  readonly groups: readonly { readonly kind: string; readonly startMs: number; readonly endMs: number }[];
+  /** unit — единица пропуска (§8.2): спин или празднование большого выигрыша. */
+  readonly groups: readonly { readonly kind: string; readonly startMs: number; readonly endMs: number; readonly unit: number }[];
   readonly segments: readonly { readonly kind: string; readonly group: number; readonly startMs: number; readonly endMs: number }[];
   readonly bigWinLevel: number;
 }
@@ -91,12 +92,17 @@ export interface CryscadeProbe {
   presentation(): PresentationInfo | null;
   /** Сид следующего раунда по каналу зонда — мимо протокола; деньги идут обычным путём (фаза 5). Сбывается, когда воркер принял сид. */
   force(round: ForcedName | number): Promise<void>;
-  /** Пропуск показа тем же тапом, что у игрока: два тапа на показ, один — на плашку фриспинов. e2e без ожидания показа. */
+  /**
+   * Пропуск показа тем же тапом, что у игрока, — тапы до конца показа: два на спин, один на плашку фриспинов и один на
+   * празднование большого выигрыша. e2e без ожидания показа.
+   */
   autoSkip(on: boolean): void;
   /** Символы, которых нет в шрифтах: без аргумента — надписи и числа самой сцены, иначе — эти строки шрифтом надписей. */
   missingGlyphs(texts?: string[]): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели. */
   chipRects(): Rect[];
+  /** Надпись видимой плашки фичи; плашки нет — null. */
+  plaqueText(): string | null;
   /** Снимок контроллера игры; null — игра ещё не связана. */
   game(): ControllerSnapshot | null;
   /** id раундов, которые вкладка показала, по порядку: свои и доигранные. */

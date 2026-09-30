@@ -5,6 +5,7 @@ import { keyId, toKey } from '../../src/server/key-order.ts';
 import { checkWallet } from '../../src/server/records.ts';
 import { MemoryStorage, type WriteOp } from '../../src/server/index.ts';
 import { fixtureRound, type FixtureName } from '../support/fixture-rounds.ts';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { Rig, T0, plant } from '../support/rgs-rig.ts';
 
 // Инвариант класса (§6.6): никакое содержимое хранилища не даёт вечного INTERNAL. Ключи seq — всех типов IndexedDB и
@@ -283,7 +284,7 @@ describe('инвариант хранилища: вечного INTERNAL нет'
         if (outcome.repairs > 0) branches.repaired += 1;
         else branches.healthy += 1;
       }),
-      { numRuns: 1000 },
+      { numRuns: 1000, timeout: RUN_TIMEOUT_MS },
     );
     // Охват: каждый вид ключа seq и каждый вид кошелька встретился; обе ветви — с починкой и без.
     const expectedKinds = ['целое', 'у границ', 'дробное', 'за границей', 'строка', 'дата', 'двоичные', 'массив', 'не ключ'];

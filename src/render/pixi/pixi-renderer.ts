@@ -7,12 +7,13 @@
 import { Application, Container, type Renderer as PixiRendererBackend, type Ticker, type WebGLRenderer, type WebGPURenderer } from 'pixi.js';
 import { AmbientClock } from '../ambient-clock.ts';
 import { PALETTE } from '../art/palette.ts';
+import { FrameClock } from '../frame-clock.ts';
 import { computeLayout, renderResolution, type Layout, type Viewport } from '../layout.ts';
 import { numberCodes, type NumberCodes, type NumberStyle } from '../number-layout.ts';
 import { sceneTextList, type Renderer, type RendererInfo, type RendererName, type SceneSource, type SceneTexts } from '../renderer.ts';
 import { CrystalAtlas } from './atlas.ts';
 import { CaveBackground } from './background.ts';
-import { DIGITS_FONT, LABELS_FONT, digitTexts, ensureDigitsFont, ensureLabelsFont, fontMissing } from './fonts.ts';
+import { DIGITS_FONT, LABELS_FONT, digitTexts, ensureDigitsFont, ensureLabelsFont, fontMissing, fontPages } from './fonts.ts';
 import { FrameView } from './frame-view.ts';
 import { RoundView } from './round-view.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
@@ -23,7 +24,7 @@ export interface PixiRendererOptions {
   readonly preference: readonly RendererName[];
   /** Тестовый зонд; в проде — null. */
   readonly inspector: SceneInspector | null;
-  /** Прогрев шейдеров до первого кадра; выключается только зондом — положительный контроль его проверки. */
+  /** Прогрев шейдеров и страниц глифов до первого кадра; выключается только зондом — положительный контроль его проверок. */
   readonly warmUp: boolean;
   /** Надписи сцены и разделители чисел — от ui: в render/ текста и формата нет. */
   readonly texts: SceneTexts;
@@ -62,9 +63,12 @@ export class PixiRenderer implements Renderer {
   readonly #codes: NumberCodes;
   readonly #root = new Container({ label: 'design' });
   readonly #ambient = new AmbientClock();
+  readonly #frameClock = new FrameClock();
+  /** Дробное время тикера становится целыми мс в одном месте — в часах кадра; дальше по кадру идут только целые. */
   readonly #tick = (ticker: Ticker): void => {
-    this.#ambient.advance(ticker.deltaMS);
-    this.#frame(ticker.deltaMS);
+    const deltaMs = this.#frameClock.advance(ticker);
+    this.#ambient.advance(deltaMs);
+    this.#frame(deltaMs);
   };
   #app: Application | null = null;
   #canvas: HTMLCanvasElement | null = null;
@@ -116,7 +120,7 @@ export class PixiRenderer implements Renderer {
     this.#frame(0);
     if (this.#options.warmUp) {
       round.forWarmUp(() => {
-        warmUp(app.renderer, app.stage);
+        warmUp(app.renderer, app.stage, fontPages());
       });
     }
     host.appendChild(canvas);
@@ -138,6 +142,7 @@ export class PixiRenderer implements Renderer {
         missingGlyphs: (asked) =>
           asked === null ? [...fontMissing(LABELS_FONT, texts), ...fontMissing(DIGITS_FONT, digitTexts(this.#options.numbers))] : fontMissing(LABELS_FONT, asked),
         chipRects: () => round.chipRects(),
+        plaqueText: () => round.plaqueText(),
         pinAmbient: (seconds) => {
           this.#ambient.pin(seconds);
           this.#applyAmbient();
@@ -192,7 +197,7 @@ export class PixiRenderer implements Renderer {
     this.#scene = null;
   }
 
-  /** Кадр: часы источника на deltaMs, его SceneState — на сцену; тепло фриспинов — фону и рамке. */
+  /** Кадр: часы источника на deltaMs (целые мс от часов кадра), его SceneState — на сцену; тепло фриспинов — фону и рамке. */
   #frame(deltaMs: number): void {
     const scene = this.#scene;
     if (scene === null) return;

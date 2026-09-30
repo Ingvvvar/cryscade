@@ -17,10 +17,16 @@ describe('glyphSet', () => {
 
   it('надписи сцены: все символы строк ui и кириллица в наборе', () => {
     const texts = sceneTextList(SCENE_TEXT);
-    expect(texts).toHaveLength(8);
     const set = glyphSet(texts);
     for (const text of texts) for (const char of text) expect(set).toContain(char);
     expect(set).toEqual(expect.arrayContaining(['Ф', 'і', 'щ', 'ж']));
+  });
+
+  it('надпись ретриггера с числом: в наборе все цифры, «+» и все формы слова', () => {
+    const texts = sceneTextList(SCENE_TEXT);
+    expect(texts).toEqual(expect.arrayContaining(['Фріспіни', 'Натисніть, щоб продовжити', 'Максимальний виграш', 'Великий виграш', 'Епічний виграш']));
+    expect(texts).toEqual(expect.arrayContaining(['+1 фріспін', '+2 фріспіни', '+5 фріспінів', '+21 фріспін', '+99 фріспінів']));
+    expect(glyphSet(texts)).toEqual(expect.arrayContaining(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+']));
   });
 });
 

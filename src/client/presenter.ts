@@ -31,7 +31,10 @@ export interface Presentation {
   play(round: ShownRound, restored: boolean): void;
   /** Сетка покоя (authenticate): падает, как первая сетка. */
   rest(grid: readonly number[]): void;
-  /** Пропуск: первый — к концу текущей группы, следующий в том же раунде — к концу раунда; точку удержания не перепрыгивает. */
+  /**
+   * Пропуск (§8.2): счёт тапов — в пределах единицы (спина или празднования большого выигрыша), на старте каждой с нуля;
+   * первый — к концу текущей группы, второй — к концу единицы. Точку удержания не перепрыгивает.
+   */
   skip(): void;
   /** Часы идут дальше с точки удержания. */
   resume(): void;
@@ -42,9 +45,10 @@ export interface Presentation {
 const NO_LISTENER: PresentationListener = { held: () => undefined, finished: () => undefined };
 
 /**
- * Часы показа (§8.2): расписание раунда, время и кадр. Тикер рендера двигает часы, кадр — sampleScene в свой
- * SceneState, в кадр — целые миллисекунды (sample-scene.ts). Прежняя сетка следующего раунда — итоговая сетка прошлого
- * показа. Часы стоят на точке удержания featureIntro, пока машина состояний не скажет resume, и пока вкладка скрыта.
+ * Часы показа (§8.2): расписание раунда, время и кадр. Тикер рендера двигает часы целыми миллисекундами — дробное время
+ * тикера становится целым в одном месте, в часах кадра (render/frame-clock.ts); кадр — sampleScene в свой SceneState.
+ * Прежняя сетка следующего раунда — итоговая сетка прошлого показа. Часы стоят на точке удержания featureIntro, пока
+ * машина состояний не скажет resume, и пока вкладка скрыта.
  */
 export class Presenter implements Presentation {
   readonly scene = new SceneState();
@@ -62,7 +66,9 @@ export class Presenter implements Presentation {
   #held = false;
   /** Следующая точка удержания в schedule.holds. */
   #nextHold = 0;
+  /** Тапы пропуска в единице #skipUnit: новая единица — счёт с нуля. */
   #skips = 0;
+  #skipUnit = -1;
   #group = -1;
   #finishedSent = false;
   /** С какого момента начался показ раунда: 0 — новый, начало группы — восстановленный. */
@@ -131,9 +137,14 @@ export class Presenter implements Presentation {
   skip(): void {
     const schedule = this.#schedule;
     if (schedule === null || this.#roundId === null || !this.#settings.skip || this.#held || this.#halted) return;
+    const group = schedule.groups[groupAt(schedule, this.#clock)];
+    if (group === undefined) return;
+    if (group.unit !== this.#skipUnit) {
+      this.#skipUnit = group.unit;
+      this.#skips = 0;
+    }
     this.#skips += 1;
-    const target = this.#skips === 1 ? (schedule.groups[groupAt(schedule, this.#clock)]?.endMs ?? schedule.durationMs) : schedule.durationMs;
-    this.#advanceTo(target);
+    this.#advanceTo(this.#skips === 1 ? group.endMs : (schedule.unitEnds[group.unit] ?? schedule.durationMs));
   }
 
   resume(): void {
@@ -158,7 +169,7 @@ export class Presenter implements Presentation {
     const schedule = this.#schedule;
     if (schedule === null) return this.scene;
     if (!this.#frozen && !this.#halted && !this.#hidden && !this.#held) this.#advanceTo(this.#clock + deltaMs);
-    sampleScene(schedule, Math.round(this.#clock), this.scene);
+    sampleScene(schedule, this.#clock, this.scene);
     return this.scene;
   }
 
@@ -187,7 +198,7 @@ export class Presenter implements Presentation {
   #mark(): void {
     const schedule = this.#schedule;
     if (schedule === null) return;
-    const group = groupAt(schedule, Math.round(this.#clock));
+    const group = groupAt(schedule, this.#clock);
     if (group === this.#group) return;
     this.#group = group;
     if (this.#roundId !== null) this.#checkpoints.write(this.#roundId, group);
@@ -203,6 +214,7 @@ export class Presenter implements Presentation {
     this.#held = false;
     this.#nextHold = 0;
     this.#skips = 0;
+    this.#skipUnit = -1;
     this.#group = -1;
     this.#finishedSent = false;
     this.#startMs = 0;

@@ -2,8 +2,11 @@
 // иначе глифы выпеклись бы запасным шрифтом. Кириллица Unbounded — отдельное подмножество (unicode-range): грузится,
 // только когда load получает текст с ней, поэтому надписи грузятся со своим текстом. Шрифты ставятся один раз на
 // страницу и не снимаются: их текстура, побывав в батче WebGPU, держится модульным кэшем Pixi (как источник атласа).
+// Страницы глифов грузит в GPU прогрев (warmup.ts), и сборщик Pixi их не выгружает: страница — ImageSource с
+// autoGarbageCollect, и через минуту без надписей (весь основной игры) сборщик снял бы её, а первый кадр фичи или
+// большого выигрыша снова грузил бы её и строил мипмапы — рывок в самый важный момент (§10).
 
-import { AbstractBitmapFont, BitmapFont, Cache, type CharData } from 'pixi.js';
+import { AbstractBitmapFont, BitmapFont, Cache, type CharData, type TextureSource } from 'pixi.js';
 import { glyphSet, missingGlyphs } from '../glyph-set.ts';
 import type { NumberStyle } from '../number-layout.ts';
 
@@ -23,6 +26,7 @@ function install(name: string, chars: string[]): void {
     padding: 4,
     style: { fontFamily: FACE, fontSize: 64, fontWeight: '700', fill: 0xffffff },
   });
+  for (const page of installedFont(name).pages) page.texture.source.autoGarbageCollect = false;
 }
 
 /** Шрифт цифр готов: document.fonts видел Unbounded в момент установки. */
@@ -51,6 +55,11 @@ export function installedFont(name: string): InstalledFont {
   return font;
 }
 
+/** Страницы глифов обоих шрифтов — прогрев грузит их в GPU с мипмапами до первого кадра (warmup.ts). */
+export function fontPages(): TextureSource[] {
+  return [DIGITS_FONT, LABELS_FONT].flatMap((name) => installedFont(name).pages.map((page) => page.texture.source));
+}
+
 /** Глифы шрифта по коду символа — для раскладки чисел без строк в кадре. */
 export function glyphsByCode(font: InstalledFont): Map<number, CharData> {
   const glyphs = new Map<number, CharData>();
@@ -58,9 +67,9 @@ export function glyphsByCode(font: InstalledFont): Map<number, CharData> {
   return glyphs;
 }
 
-/** Что сцена пишет шрифтом цифр: цифры, знаки множителя и ретриггера, разделители локали. */
+/** Что сцена пишет шрифтом цифр: цифры, знак множителя, разделители локали. */
 export function digitTexts(style: NumberStyle): string[] {
-  return ['0123456789', '\u00d7+', style.group, style.decimal];
+  return ['0123456789', '\u00d7', style.group, style.decimal];
 }
 
 /** Символы строк, которых нет в установленном шрифте. Пробел глифа-текстуры не имеет — он есть, если есть запись. */

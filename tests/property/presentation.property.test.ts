@@ -112,6 +112,15 @@ describe.each([
             expect(snapshot(shared)).toStrictEqual(snapshot(fresh));
           }
           expect(maxFlashesPerSecond(schedule)).toBeLessThanOrEqual(3);
+          // Единицы пропуска: номер растёт на 1 ровно на заполнении и на празднике, конец единицы — начало следующей.
+          schedule.groups.forEach((group, k) => {
+            const opens = k > 0 && (group.kind === 'fill' || group.kind === 'bigWin');
+            expect(group.unit).toBe(k === 0 ? 0 : (schedule.groups[k - 1]?.unit ?? -1) + (opens ? 1 : 0));
+            const next = schedule.groups[k + 1];
+            if (next === undefined || next.unit !== group.unit) expect(schedule.unitEnds[group.unit]).toBe(group.endMs);
+          });
+          expect(schedule.unitEnds).toHaveLength((schedule.groups.at(-1)?.unit ?? -1) + 1);
+          expect(schedule.unitEnds.at(-1)).toBe(schedule.durationMs);
           if (!options.preset.celebrateSmallWins && payX100 <= 100) {
             expect(schedule.segments.filter((segment) => segment.celebrate)).toStrictEqual([]);
             expect(schedule.durationMs).toBeGreaterThanOrEqual(2500);

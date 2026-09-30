@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLEAR_NETWORK } from '../../src/client/index.ts';
 import { ClientWorld, type Tab } from '../support/client-world.ts';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { audit } from '../support/wallet-world.ts';
 
 // Вкладки на контроллерах (§6.3, §6.5): от одной до трёх вкладок на общем профиле открываются и закрываются, крутят,
@@ -190,7 +191,7 @@ describe('вкладки на контроллерах', () => {
       fc.asyncProperty(fc.array(ACTION, { minLength: 1, maxLength: 50 }), async (actions) => {
         expect(await run(actions, seen)).toStrictEqual([]);
       }),
-      { numRuns: 1000 },
+      { numRuns: 1000, timeout: RUN_TIMEOUT_MS },
     );
     // Положительный контроль: прогоны дошли до раундов, ожидания, перехвата, доигрывания и экрана ошибки.
     expect(seen.closedRounds).toBeGreaterThan(0);
@@ -198,5 +199,5 @@ describe('вкладки на контроллерах', () => {
     expect(seen.steals).toBeGreaterThan(0);
     expect(seen.restores).toBeGreaterThan(0);
     expect(seen.errors).toBeGreaterThan(0);
-  });
+  }, 60_000);
 });

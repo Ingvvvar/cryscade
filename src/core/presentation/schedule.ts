@@ -57,6 +57,11 @@ export interface Group {
   readonly kind: GroupKind;
   readonly startMs: number;
   readonly endMs: number;
+  /**
+   * Единица пропуска (§8.2): спин — основной или фриспин, от своего заполнения до следующего, с плашками фичи и
+   * ретриггера, которые он открыл, — или празднование большого выигрыша. Счёт тапов живёт в пределах единицы.
+   */
+  readonly unit: number;
   readonly firstSegment: number;
   /** Индекс сегмента после последнего сегмента группы. */
   readonly segmentEnd: number;
@@ -107,6 +112,8 @@ export interface Schedule {
   readonly plaques: readonly Plaque[];
   /** Точки удержания featureIntro: часы показа ждут здесь тапа или пробела. Расписание от удержания не меняется. */
   readonly holds: readonly number[];
+  /** Конец каждой единицы пропуска, мс: начало следующей; последняя кончается с раундом. */
+  readonly unitEnds: readonly number[];
   readonly profile: FallProfile;
   /** Итоговая сетка: что лежит на поле в конце показа. */
   readonly finalGrid: Int8Array;
@@ -422,10 +429,14 @@ class ScheduleBuilder {
     const groups: Group[] = [];
     const segments: Segment[] = [];
     const holds: number[] = [];
+    const unitEnds: number[] = [];
     let at = 0;
+    // Раунд начинается с заполнения (#current бросает на событии до fill): первая группа открывает единицу 0.
+    let unit = -1;
     this.#groups.forEach((draft, groupIndex) => {
       const firstSegment = segments.length;
       const startMs = at;
+      if (draft.kind === 'fill' || draft.kind === 'bigWin') unit += 1;
       draft.segments.forEach((segment, k) => {
         // Пауза строгого кончается ровно на минимальном цикле: сумма длительностей с плавающей точкой недобрала бы
         // до него (контрпример property — 2499.9999999999995).
@@ -438,12 +449,14 @@ class ScheduleBuilder {
         kind: draft.kind,
         startMs,
         endMs: at,
+        unit,
         firstSegment,
         segmentEnd: segments.length,
         fromEvent: draft.fromEvent,
         toEvent: draft.toEvent,
         start: draft.start,
       });
+      unitEnds[unit] = at;
     });
     const endEvent = this.#round.events.at(-1);
     return {
@@ -456,6 +469,7 @@ class ScheduleBuilder {
       scatterSets: this.#scatterSets,
       plaques: this.#plaques,
       holds,
+      unitEnds,
       profile: this.#profile,
       finalGrid: Int8Array.from(this.#grid),
       totalMinor: this.#round.winMinor,

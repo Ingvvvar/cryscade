@@ -4,6 +4,7 @@ import { parseResponse, type RequestBody } from '../../src/protocol/index.ts';
 import { checkWallet } from '../../src/server/records.ts';
 import { MemoryStorage, type WriteOp } from '../../src/server/index.ts';
 import { fixtureRound } from '../support/fixture-rounds.ts';
+import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { Rig, T0, plant } from '../support/rgs-rig.ts';
 
 // Хранилище переживает испорченное состояние: записи кошелька, раундов и ключей с поломками в случайных полях
@@ -114,7 +115,7 @@ describe('испорченное хранилище не роняет серве
         if (storage.snapshot().quarantine.length > 0 || rig.broadcast.messages.some((message) => message.notice === 'reset')) repaired += 1;
         else healthy += 1;
       }),
-      { numRuns: 1000 },
+      { numRuns: 1000, timeout: RUN_TIMEOUT_MS },
     );
     // Обе ветви пройдены: состояния, которые чинятся, и состояния, которые служат как есть.
     expect(repaired).toBeGreaterThan(0);

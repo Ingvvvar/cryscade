@@ -29,6 +29,9 @@ function shownRoundId(state: ControllerSnapshot['state']): string | null {
   }
 }
 
+/** Предел тапов автопропуска за один заход: раунд с сотней фриспинов — пара сотен тапов. */
+const AUTO_TAPS = 10_000;
+
 /** Идёт показ раунда (свой или восстановленный) или плашка фриспинов ждёт тапа: ключ — состояние и раунд. */
 function showingKey(state: ControllerSnapshot['state']): string | null {
   if (state.name === 'presenting' || state.name === 'featureIntro') return `${state.name}:${state.roundId}`;
@@ -61,8 +64,8 @@ export class PageProbe implements MountObserver {
   #presenter: Presenter | null = null;
   /** ?autoskip=1 — автопропуск с загрузки и после перезагрузок посреди раунда (e2e фазы 4 не ждут показа). */
   #autoSkip = new URLSearchParams(window.location.search).get('autoskip') === '1';
-  /** Показ, на который автопропуск уже ответил: на каждый вход в показ или в плашку — один раз. */
-  #skipped: string | null = null;
+  /** Серия тапов автопропуска идёт: оповещения, которые она сама вызывает, новую серию не начинают. */
+  #skipping = false;
   readonly #shown: string[] = [];
   readonly #sent: SentBody[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
@@ -95,17 +98,26 @@ export class PageProbe implements MountObserver {
     });
   }
 
-  /** Автопропуск: вошли в показ — два тапа (к концу группы, к концу раунда), в плашку фриспинов — тап «продолжить». */
+  /**
+   * Автопропуск — тапы игрока, пока идёт показ: два на спин (к концу группы, к концу спина), один на плашку фриспинов
+   * («продолжить») и один на празднование большого выигрыша (§8.2). Тап, который ничего не сдвинул, кончает серию: в
+   * строгом пресете пропуска нет.
+   */
   #skipAhead(): void {
     const game = this.#game;
-    if (!this.#autoSkip || game === null) return;
-    const state = game.getSnapshot().state;
-    const key = showingKey(state);
-    if (key === this.#skipped) return;
-    this.#skipped = key;
-    if (key === null) return;
-    game.tap();
-    if (state.name !== 'featureIntro') game.tap();
+    if (!this.#autoSkip || game === null || this.#skipping) return;
+    this.#skipping = true;
+    try {
+      for (let taps = 0; taps < AUTO_TAPS; taps++) {
+        const key = showingKey(game.getSnapshot().state);
+        if (key === null) break;
+        const clock = this.#presenter?.clock;
+        game.tap();
+        if (showingKey(game.getSnapshot().state) === key && this.#presenter?.clock === clock) break;
+      }
+    } finally {
+      this.#skipping = false;
+    }
   }
 
   #presentation(): PresentationInfo | null {
@@ -223,11 +235,11 @@ export class PageProbe implements MountObserver {
       force: (round) => this.#force(round),
       autoSkip: (on) => {
         this.#autoSkip = on;
-        this.#skipped = null;
         this.#skipAhead();
       },
       missingGlyphs: (texts) => scene.missingGlyphs(texts ?? null),
       chipRects: () => scene.chipRects(),
+      plaqueText: () => scene.plaqueText(),
       game: () => this.#game?.getSnapshot() ?? null,
       shownRounds: () => [...this.#shown],
       sent: () => [...this.#sent],
@@ -256,7 +268,7 @@ export class PageProbe implements MountObserver {
     if (schedule === null) return null;
     return {
       durationMs: schedule.durationMs,
-      groups: schedule.groups.map(({ kind, startMs, endMs }) => ({ kind, startMs, endMs })),
+      groups: schedule.groups.map(({ kind, startMs, endMs, unit }) => ({ kind, startMs, endMs, unit })),
       segments: schedule.segments.map(({ kind, group, startMs, endMs }) => ({ kind, group, startMs, endMs })),
       bigWinLevel: schedule.bigWinLevel,
     };

@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { RendererInfo, RendererLifecycle } from '../../../src/render/renderer.ts';
 import { SceneMount } from '../../../src/ui/scene-mount.ts';
+import { RUN_TIMEOUT_MS } from '../../support/property-run.ts';
 
 // Поддельный рендерер: init ждёт, пока тест не разрешит или не отвергнет его. Двойной destroy — ошибка.
 const HOST = {} as HTMLElement;
@@ -221,6 +222,7 @@ describe('SceneMount — свойства на случайных перемеж
         if (last.failed) return h.alive === 0 && h.mount.renderer === null && h.errors.length > 0;
         return h.alive === 1 && h.mount.renderer === last && last.initialised;
       }),
+      { timeout: RUN_TIMEOUT_MS },
     );
   });
 });

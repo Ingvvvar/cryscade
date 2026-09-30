@@ -5,14 +5,17 @@ import { BundleBudget, INITIAL_JS_BUDGET, type BudgetChunk } from './tools/bundl
 function chunksOf(bundle: Rolldown.OutputBundle): Map<string, BudgetChunk> {
   const chunks = new Map<string, BudgetChunk>();
   for (const item of Object.values(bundle)) {
-    if (item.type === 'chunk') chunks.set(item.fileName, { fileName: item.fileName, code: item.code, isEntry: item.isEntry, imports: item.imports });
+    if (item.type === 'chunk') {
+      chunks.set(item.fileName, { fileName: item.fileName, code: item.code, isEntry: item.isEntry, imports: item.imports, modules: item.moduleIds });
+    }
   }
   return chunks;
 }
 
 /**
  * Гейт начального JS (§13) вместо порога Vite на размер чанка: воркер Vite собирает отдельной сборкой раньше главной —
- * его граф записывает плагин из worker.plugins, главная сверяет итог и падает сверх бюджета.
+ * его граф записывает плагин из worker.plugins, главная сверяет итог и падает сверх бюджета; ленивый модуль в начальном
+ * JS роняет любую из двух сборок при любом размере.
  */
 function budgetPlugins(budget: BundleBudget): { readonly main: Plugin; readonly worker: () => Plugin[] } {
   return {
@@ -39,7 +42,7 @@ function budgetPlugins(budget: BundleBudget): { readonly main: Plugin; readonly 
 }
 
 export interface CryscadeConfigOptions {
-  /** Бюджет начального JS, байт gzip; по умолчанию 300 КБ. Меньше — только для положительного контроля гейта. */
+  /** Бюджет начального JS, байт gzip; по умолчанию 300 КБ. Другой — только для положительных контролей гейта. */
   readonly budget?: number;
   /** Модуль, который главный вход импортирует статически сверх своих импортов, — положительный контроль гейта. */
   readonly staticRoot?: string;
