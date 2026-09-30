@@ -112,7 +112,6 @@ export class PixiRenderer implements Renderer {
     this.#scene = { atlas, background, frame, round };
     app.stage.addChild(background.view, this.#root);
     this.#ambient.setReducedMotion(this.#reducedMotion);
-    round.setReducedMotion(this.#reducedMotion);
     this.#applyViewport();
     this.#frame(0);
     if (this.#options.warmUp) {
@@ -157,10 +156,10 @@ export class PixiRenderer implements Renderer {
     this.#applyViewport();
   }
 
+  /** Сразу встаёт только время фона (решение 1): частицы и падение раунда — по его расписанию, со следующего раунда. */
   setReducedMotion(on: boolean): void {
     this.#reducedMotion = on;
     this.#ambient.setReducedMotion(on);
-    this.#scene?.round.setReducedMotion(on);
     this.#applyAmbient();
   }
 

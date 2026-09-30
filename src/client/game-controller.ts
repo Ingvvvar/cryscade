@@ -119,6 +119,14 @@ export class GameController {
     this.#localLock = ports.localLock;
     this.#keys = ports.keys;
     this.#presentation = ports.presentation;
+    this.#presentation.listen({
+      held: () => {
+        this.#dispatch({ type: 'held' });
+      },
+      finished: () => {
+        this.#dispatch({ type: 'presented' });
+      },
+    });
     this.#snapshot = this.#compose();
     this.#unlisten = ports.channel.listen((message) => {
       this.#fromTab(message);
@@ -149,6 +157,11 @@ export class GameController {
   spin(): void {
     if (this.#state.view.name !== 'idle' || this.#betMinor === null) return;
     this.#dispatch({ type: 'spin', key: this.#keys.next(), betMinor: this.#betMinor });
+  }
+
+  /** Тап по сцене, пробел или «Спін» во время показа: пропуск или «продолжить» на плашке фриспинов. */
+  tap(): void {
+    this.#dispatch({ type: 'tap' });
   }
 
   /** «Повторити»: тот же запрос — play с тем же ключом, endRound с тем же roundId. */
@@ -236,9 +249,16 @@ export class GameController {
         break;
       case 'abandon':
         this.#call?.abort();
+        this.#presentation.halt();
         break;
       case 'startPresentation':
-        this.#present(command.round);
+        this.#present(command.round, command.restored);
+        break;
+      case 'skipPresentation':
+        this.#presentation.skip();
+        break;
+      case 'resumePresentation':
+        this.#presentation.resume();
         break;
       default:
         command satisfies never;
@@ -304,14 +324,13 @@ export class GameController {
   }
 
   /**
-   * Показ раунда на сцене (§8.2). Фаза 5, подход Б: сцена показывает раунд по расписанию, а машина состояний ещё не ждёт
-   * его конца — endRound уходит сразу, как в фазе 4. Связь с концом показа, пропуск и featureIntro — подход В.
+   * Показ раунда на сцене (§8.2): endRound уйдёт, когда показ дойдёт до конца (presented от часов показа). До ответа
+   * endRound на панели — баланс после ставки: зачисление приходит с ответом endRound.
    */
-  #present(round: ShownRound): void {
+  #present(round: ShownRound, restored: boolean): void {
     this.#grid = finalGrid(round.events);
     this.#winMinor = round.winMinor;
-    this.#presentation.play(round);
-    this.#dispatch({ type: 'presented' });
+    this.#presentation.play(round, restored);
   }
 
   #lock(): RoundLock {

@@ -1,34 +1,76 @@
 import type { ShownRound } from '../core/fsm/index.ts';
 import type { RoundEvent } from '../core/model/events.ts';
-import { SceneState, buildSchedule, sampleScene, type Schedule, type ScheduleOptions } from '../core/presentation/index.ts';
+import { SceneState, buildSchedule, groupAt, sampleScene, type Schedule, type ScheduleOptions } from '../core/presentation/index.ts';
 
-/** Параметры показа: читаются при старте раунда — турбо и reduced motion, переключённые посреди раунда, ждут следующего. */
+/** Параметры показа. Расписание читает их на старте раунда: турбо и reduced motion посреди раунда ждут следующего. */
 export interface PresentationSettings {
   options(): ScheduleOptions;
+  /** Пресет разрешает пропуск (slam stop); в строгом его нет. */
+  readonly skip: boolean;
+}
+
+/** Контрольная точка показа (§6.5): индекс группы раунда — переживает смену турбо и пресета между перезагрузками. */
+export interface CheckpointStore {
+  /** Группа, с которой продолжать раунд roundId; нет, испорчена или от другого раунда — null. */
+  read(roundId: string): number | null;
+  write(roundId: string, group: number): void;
+}
+
+/** Что показ сообщает контроллеру. */
+export interface PresentationListener {
+  /** Часы встали на точке удержания featureIntro. */
+  held(): void;
+  /** Показ раунда дошёл до конца — после счётчика. */
+  finished(): void;
 }
 
 /** Что контроллеру нужно от показа. */
 export interface Presentation {
-  /** Показ раунда с начала. */
-  play(round: ShownRound): void;
+  listen(listener: PresentationListener): void;
+  /** Показ раунда: новый — с начала, восстановленный — с начала группы контрольной точки. */
+  play(round: ShownRound, restored: boolean): void;
   /** Сетка покоя (authenticate): падает, как первая сетка. */
   rest(grid: readonly number[]): void;
+  /** Пропуск: первый — к концу текущей группы, следующий в том же раунде — к концу раунда; точку удержания не перепрыгивает. */
+  skip(): void;
+  /** Часы идут дальше с точки удержания. */
+  resume(): void;
+  /** Показ брошен (замок отняли): часы стоят, о конце показа никто не узнает. */
+  halt(): void;
 }
 
+const NO_LISTENER: PresentationListener = { held: () => undefined, finished: () => undefined };
+
 /**
- * Часы показа (§8.2): расписание раунда, время и кадр. Тикер рендера двигает часы, кадр — sampleScene в свой SceneState;
- * в кадр — целые миллисекунды (sample-scene.ts). Прежняя сетка следующего раунда — итоговая сетка прошлого показа.
+ * Часы показа (§8.2): расписание раунда, время и кадр. Тикер рендера двигает часы, кадр — sampleScene в свой
+ * SceneState, в кадр — целые миллисекунды (sample-scene.ts). Прежняя сетка следующего раунда — итоговая сетка прошлого
+ * показа. Часы стоят на точке удержания featureIntro, пока машина состояний не скажет resume, и пока вкладка скрыта.
  */
 export class Presenter implements Presentation {
   readonly scene = new SceneState();
   readonly #settings: PresentationSettings;
+  readonly #checkpoints: CheckpointStore;
+  #listener: PresentationListener = NO_LISTENER;
   #schedule: Schedule | null = null;
   #clock = 0;
-  #frozen = false;
   #shown: readonly number[] | null = null;
+  /** Раунд показа; null — сетка покоя или стоп-кадр зонда: о них контроллер не слышит. */
+  #roundId: string | null = null;
+  #frozen = false;
+  #halted = false;
+  #hidden = false;
+  #held = false;
+  /** Следующая точка удержания в schedule.holds. */
+  #nextHold = 0;
+  #skips = 0;
+  #group = -1;
+  #finishedSent = false;
+  /** С какого момента начался показ раунда: 0 — новый, начало группы — восстановленный. */
+  #startMs = 0;
 
-  constructor(settings: PresentationSettings) {
+  constructor(settings: PresentationSettings, checkpoints: CheckpointStore) {
     this.#settings = settings;
+    this.#checkpoints = checkpoints;
   }
 
   get schedule(): Schedule | null {
@@ -45,8 +87,34 @@ export class Presenter implements Presentation {
     return this.#schedule !== null && this.#clock >= this.#schedule.durationMs;
   }
 
-  play(round: ShownRound): void {
-    this.#start(round.events, round.betMinor, round.winMinor, this.#settings.options());
+  /** Часы стоят на точке удержания featureIntro. */
+  get held(): boolean {
+    return this.#held;
+  }
+
+  /** Группа расписания, в которой сейчас часы; −1 — показа нет. */
+  get group(): number {
+    return this.#group;
+  }
+
+  /** Момент, с которого начался показ раунда: 0 — новый раунд, начало группы контрольной точки — восстановленный. */
+  get startMs(): number {
+    return this.#startMs;
+  }
+
+  listen(listener: PresentationListener): void {
+    this.#listener = listener;
+  }
+
+  play(round: ShownRound, restored: boolean): void {
+    const schedule = this.#start(round.events, round.betMinor, round.winMinor, this.#settings.options());
+    this.#roundId = round.roundId;
+    const group = restored ? this.#checkpoints.read(round.roundId) : null;
+    const from = group !== null && Number.isSafeInteger(group) ? schedule.groups[group] : undefined;
+    this.#clock = from?.startMs ?? 0;
+    this.#startMs = this.#clock;
+    while ((schedule.holds[this.#nextHold] ?? Number.POSITIVE_INFINITY) < this.#clock) this.#nextHold += 1;
+    this.#mark();
   }
 
   rest(grid: readonly number[]): void {
@@ -55,25 +123,91 @@ export class Presenter implements Presentation {
 
   /** Зонд (dev и e2e): показ стоит на tMs — снимок кадра на поддельных часах. */
   still(round: ShownRound, tMs: number, options: ScheduleOptions): void {
-    this.#start(round.events, round.betMinor, round.winMinor, options);
-    this.#clock = Math.min(tMs, this.#schedule?.durationMs ?? 0);
+    const schedule = this.#start(round.events, round.betMinor, round.winMinor, options);
+    this.#clock = Math.min(tMs, schedule.durationMs);
     this.#frozen = true;
+  }
+
+  skip(): void {
+    const schedule = this.#schedule;
+    if (schedule === null || this.#roundId === null || !this.#settings.skip || this.#held || this.#halted) return;
+    this.#skips += 1;
+    const target = this.#skips === 1 ? (schedule.groups[groupAt(schedule, this.#clock)]?.endMs ?? schedule.durationMs) : schedule.durationMs;
+    this.#advanceTo(target);
+  }
+
+  resume(): void {
+    this.#held = false;
+  }
+
+  halt(): void {
+    this.#halted = true;
+  }
+
+  /** Вкладка скрыта — часы показа стоят (§8.2). */
+  setHidden(hidden: boolean): void {
+    this.#hidden = hidden;
+  }
+
+  /** pagehide: контрольная точка — группа, в которой часы сейчас. */
+  saveCheckpoint(): void {
+    if (this.#roundId !== null && this.#group >= 0) this.#checkpoints.write(this.#roundId, this.#group);
   }
 
   tick(deltaMs: number): SceneState {
     const schedule = this.#schedule;
     if (schedule === null) return this.scene;
-    if (!this.#frozen) this.#clock = Math.min(this.#clock + deltaMs, schedule.durationMs);
+    if (!this.#frozen && !this.#halted && !this.#hidden && !this.#held) this.#advanceTo(this.#clock + deltaMs);
     sampleScene(schedule, Math.round(this.#clock), this.scene);
     return this.scene;
   }
 
-  #start(events: readonly RoundEvent[], betMinor: number, winMinor: number, options: ScheduleOptions): void {
+  /** Часы вперёд до target: не дальше точки удержания и конца; на границе группы — контрольная точка. */
+  #advanceTo(target: number): void {
+    const schedule = this.#schedule;
+    if (schedule === null) return;
+    const hold = this.#roundId === null ? Number.POSITIVE_INFINITY : (schedule.holds[this.#nextHold] ?? Number.POSITIVE_INFINITY);
+    const stop = Math.min(target, hold, schedule.durationMs);
+    this.#clock = Math.max(this.#clock, stop);
+    this.#mark();
+    if (this.#roundId === null) return;
+    if (this.#clock >= hold) {
+      this.#nextHold += 1;
+      this.#held = true;
+      this.#listener.held();
+      return;
+    }
+    if (this.#clock >= schedule.durationMs && !this.#finishedSent) {
+      this.#finishedSent = true;
+      this.#listener.finished();
+    }
+  }
+
+  /** Группа часов сменилась — её индекс в контрольную точку раунда. */
+  #mark(): void {
+    const schedule = this.#schedule;
+    if (schedule === null) return;
+    const group = groupAt(schedule, Math.round(this.#clock));
+    if (group === this.#group) return;
+    this.#group = group;
+    if (this.#roundId !== null) this.#checkpoints.write(this.#roundId, group);
+  }
+
+  #start(events: readonly RoundEvent[], betMinor: number, winMinor: number, options: ScheduleOptions): Schedule {
     const schedule = buildSchedule({ events, betMinor, winMinor, previousGrid: this.#shown }, options);
     this.#schedule = schedule;
     this.#clock = 0;
+    this.#roundId = null;
     this.#frozen = false;
+    this.#halted = false;
+    this.#held = false;
+    this.#nextHold = 0;
+    this.#skips = 0;
+    this.#group = -1;
+    this.#finishedSent = false;
+    this.#startMs = 0;
     this.#shown = Array.from(schedule.finalGrid);
+    return schedule;
   }
 }
 

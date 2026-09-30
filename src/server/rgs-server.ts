@@ -62,6 +62,8 @@ export interface RgsServerOptions {
   readonly config: GameConfig;
   /** Порог сторожа; по умолчанию SERVER_MAX_REQUESTS. */
   readonly maxRequests?: number;
+  /** Декоратор источника раундов (Strategy, §3): принудительный раунд dev и e2e. По умолчанию — живой источник как есть. */
+  readonly decorateSource?: (live: RoundSource, rounds: SeededRounds) => RoundSource;
 }
 
 /** Состояние под замком: кошелёк прошёл гард или починен, активный раунд цел и сходится с кошельком. */
@@ -171,7 +173,8 @@ export class RgsServer {
     this.#rounds = new RoundRepository(ports.storage);
     this.#keys = new IdempotencyRepository(ports.storage);
     this.#seeded = new SeededRounds(options.config, options.maxRequests ?? SERVER_MAX_REQUESTS);
-    this.#source = new LiveRoundSource(ports.entropy, this.#seeded);
+    const live = new LiveRoundSource(ports.entropy, this.#seeded);
+    this.#source = options.decorateSource?.(live, this.#seeded) ?? live;
     this.#maxWin = this.#price(Math.max(...BET_LEVELS_MINOR), options.config.capX100);
   }
 

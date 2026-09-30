@@ -4,6 +4,7 @@ import {
   BootingState,
   EndingState,
   ErrorState,
+  FeatureIntroState,
   IdleState,
   PresentingState,
   RefillingState,
@@ -36,6 +37,8 @@ const STATES: Readonly<Record<string, () => ClientState>> = {
   'requesting: замок': () => new RequestingState('lock', 'k1', 100),
   'requesting: play': () => new RequestingState('play', 'k1', 100),
   presenting: () => new PresentingState('r1'),
+  featureIntro: () => new FeatureIntroState('r1', new PresentingState('r1')),
+  'featureIntro восстановленного': () => new FeatureIntroState('r1', new RestoringState(ROUND)),
   ending: () => new EndingState('r1'),
   'restoring: замок': () => new RestoringState(null),
   'restoring: показ': () => new RestoringState(ROUND),
@@ -74,6 +77,8 @@ const EVENTS: Readonly<Record<string, ClientEvent>> = {
   'authenticated: раунд': { type: 'authenticated', activeRound: OTHER },
   played: { type: 'played', round: OTHER },
   presented: { type: 'presented' },
+  held: { type: 'held' },
+  tap: { type: 'tap' },
   ended: { type: 'ended' },
   refilled: { type: 'refilled' },
   ...Object.fromEntries(CODES.map((code) => [`rejected ${code}`, { type: 'rejected', code }])),
@@ -87,6 +92,8 @@ const RELEASE: Command = { type: 'releaseLock' };
 const QUEUE: Command = { type: 'queueForLock' };
 const ABANDON: Command = { type: 'abandon' };
 const RESET: Command = { type: 'callResetBalance' };
+const SKIP: Command = { type: 'skipPresentation' };
+const RESUME: Command = { type: 'resumePresentation' };
 
 const IDLE: StateView = { name: 'idle', refusal: null };
 const WAITING: StateView = { name: 'waitingForTab', stealing: false };
@@ -169,6 +176,13 @@ const TABLE: readonly Row[] = [
 
   ['presenting', 'presented', { name: 'ending', roundId: 'r1' }, [{ type: 'callEndRound', roundId: 'r1' }]],
   ['presenting', 'lockLost', WAITING, [ABANDON, QUEUE]],
+  // Тап во время показа — пропуск (исполнит ли его пресет, решает показ); стоянка часов на плашке — featureIntro.
+  ['presenting', 'tap', { name: 'presenting', roundId: 'r1' }, [SKIP]],
+  ['presenting', 'held', { name: 'featureIntro', roundId: 'r1' }, []],
+  ['featureIntro', 'tap', { name: 'presenting', roundId: 'r1' }, [RESUME]],
+  ['featureIntro', 'lockLost', WAITING, [ABANDON, QUEUE]],
+  ['featureIntro восстановленного', 'tap', { name: 'restoring', stage: 'show', roundId: 'r1' }, [RESUME]],
+  ['featureIntro восстановленного', 'lockLost', WAITING, [ABANDON, QUEUE]],
 
   ['ending', 'ended', IDLE, [RELEASE]],
   ['ending', 'rejected ROUND_NOT_FOUND', AUTH_HELD, [AUTH]],
@@ -185,6 +199,8 @@ const TABLE: readonly Row[] = [
   ['restoring: замок', 'lockBusy', WAITING, [QUEUE]],
   ['restoring: показ', 'presented', { name: 'ending', roundId: 'r1' }, [{ type: 'callEndRound', roundId: 'r1' }]],
   ['restoring: показ', 'lockLost', WAITING, [ABANDON, QUEUE]],
+  ['restoring: показ', 'tap', { name: 'restoring', stage: 'show', roundId: 'r1' }, [SKIP]],
+  ['restoring: показ', 'held', { name: 'featureIntro', roundId: 'r1' }, []],
 
   ['waitingForTab', 'lockGranted', AUTH_HELD, [AUTH]],
   ['waitingForTab', 'takeOver', { name: 'waitingForTab', stealing: true }, [{ type: 'stealLock' }]],
@@ -212,7 +228,7 @@ describe('таблица переходов', () => {
   });
 
   it(`покрыто ${String(Object.keys(STATES).length)} × ${String(Object.keys(EVENTS).length)} пар`, () => {
-    expect(PAIRS.length).toBe(20 * 25);
+    expect(PAIRS.length).toBe(22 * 27);
   });
 
   it.each(PAIRS)('%s × %s', (stateName, eventName) => {
@@ -247,6 +263,8 @@ describe('состояния', () => {
     ['requesting: замок', false],
     ['requesting: play', true],
     ['presenting', true],
+    ['featureIntro', true],
+    ['featureIntro восстановленного', true],
     ['ending', true],
     ['restoring: замок', false],
     ['restoring: показ', true],

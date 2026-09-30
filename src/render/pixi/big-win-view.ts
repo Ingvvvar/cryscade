@@ -23,7 +23,6 @@ export class BigWinView {
   readonly #texts: SceneTexts;
   readonly #codes: NumberCodes;
   #level = -1;
-  #reducedMotion = false;
 
   constructor(texts: SceneTexts, codes: NumberCodes) {
     this.#texts = texts;
@@ -46,11 +45,8 @@ export class BigWinView {
     this.#amount.view.position.set(x, y + 40);
   }
 
-  setReducedMotion(on: boolean): void {
-    this.#reducedMotion = on;
-  }
-
-  apply(scene: SceneState): void {
+  /** still — раунд под reduced motion: надпись без всплеска. */
+  apply(scene: SceneState, still: boolean): void {
     const level = scene.bigWinLevel;
     this.view.visible = level > 0;
     if (level <= 0) return;
@@ -60,7 +56,7 @@ export class BigWinView {
     }
     const p = scene.bigWinProgress;
     this.view.alpha = Math.min(1, p / FADE, (1 - p) / FADE);
-    this.#title.scale.set(this.#reducedMotion ? 1 : 1 + POP * (1 - Math.min(1, p / POP_SHARE)));
+    this.#title.scale.set(still ? 1 : 1 + POP * (1 - Math.min(1, p / POP_SHARE)));
     this.#amount.money(scene.bigWinMinor, this.#codes);
   }
 

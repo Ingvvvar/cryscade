@@ -69,12 +69,6 @@ export class RoundView {
     this.#bigWin.setDesign(design);
   }
 
-  setReducedMotion(on: boolean): void {
-    this.#shards.setReducedMotion(on);
-    this.#plaque.setReducedMotion(on);
-    this.#bigWin.setReducedMotion(on);
-  }
-
   /**
    * Прогрев (§10): конвейеры частиц и аддитивных подсветок должны собраться до первого кадра, хотя в момент init на
    * сцене их нет. На время отрисовки прогрева осколки видимы и при reduced motion.
@@ -83,17 +77,21 @@ export class RoundView {
     this.#shards.forWarmUp(render);
   }
 
-  /** Кадр показа; schedule — чтобы раз на раунд построить контуры по его геометрии. */
+  /**
+   * Кадр показа; schedule — чтобы раз на раунд построить контуры по его геометрии. Reduced motion — флаг расписания
+   * раунда (§8.2, решение 1): переключённый посреди раунда, он убирает частицы и всплески только со следующего.
+   */
   apply(scene: SceneState, schedule: Schedule | null): void {
+    const still = schedule?.reducedMotion ?? false;
     this.#grid.apply(scene);
     this.#highlights.apply(scene, this.#grid);
     this.#contours.apply(scene, schedule);
     this.#chips.apply(scene);
-    this.#shards.apply(scene, this.#grid);
+    this.#shards.apply(scene, this.#grid, still);
     this.#counter.apply(scene.counterMinor);
     this.#freeSpins.apply(scene);
-    this.#plaque.apply(scene);
-    this.#bigWin.apply(scene);
+    this.#plaque.apply(scene, still);
+    this.#bigWin.apply(scene, still);
     this.#settled = this.#grid.shown && scene.settled;
   }
 

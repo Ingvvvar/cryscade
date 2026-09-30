@@ -114,6 +114,10 @@ export interface Schedule {
   readonly bigWinLevel: number;
   /** Празднует ли раунд вообще: строгий пресет не празднует выигрыш ≤ ставки. */
   readonly celebrates: boolean;
+  /** Раунд собран под reduced motion (§8.4): падение без отскока, частиц и всплесков нет — до конца раунда. */
+  readonly reducedMotion: boolean;
+  /** Скорость, с которой раунд собран: турбо, переключённое посреди раунда, ждёт следующего. */
+  readonly speed: Speed;
 }
 
 export interface ScheduleRound {
@@ -457,6 +461,8 @@ class ScheduleBuilder {
       totalMinor: this.#round.winMinor,
       bigWinLevel: endEvent?.t === 'end' ? bigWinLevel(endEvent.payX100, this.#capped) : 0,
       celebrates: this.#celebrates,
+      reducedMotion: this.#options.reducedMotion,
+      speed: this.#options.speed,
     };
   }
 }

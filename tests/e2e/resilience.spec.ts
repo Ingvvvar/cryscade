@@ -4,12 +4,13 @@ import { collectConsole } from '../support/page-probe.ts';
 
 // Устойчивость (§6.5, §15 фаза 4): перезагрузка посреди раунда, потеря ответа, две вкладки на одном кошельке, перехват
 // очередью и кнопкой. Вкладки — страницы одного контекста: общие IndexedDB, Web Locks и BroadcastChannel. Сбои — через
-// лабораторию сети зонда; ввод — кликами по панели. Деньги сверяются по записям IndexedDB (§6.6).
+// лабораторию сети зонда; ввод — кликами по панели. Деньги сверяются по записям IndexedDB (§6.6). Показ раунда
+// пропускает зонд (?autoskip=1) тем же тапом, что у игрока, — и после перезагрузок: тесты не ждут показа (фаза 5).
 
 const spinButton = (page: Page) => page.getByRole('button', { name: 'Спін' });
 
 async function open(page: Page): Promise<void> {
-  await page.goto('./');
+  await page.goto('./?autoskip=1');
   await waitForState(page, 'idle');
 }
 

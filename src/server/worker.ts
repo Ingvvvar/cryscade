@@ -4,7 +4,16 @@
 // volatile, свой замок кошелька и молчание в общем канале: баланс в памяти — не баланс вкладок с IndexedDB.
 
 import { DEFAULT_CONFIG } from '../core/model/config.ts';
-import { PROTOCOL_VERSION, TAB_CHANNEL, type StorageClosed, type WalletChanged } from '../protocol/index.ts';
+import {
+  PROBE_CHANNEL,
+  PROTOCOL_VERSION,
+  TAB_CHANNEL,
+  checkForceRound,
+  type ForceRound,
+  type ForceRoundAck,
+  type StorageClosed,
+  type WalletChanged,
+} from '../protocol/index.ts';
 import {
   DB_NAME,
   DB_VERSION,
@@ -23,6 +32,7 @@ import {
   type IndexedRecord,
   type KeyRange,
   type Lock,
+  type RgsServerOptions,
   type Storage,
   type StoreKey,
   type StoreName,
@@ -252,10 +262,33 @@ async function storageParts(scope: DedicatedWorkerGlobalScope): Promise<ServerPa
   }
 }
 
+/**
+ * Принудительный раунд (фаза 5) — только dev и e2e-сборка: в проде условие ложно, ветка и её динамический импорт
+ * выпадают. Сид следующего раунда приходит по каналу зонда мимо протокола; деньги идут обычным путём.
+ */
+async function forcedRounds(): Promise<RgsServerOptions['decorateSource']> {
+  if (!(import.meta.env.DEV || import.meta.env.MODE === 'e2e')) return undefined;
+  const { ForcedRoundSource } = await import('./forced-round-source.ts');
+  return (live, rounds) => {
+    const forced = new ForcedRoundSource(live, rounds);
+    const channel = new BroadcastChannel(PROBE_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      const message: unknown = event.data;
+      if (checkForceRound(message) !== null) return;
+      const { seed } = message as ForceRound;
+      forced.force(seed);
+      const ack: ForceRoundAck = { type: 'forceRoundAck', seed };
+      channel.postMessage(ack);
+    };
+    return forced;
+  };
+}
+
 /** Сервер собирается один раз; запросы, пришедшие раньше, ждут готовности и уходят по порядку. */
 function start(scope: DedicatedWorkerGlobalScope): void {
-  const ready = storageParts(scope).then(
-    (parts) => new RgsServer({ ...parts, clock: new SystemClock(), entropy: new CryptoEntropy() }, { config: DEFAULT_CONFIG }),
+  const ready = Promise.all([storageParts(scope), forcedRounds()]).then(
+    ([parts, decorateSource]) =>
+      new RgsServer({ ...parts, clock: new SystemClock(), entropy: new CryptoEntropy() }, { config: DEFAULT_CONFIG, ...(decorateSource === undefined ? {} : { decorateSource }) }),
   );
   scope.onmessage = (event: MessageEvent<unknown>) => {
     void ready

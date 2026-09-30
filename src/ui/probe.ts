@@ -2,20 +2,24 @@
 // В прод-бандле его нет: tests/e2e/bundle.spec.ts ищет маркеры в dist/ и, положительным контролем, в dist-e2e/.
 
 import { PRESETS, type ControllerSnapshot, type LabSettings, type Presenter, type Transport } from '../client/index.ts';
+import { PROBE_CHANNEL, checkForceRoundAck, type ForceRound, type ForceRoundAck } from '../protocol/index.ts';
 import { SceneProbe } from '../render/pixi/inspector.ts';
-import type { CryscadeProbe, MountCounts, ProbeLab, ScheduleSummary, SentBody } from './probe-api.ts';
+import { FORCED_SEEDS, type ForcedName } from './forced-rounds.ts';
+import type { CryscadeProbe, MountCounts, PresentationInfo, ProbeLab, ScheduleSummary, SentBody } from './probe-api.ts';
 import type { MountObserver } from './scene-session.ts';
 
-/** Что зонду нужно от контроллера: снимок и подписка. */
+/** Что зонду нужно от контроллера: снимок, подписка и тап игрока (пропуск показа). */
 interface GameView {
   getSnapshot(): ControllerSnapshot;
   subscribe(listener: () => void): () => void;
+  tap(): void;
 }
 
-/** Раунд, который показывает вкладка: показ, доигрывание и его endRound. */
+/** Раунд, который показывает вкладка: показ, плашка фриспинов, доигрывание и его endRound. */
 function shownRoundId(state: ControllerSnapshot['state']): string | null {
   switch (state.name) {
     case 'presenting':
+    case 'featureIntro':
     case 'ending':
       return state.roundId;
     case 'restoring':
@@ -23,6 +27,13 @@ function shownRoundId(state: ControllerSnapshot['state']): string | null {
     default:
       return null;
   }
+}
+
+/** Идёт показ раунда (свой или восстановленный) или плашка фриспинов ждёт тапа: ключ — состояние и раунд. */
+function showingKey(state: ControllerSnapshot['state']): string | null {
+  if (state.name === 'presenting' || state.name === 'featureIntro') return `${state.name}:${state.roundId}`;
+  if (state.name === 'restoring' && state.stage === 'show') return `restoring:${state.roundId}`;
+  return null;
 }
 
 function bodyOf(message: unknown): SentBody | null {
@@ -48,6 +59,10 @@ export class PageProbe implements MountObserver {
   #game: GameView | null = null;
   #lab: ProbeLab | null = null;
   #presenter: Presenter | null = null;
+  /** ?autoskip=1 — автопропуск с загрузки и после перезагрузок посреди раунда (e2e фазы 4 не ждут показа). */
+  #autoSkip = new URLSearchParams(window.location.search).get('autoskip') === '1';
+  /** Показ, на который автопропуск уже ответил: на каждый вход в показ или в плашку — один раз. */
+  #skipped: string | null = null;
   readonly #shown: string[] = [];
   readonly #sent: SentBody[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
@@ -76,6 +91,62 @@ export class PageProbe implements MountObserver {
     game.subscribe(() => {
       const roundId = shownRoundId(game.getSnapshot().state);
       if (roundId !== null && !this.#shown.includes(roundId)) this.#shown.push(roundId);
+      this.#skipAhead();
+    });
+  }
+
+  /** Автопропуск: вошли в показ — два тапа (к концу группы, к концу раунда), в плашку фриспинов — тап «продолжить». */
+  #skipAhead(): void {
+    const game = this.#game;
+    if (!this.#autoSkip || game === null) return;
+    const state = game.getSnapshot().state;
+    const key = showingKey(state);
+    if (key === this.#skipped) return;
+    this.#skipped = key;
+    if (key === null) return;
+    game.tap();
+    if (state.name !== 'featureIntro') game.tap();
+  }
+
+  #presentation(): PresentationInfo | null {
+    const presenter = this.#presenter;
+    const schedule = presenter?.schedule ?? null;
+    if (presenter === null || schedule === null) return null;
+    return {
+      clock: presenter.clock,
+      startMs: presenter.startMs,
+      group: presenter.group,
+      groupStarts: schedule.groups.map((group) => group.startMs),
+      durationMs: schedule.durationMs,
+      held: presenter.held,
+      finished: presenter.finished,
+      speed: schedule.speed,
+      reducedMotion: schedule.reducedMotion,
+    };
+  }
+
+  /**
+   * Сид следующего раунда — воркеру по каналу зонда; промис сбывается, когда воркер ответил, что принял его: канал и
+   * запросы к воркеру — разные очереди, и «Спін» раньше ответа мог бы обогнать сид. Воркер слушает канал только в dev и
+   * e2e-сборке; не ответил за 5 с — отказ.
+   */
+  #force(round: ForcedName | number): Promise<void> {
+    const seed = typeof round === 'number' ? round : FORCED_SEEDS[round];
+    const channel = new BroadcastChannel(PROBE_CHANNEL);
+    return new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        channel.close();
+        reject(new Error(`воркер не принял сид ${String(seed)}`));
+      }, 5000);
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        const reply: unknown = event.data;
+        if (checkForceRoundAck(reply) !== null || (reply as ForceRoundAck).seed !== seed) return;
+        window.clearTimeout(timer);
+        channel.close();
+        resolve();
+      };
+      const message: ForceRound = { type: 'forceRound', seed };
+      channel.postMessage(message);
     });
   }
 
@@ -148,6 +219,13 @@ export class PageProbe implements MountObserver {
         });
       },
       schedule: () => this.#schedule(),
+      presentation: () => this.#presentation(),
+      force: (round) => this.#force(round),
+      autoSkip: (on) => {
+        this.#autoSkip = on;
+        this.#skipped = null;
+        this.#skipAhead();
+      },
       missingGlyphs: (texts) => scene.missingGlyphs(texts ?? null),
       chipRects: () => scene.chipRects(),
       game: () => this.#game?.getSnapshot() ?? null,

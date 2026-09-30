@@ -6,8 +6,9 @@ import { expect, test } from '@playwright/test';
 
 // Тестовые крючки только вне прод-сборки (§15, фаза 3). Сборки делает webServer этого конфига:
 // dist/ — прод, dist-e2e/ — --mode e2e. Положительный контроль: те же маркеры находятся в dist-e2e/.
+// Фаза 5: канал зонда cryscade-probe — принудительный раунд в воркере и его сиды; в проде ни страница, ни воркер его не знают.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce'];
+const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck'];
 
 function scripts(dir: string): { files: number; text: string } {
   const out: string[] = [];

@@ -58,7 +58,7 @@ const RESET_TEXT = 'Дані гри в браузері пошкоджено —
 
 test('испорченный кошелёк: сброс до 1000, полоса reset, шесть спинов без INTERNAL', async ({ page }) => {
   const { problems } = collectConsole(page);
-  await page.goto('./');
+  await page.goto('./?autoskip=1');
   await waitForState(page, 'idle');
   await plantRecords(page, [{ store: 'wallet', put: { id: 'main', balanceMinor: 'x', activeRoundId: null, nextSeq: 1, revision: 4, resetSeq: 1 } }]);
   await page.reload();
@@ -74,7 +74,7 @@ test('испорченный кошелёк: сброс до 1000, полоса 
 
 test('раунд со строковым seq без кошелька: сброс, полоса reset, раунд в карантине, шесть спинов без INTERNAL', async ({ page }) => {
   const { problems } = collectConsole(page);
-  await page.goto('./');
+  await page.goto('./?autoskip=1');
   await waitForState(page, 'idle');
   const junk = { roundId: 'junk', seq: 'x', idempotencyKey: 'kj', betMinor: 100, status: 'active' };
   await plantRecords(page, [
@@ -114,7 +114,7 @@ test('IndexedDB недоступна (база версии 99): игра в п�
     ),
   ).toBe(99);
   const { problems } = collectConsole(page);
-  await page.goto('./');
+  await page.goto('./?autoskip=1');
   const idle = await waitForState(page, 'idle');
   expect([idle.balanceMinor, idle.notice]).toStrictEqual([100_000, 'volatile']);
   await expect(page.getByText('Сховище браузера недоступне: гра працює, але баланс і історія не збережуться після перезавантаження')).toBeVisible();
@@ -127,7 +127,7 @@ test('IndexedDB недоступна (база версии 99): игра в п�
 test('versionchange: вторая страница открывает cryscade версии 2 — первая закрыла соединение, показала полосу, спин выключен', async ({ context }) => {
   const a = await context.newPage();
   const { problems } = collectConsole(a);
-  await a.goto('./');
+  await a.goto('./?autoskip=1');
   await waitForState(a, 'idle');
   const b = await context.newPage();
   await blankOnOrigin(b);

@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GameController,
   MemoryRoundLock,
+  PRESETS,
+  Presenter,
+  type CheckpointStore,
   type CallOutcome,
   type Rgs,
   type RoundLease,
@@ -225,7 +228,7 @@ class HandLock implements RoundLock {
 }
 
 const QUIET = { listen: () => () => undefined };
-const NO_SHOW = { play: () => undefined, rest: () => undefined };
+const NO_SHOW = { listen: () => undefined, play: () => undefined, rest: () => undefined, skip: () => undefined, resume: () => undefined, halt: () => undefined };
 const AUTH_RESULT = {
   balanceMinor: 100_000,
   config: { betLevelsMinor: [100], capX100: 500_000 },
@@ -579,7 +582,7 @@ describe('показ на сцене', () => {
     const reloaded = world.open('a2');
     await settle();
     expect(reloaded.port.received.filter((body) => body.type === 'authenticate')).toHaveLength(2);
-    expect(reloaded.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }]);
+    expect(reloaded.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { restore: 'ar1' }]);
   });
 
   it('ROUND_ACTIVE на спин: та же сетка покоя заново не роняется — сразу показ чужого раунда', async () => {
@@ -597,7 +600,7 @@ describe('показ на сцене', () => {
     a.controller.spin();
     await settle();
     expect(a.calls.filter((call) => call === 'authenticate')).toHaveLength(2);
-    expect(a.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }, { play: 'br1' }]);
+    expect(a.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }, { restore: 'br1' }]);
   });
 
   it('ждёт вкладку: на поле — сетка до чужого раунда; раунд доигран — его итоговая сетка', async () => {
@@ -619,6 +622,111 @@ describe('показ на сцене', () => {
     await settle();
     expect(c.state).toStrictEqual(IDLE);
     expect(c.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { rest: SMALL_GRID }]);
+  });
+});
+
+/** Часы показа, которые тест двигает сам; контрольная точка — в памяти. */
+function clockShow(skip = true): Presenter {
+  const checkpoints: CheckpointStore = { read: () => null, write: () => undefined };
+  return new Presenter({ options: () => ({ speed: 'normal', preset: PRESETS.standard, reducedMotion: false }), skip }, checkpoints);
+}
+
+describe('показ по часам', () => {
+  it('endRound — когда показ дошёл до конца; до ответа на панели баланс после ставки', async () => {
+    const world = new ClientWorld();
+    const show = clockShow();
+    const a = world.open('a', { presentation: show });
+    await settle();
+    a.controller.spin();
+    await settle();
+    expect(a.state).toStrictEqual({ name: 'presenting', roundId: 'ar1' });
+    const duration = show.schedule?.durationMs ?? 0;
+    show.tick(duration - 1);
+    await settle();
+    expect(a.state.name).toBe('presenting');
+    expect(a.calls).toStrictEqual(['authenticate', 'play']);
+    expect(a.snapshot.balanceMinor).toBe(99_900);
+    show.tick(1);
+    await settle();
+    expect(a.calls).toStrictEqual(['authenticate', 'play', 'endRound']);
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+  });
+
+  it('фича: часы встают на плашке — featureIntro; тап — показ дальше, endRound после конца', async () => {
+    const world = new ClientWorld();
+    const show = clockShow();
+    const a = world.open('a', { presentation: show, seeds: [48] });
+    await settle();
+    a.controller.spin();
+    await settle();
+    show.tick(Number.MAX_SAFE_INTEGER);
+    await settle();
+    expect(a.state).toStrictEqual({ name: 'featureIntro', roundId: 'ar1' });
+    show.tick(60_000);
+    await settle();
+    expect(a.calls).toStrictEqual(['authenticate', 'play']);
+    a.controller.tap();
+    expect(a.state).toStrictEqual({ name: 'presenting', roundId: 'ar1' });
+    show.tick(Number.MAX_SAFE_INTEGER);
+    await settle();
+    expect(a.calls).toStrictEqual(['authenticate', 'play', 'endRound']);
+    expect(a.state).toStrictEqual(IDLE);
+  });
+
+  it('пропуск: первый тап — к концу группы, второй — к концу раунда, и endRound уходит сразу', async () => {
+    const world = new ClientWorld();
+    const show = clockShow();
+    const a = world.open('a', { presentation: show, seeds: [12387] });
+    await settle();
+    a.controller.spin();
+    await settle();
+    const groups = show.schedule?.groups ?? [];
+    show.tick(10);
+    a.controller.tap();
+    expect(show.clock).toBe(groups[0]?.endMs);
+    expect(a.state.name).toBe('presenting');
+    a.controller.tap();
+    expect(show.clock).toBe(show.schedule?.durationMs);
+    expect(a.state).toStrictEqual({ name: 'ending', roundId: 'ar1' });
+    await settle();
+    expect(a.state).toStrictEqual(IDLE);
+  });
+
+  it('строгий пресет: тап показ не пропускает', async () => {
+    const world = new ClientWorld();
+    const show = clockShow(false);
+    const a = world.open('a', { presentation: show });
+    await settle();
+    a.controller.spin();
+    await settle();
+    show.tick(10);
+    a.controller.tap();
+    a.controller.tap();
+    expect(show.clock).toBe(10);
+    expect(a.state.name).toBe('presenting');
+  });
+
+  it('замок отняли посреди показа — показ брошен: часы стоят, endRound не уходит', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    const show = clockShow();
+    const b = world.open('b', { presentation: show });
+    await settle();
+    b.controller.spin();
+    await settle();
+    show.tick(100);
+    a.controller.spin();
+    await settle();
+    a.controller.takeOver();
+    await settle();
+    // a отняла замок и доиграла раунд b; b брошенный показ не продолжает, сверилась и вернулась в покой.
+    show.tick(Number.MAX_SAFE_INTEGER);
+    await settle();
+    expect(show.clock).toBe(100);
+    expect(b.calls).toStrictEqual(['authenticate', 'play', 'authenticate']);
+    expect(a.calls).toStrictEqual(['authenticate', 'authenticate', 'endRound']);
+    expect(roundsIn(world)).toStrictEqual([{ roundId: 'br1', status: 'closed', idempotencyKey: 'bk1' }]);
+    expect([a.state, b.state]).toStrictEqual([IDLE, IDLE]);
   });
 });
 

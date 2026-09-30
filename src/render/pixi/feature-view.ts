@@ -64,7 +64,6 @@ export class PlaqueView {
   readonly #hint: BitmapText;
   readonly #texts: SceneTexts;
   #kind = -1;
-  #reducedMotion = false;
 
   constructor(atlas: CrystalAtlas, texts: SceneTexts) {
     this.#texts = texts;
@@ -92,11 +91,8 @@ export class PlaqueView {
     this.view.position.set(grid.x + grid.width / 2, grid.y + grid.height / 2);
   }
 
-  setReducedMotion(on: boolean): void {
-    this.#reducedMotion = on;
-  }
-
-  apply(scene: SceneState): void {
+  /** still — раунд под reduced motion: плашка проявляется без роста. */
+  apply(scene: SceneState, still: boolean): void {
     const kind = scene.plaque;
     this.view.visible = kind !== PLAQUE.none && scene.plaqueAlpha > 0;
     if (!this.view.visible) return;
@@ -108,7 +104,7 @@ export class PlaqueView {
     }
     if (kind !== PLAQUE.cap) this.#value.integer(scene.plaqueValue, kind === PLAQUE.retrigger ? PLUS : -1);
     this.view.alpha = scene.plaqueAlpha;
-    this.view.scale.set(this.#reducedMotion ? 1 : 0.92 + 0.08 * scene.plaqueAlpha);
+    this.view.scale.set(still ? 1 : 0.92 + 0.08 * scene.plaqueAlpha);
   }
 
   destroy(): void {

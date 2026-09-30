@@ -4,6 +4,7 @@ export {
   BootingState,
   EndingState,
   ErrorState,
+  FeatureIntroState,
   IdleState,
   PresentingState,
   RefillingState,

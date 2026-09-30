@@ -7,6 +7,7 @@ import {
   type ControllerSnapshot,
   type KeySource,
   type Presentation,
+  type PresentationListener,
   type RoundLock,
   type TabChannel,
   type Transport,
@@ -151,20 +152,50 @@ export interface TabOptions {
   readonly wrapPort?: (port: WorkerPort) => Transport;
   /** Обёртка над общим замком раунда — придержать выдачу. */
   readonly wrapLock?: (lock: RoundLock) => RoundLock;
+  /** Свой показ вместо мгновенного — например, настоящие часы Presenter, которые тест двигает сам. */
+  readonly presentation?: Presentation;
   /** Сервер вкладки не пишет в общий канал — так воркер в памяти не путает вкладки с IndexedDB (шаг В). */
   readonly silent?: boolean;
 }
 
-/** Показ вкладки: что контроллер отдал сцене — сетку покоя (rest) и раунды (play), по порядку. */
-export class RecordingPresentation implements Presentation {
-  readonly log: ({ readonly rest: readonly number[] } | { readonly play: string })[] = [];
+/**
+ * Показ вкладки без часов: раунд показан сразу, как в фазе 4 (конец показа — прямо в play). Журнал — что контроллер
+ * отдал сцене: сетку покоя, новый раунд, восстановленный раунд, пропуск, продолжение, брошенный показ.
+ */
+export class InstantPresentation implements Presentation {
+  readonly log: (
+    | { readonly rest: readonly number[] }
+    | { readonly play: string }
+    | { readonly restore: string }
+    | 'skip'
+    | 'resume'
+    | 'halt'
+  )[] = [];
+  #listener: PresentationListener | null = null;
 
-  play(round: ShownRound): void {
-    this.log.push({ play: round.roundId });
+  listen(listener: PresentationListener): void {
+    this.#listener = listener;
+  }
+
+  play(round: ShownRound, restored: boolean): void {
+    this.log.push(restored ? { restore: round.roundId } : { play: round.roundId });
+    this.#listener?.finished();
   }
 
   rest(grid: readonly number[]): void {
     this.log.push({ rest: [...grid] });
+  }
+
+  skip(): void {
+    this.log.push('skip');
+  }
+
+  resume(): void {
+    this.log.push('resume');
+  }
+
+  halt(): void {
+    this.log.push('halt');
   }
 }
 
@@ -175,7 +206,7 @@ export class Tab {
   readonly lab: NetworkLabTransport;
   readonly client: RgsClient;
   readonly controller: GameController;
-  readonly presentation = new RecordingPresentation();
+  readonly presentation = new InstantPresentation();
   /** Каждый опубликованный снимок — чтобы видеть не только итог, но и путь к нему. */
   readonly snapshots: ControllerSnapshot[] = [];
   reloads = 0;
@@ -213,7 +244,7 @@ export class Tab {
       channel: world.bus.channel(),
       notices: this.port,
       keys: new SequentialKeys(name),
-      presentation: this.presentation,
+      presentation: options.presentation ?? this.presentation,
     });
     this.controller.subscribe(() => {
       this.snapshots.push(this.controller.getSnapshot());

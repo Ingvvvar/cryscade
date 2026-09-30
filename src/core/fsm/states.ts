@@ -2,8 +2,9 @@ import type { ClientEvent, ClientState, Command, ErrorKind, RejectCode, RetryTar
 
 // Состояния клиента (§8.1). Замок раунда cryscade-round вкладка берёт до play и держит до ответа endRound (§6.5).
 // Раунд доигрывает только вкладка с замком и только по authenticate, полученному под замком: иначе раунд, который
-// хозяин успел закончить между authenticate и захватом, показался бы второй раз. В фазе 5 придёт featureIntro,
-// в фазе 6 — replaying.
+// хозяин успел закончить между authenticate и захватом, показался бы второй раз. Показ идёт по часам презентации:
+// endRound — когда показ дошёл до конца (presented), featureIntro — стоянка часов на плашке фриспинов. В фазе 6 придёт
+// replaying.
 // Полнота — `satisfies never` в switch каждого состояния: новое событие не скомпилируется, пока каждое состояние не
 // решит, что с ним делать. Недопустимая пара возвращает то же состояние с пометкой ignored и не бросает.
 
@@ -14,6 +15,8 @@ const STEAL: Command = { type: 'stealLock' };
 const RELEASE: Command = { type: 'releaseLock' };
 const ABANDON: Command = { type: 'abandon' };
 const RESET_BALANCE: Command = { type: 'callResetBalance' };
+const SKIP: Command = { type: 'skipPresentation' };
+const RESUME: Command = { type: 'resumePresentation' };
 
 function stay(state: ClientState): Transition {
   return { state, commands: [], ignored: true };
@@ -85,6 +88,8 @@ export class BootingState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -124,6 +129,8 @@ export class AuthenticatingState implements ClientState {
       case 'ended':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -169,6 +176,8 @@ export class IdleState implements ClientState {
       case 'unreachable':
       case 'unusable':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -217,6 +226,8 @@ export class RequestingState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -246,6 +257,8 @@ export class RequestingState implements ClientState {
       case 'ended':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -276,7 +289,7 @@ export class RequestingState implements ClientState {
   }
 }
 
-/** Показ раунда из ответа play. В фазе 4 он мгновенный: итоговая сетка и сразу endRound. */
+/** Показ раунда из ответа play: часы презентации идут, endRound — когда показ дошёл до конца. */
 export class PresentingState implements ClientState {
   readonly view: StateView;
   readonly holdsLock = true;
@@ -291,6 +304,10 @@ export class PresentingState implements ClientState {
     switch (event.type) {
       case 'presented':
         return to(new EndingState(this.#roundId), { type: 'callEndRound', roundId: this.#roundId });
+      case 'held':
+        return to(new FeatureIntroState(this.#roundId, this));
+      case 'tap':
+        return to(this, SKIP);
       case 'lockLost':
         return displaced();
       case 'start':
@@ -301,6 +318,50 @@ export class PresentingState implements ClientState {
       case 'lockBusy':
       case 'authenticated':
       case 'played':
+      case 'ended':
+      case 'rejected':
+      case 'unreachable':
+      case 'unusable':
+      case 'refill':
+      case 'refilled':
+        return stay(this);
+      default:
+        event satisfies never;
+        return stay(this);
+    }
+  }
+}
+
+/**
+ * featureIntro: часы показа стоят на плашке фриспинов, пока игрок не тапнет или не нажмёт пробел; расписание от этого
+ * не меняется. Возврат — в тот показ, откуда пришли: свой раунд или восстановленный. Замок у вкладки.
+ */
+export class FeatureIntroState implements ClientState {
+  readonly view: StateView;
+  readonly holdsLock = true;
+  readonly #back: ClientState;
+
+  constructor(roundId: string, back: ClientState) {
+    this.#back = back;
+    this.view = { name: 'featureIntro', roundId };
+  }
+
+  on(event: ClientEvent): Transition {
+    switch (event.type) {
+      case 'tap':
+        return to(this.#back, RESUME);
+      case 'lockLost':
+        return displaced();
+      case 'start':
+      case 'spin':
+      case 'retry':
+      case 'takeOver':
+      case 'lockGranted':
+      case 'lockBusy':
+      case 'authenticated':
+      case 'played':
+      case 'presented':
+      case 'held':
       case 'ended':
       case 'rejected':
       case 'unreachable':
@@ -350,6 +411,8 @@ export class EndingState implements ClientState {
       case 'presented':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -386,6 +449,10 @@ export class RestoringState implements ClientState {
         return round === null ? to(new WaitingForTabState(false), QUEUE) : stay(this);
       case 'presented':
         return round === null ? stay(this) : to(new EndingState(round.roundId), { type: 'callEndRound', roundId: round.roundId });
+      case 'held':
+        return round === null ? stay(this) : to(new FeatureIntroState(round.roundId, this));
+      case 'tap':
+        return round === null ? stay(this) : to(this, SKIP);
       case 'lockLost':
         return round === null ? stay(this) : displaced();
       case 'start':
@@ -442,6 +509,8 @@ export class WaitingForTabState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -479,6 +548,8 @@ export class RefillingState implements ClientState {
       case 'played':
       case 'presented':
       case 'ended':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;
@@ -524,6 +595,8 @@ export class ErrorState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'held':
+      case 'tap':
         return stay(this);
       default:
         event satisfies never;

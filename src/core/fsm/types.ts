@@ -42,8 +42,12 @@ export type ClientEvent =
   | { readonly type: 'lockLost' }
   | { readonly type: 'authenticated'; readonly activeRound: ShownRound | null }
   | { readonly type: 'played'; readonly round: ShownRound }
-  /** Показ раунда закончен. */
+  /** Показ раунда закончен: часы показа дошли до конца, после счётчика. */
   | { readonly type: 'presented' }
+  /** Часы показа встали на точке удержания featureIntro: плашка фриспинов ждёт игрока. */
+  | { readonly type: 'held' }
+  /** Тап по сцене, пробел или «Спін» во время показа: пропуск (slam stop) или «продолжить» на featureIntro. */
+  | { readonly type: 'tap' }
   | { readonly type: 'ended' }
   /** resetBalance прошёл. */
   | { readonly type: 'refilled' }
@@ -77,7 +81,11 @@ export type Command =
   | { readonly type: 'releaseLock' }
   /** Бросить начатое — запрос в пути и показ: замок отняли, раунд доиграет другая вкладка. */
   | { readonly type: 'abandon' }
-  | { readonly type: 'startPresentation'; readonly round: ShownRound; readonly restored: boolean };
+  | { readonly type: 'startPresentation'; readonly round: ShownRound; readonly restored: boolean }
+  /** Пропуск показа: первый — к концу текущей группы, следующий — к концу раунда. Пресет без пропуска его не исполняет. */
+  | { readonly type: 'skipPresentation' }
+  /** Часы показа идут дальше с точки удержания featureIntro. */
+  | { readonly type: 'resumePresentation' };
 
 /** Почему вкладка на экране ошибки. version и client лечит только перезагрузка, остальное — «Повторити». */
 export type ErrorKind = 'unreachable' | 'server' | 'invalid' | 'version' | 'client';
@@ -90,6 +98,8 @@ export type StateView =
   | { readonly name: 'idle'; readonly refusal: RejectCode | null }
   | { readonly name: 'requesting'; readonly stage: 'lock' | 'play'; readonly key: string; readonly betMinor: number }
   | { readonly name: 'presenting'; readonly roundId: string }
+  /** Показ стоит на плашке фриспинов и ждёт тапа или пробела; замок раунда у вкладки. */
+  | { readonly name: 'featureIntro'; readonly roundId: string }
   | { readonly name: 'ending'; readonly roundId: string }
   | { readonly name: 'restoring'; readonly stage: 'lock'; readonly roundId: null }
   | { readonly name: 'restoring'; readonly stage: 'show'; readonly roundId: string }

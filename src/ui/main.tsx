@@ -10,9 +10,9 @@ import {
   GameController,
   MemoryRoundLock,
   NetworkLabTransport,
-  PRESETS,
   Presenter,
   RgsClient,
+  SessionCheckpoint,
   TimeoutSleep,
   UuidKeys,
   WebRoundLock,
@@ -24,8 +24,10 @@ import type { Renderer } from '../render/renderer.ts';
 import { App } from './App.tsx';
 import { MoneyFormat } from './money-format.ts';
 import type { PageProbe } from './probe.ts';
+import { PresentationPreferences, presetChoice } from './presentation-preferences.ts';
 import { rendererChoice } from './renderer-choice.ts';
 import { SCENE_TEXT } from './texts.ts';
+import { REDUCED_MOTION_QUERY } from './viewport-watcher.ts';
 
 /** Тестовый зонд — только dev и e2e-сборка: в проде условие ложно, ветка и её динамический импорт выпадают. */
 async function loadProbe(): Promise<PageProbe | null> {
@@ -52,8 +54,17 @@ async function mount(): Promise<void> {
   const sleep = new TimeoutSleep();
   const lab = new NetworkLabTransport(probe?.record(transport) ?? transport, sleep, { random: Math.random, reload });
   // Параметры показа читаются при старте раунда (§8.2): переключённые посреди раунда действуют со следующего.
-  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const presenter = new Presenter({ options: () => ({ speed: 'normal', preset: PRESETS.standard, reducedMotion: motion.matches }) });
+  const preferences = new PresentationPreferences(presetChoice(window.location.search), window.matchMedia(REDUCED_MOTION_QUERY));
+  const presenter = new Presenter(preferences, new SessionCheckpoint(() => window.sessionStorage));
+  // Скрытая вкладка — часы показа стоят; уход со страницы — контрольная точка раунда (§6.5, §8.2).
+  const onVisibility = (): void => {
+    presenter.setHidden(document.hidden);
+  };
+  onVisibility();
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('pagehide', () => {
+    presenter.saveCheckpoint();
+  });
   const controller = new GameController({
     rgs: new RgsClient(lab, sleep),
     roundLock: new WebRoundLock(navigator.locks),
@@ -78,7 +89,16 @@ async function mount(): Promise<void> {
   };
   createRoot(root).render(
     <StrictMode>
-      <App create={create} choice={choice} observer={probe} game={controller} source={presenter} money={money} reload={reload} />
+      <App
+        create={create}
+        choice={choice}
+        observer={probe}
+        game={controller}
+        source={presenter}
+        preferences={preferences}
+        money={money}
+        reload={reload}
+      />
     </StrictMode>,
   );
   controller.start();

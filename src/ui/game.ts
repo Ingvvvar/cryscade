@@ -8,6 +8,8 @@ export interface Game {
   subscribe(listener: () => void): () => void;
   getSnapshot(): ControllerSnapshot;
   spin(): void;
+  /** Тап по сцене, пробел или «Спін» во время показа: пропуск или «продолжить» на плашке фриспинов. */
+  tap(): void;
   betUp(): void;
   betDown(): void;
   retry(): void;

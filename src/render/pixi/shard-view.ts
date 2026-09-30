@@ -1,6 +1,6 @@
 // Взрыв (§8.4, §10): осколки атласа в ParticleContainer — по три на клетку, все 147 частиц созданы заранее и делят
 // базовую текстуру атласа; вспышка — звезда атласа, аддитивно. Кадр — функция хода взрыва клетки из SceneState:
-// направления разлёта заданы при сборке, случайности в кадре нет. Reduced motion — ни осколков, ни вспышек (§8.4).
+// направления разлёта заданы при сборке, случайности в кадре нет. Reduced motion раунда — ни осколков, ни вспышек (§8.4).
 
 import { Container, Particle, ParticleContainer, Rectangle, Sprite, type Texture } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
@@ -30,7 +30,6 @@ export class ShardView {
   readonly #textures: Texture[] = [];
   readonly #dirX = new Float64Array(CELL_COUNT * SHARDS_PER_SYMBOL);
   readonly #dirY = new Float64Array(CELL_COUNT * SHARDS_PER_SYMBOL);
-  #reducedMotion = false;
 
   constructor(atlas: CrystalAtlas) {
     for (let symbol = 0; symbol < SYMBOL_COUNT; symbol++) {
@@ -60,12 +59,6 @@ export class ShardView {
     this.view.visible = false;
   }
 
-  setReducedMotion(on: boolean): void {
-    this.#reducedMotion = on;
-    this.stars.visible = !on;
-    if (on) this.view.visible = false;
-  }
-
   /** Отрисовка прогрева с видимыми осколками и вспышкой: их конвейеры собираются до первого кадра. */
   forWarmUp(render: () => void): void {
     const flash = this.#flashes[0];
@@ -78,11 +71,15 @@ export class ShardView {
     if (flash !== undefined) flash.visible = false;
     if (particle !== undefined) particle.alpha = 0;
     this.view.visible = false;
-    this.setReducedMotion(this.#reducedMotion);
   }
 
-  apply(scene: SceneState, grid: GridView): void {
-    if (this.#reducedMotion) return;
+  /** still — раунд под reduced motion: осколков и вспышек нет. */
+  apply(scene: SceneState, grid: GridView, still: boolean): void {
+    this.stars.visible = !still;
+    if (still) {
+      this.view.visible = false;
+      return;
+    }
     // Взрыва нет — контейнер частиц не рисуется вовсе: в покое он рвал бы батч сцены лишним draw-call.
     let exploding = false;
     for (let cell = 0; cell < CELL_COUNT; cell++) {

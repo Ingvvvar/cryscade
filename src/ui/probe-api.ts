@@ -4,6 +4,7 @@
 import type { ControllerSnapshot, LabSettings, ShownRound } from '../client/index.ts';
 import type { Layout, Rect } from '../render/layout.ts';
 import type { RendererInfo } from '../render/renderer.ts';
+import type { ForcedName } from './forced-rounds.ts';
 
 export interface ProbeSceneInfo extends RendererInfo {
   readonly maxBatchableTextures: number;
@@ -49,6 +50,21 @@ export interface ScheduleSummary {
   readonly bigWinLevel: number;
 }
 
+/** Часы показа простыми данными: где показ сейчас и по какому расписанию. */
+export interface PresentationInfo {
+  readonly clock: number;
+  /** С какого момента начался показ раунда: 0 — новый, начало группы контрольной точки — восстановленный. */
+  readonly startMs: number;
+  readonly group: number;
+  /** Начала групп расписания, мс: контрольная точка — индекс в этом списке. */
+  readonly groupStarts: readonly number[];
+  readonly durationMs: number;
+  readonly held: boolean;
+  readonly finished: boolean;
+  readonly speed: 'normal' | 'turbo';
+  readonly reducedMotion: boolean;
+}
+
 export interface CryscadeProbe {
   info(): ProbeSceneInfo | null;
   mounts(): MountCounts;
@@ -71,6 +87,12 @@ export interface CryscadeProbe {
   still(round: ShownRound, tMs: number, options?: StillOptions): void;
   /** Расписание текущего показа; null — показа нет. */
   schedule(): ScheduleSummary | null;
+  /** Часы текущего показа; null — показа нет. */
+  presentation(): PresentationInfo | null;
+  /** Сид следующего раунда по каналу зонда — мимо протокола; деньги идут обычным путём (фаза 5). Сбывается, когда воркер принял сид. */
+  force(round: ForcedName | number): Promise<void>;
+  /** Пропуск показа тем же тапом, что у игрока: два тапа на показ, один — на плашку фриспинов. e2e без ожидания показа. */
+  autoSkip(on: boolean): void;
   /** Символы, которых нет в шрифтах: без аргумента — надписи и числа самой сцены, иначе — эти строки шрифтом надписей. */
   missingGlyphs(texts?: string[]): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели. */

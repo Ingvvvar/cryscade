@@ -8,7 +8,9 @@ import { fixtureRound } from '../support/fixture-rounds.ts';
 // - play и endRound уходят только под замком, по одному запросу за раз; releaseLock — только держа замок;
 // - holdsLock состояния совпадает с моделью: замок не утекает и не мерещится;
 // - на свой запрос машина принимает ответ, на свой запрос замка — выдачу: ничего не теряется молча;
-// - play уходит с ключом последнего спина; ключ, брошенный при перехвате, не уходит больше никогда.
+// - play уходит с ключом последнего спина; ключ, брошенный при перехвате, не уходит больше никогда;
+// - пропуск — только пока показ идёт, продолжение — только пока часы стоят на featureIntro; конец показа и стоянку
+//   машина обязана принять.
 
 const ROUNDS: readonly ShownRound[] = [
   { roundId: 'r1', betMinor: 100, winMinor: 35, events: fixtureRound('small-win').events },
@@ -32,6 +34,8 @@ class World {
   lockRequest: 'none' | 'try' | 'queue' | 'steal' = 'none';
   call: Call | null = null;
   presenting = false;
+  /** Часы показа стоят на точке удержания featureIntro. */
+  holding = false;
   spinKey: string | null = null;
   readonly burned = new Set<string>();
   readonly violations: string[] = [];
@@ -47,6 +51,7 @@ class World {
       { type: 'retry' },
       { type: 'takeOver' },
       { type: 'refill' },
+      { type: 'tap' },
     ];
   }
 
@@ -59,8 +64,10 @@ class World {
     const events: ClientEvent[] = [];
     if (this.lockRequest === 'try') events.push({ type: 'lockGranted' }, { type: 'lockBusy' });
     if (this.lockRequest === 'queue' || this.lockRequest === 'steal') events.push({ type: 'lockGranted' });
-    if (this.held) events.push({ type: 'lockLost' });
-    if (this.presenting) events.push({ type: 'presented' });
+    // Пока часы стоят на плашке, окружению почти нечего сказать — ход за игроком. lockLost там — через раз из четырёх:
+    // иначе он выпадал в трёх шагах из четырёх, и возврат из featureIntro тапом не доходил до каждого прогона.
+    if (this.held && !(this.holding && pick % 4 !== 0)) events.push({ type: 'lockLost' });
+    if (this.presenting && !this.holding) events.push({ type: 'presented' }, { type: 'held' });
     if (this.call !== null) events.push({ type: 'rejected', code }, { type: 'unreachable' }, { type: 'unusable', reason: pick % 2 === 0 ? 'version' : 'invalid' });
     if (this.call === 'authenticate') events.push({ type: 'authenticated', activeRound: pick % 3 === 0 ? null : round });
     if (this.call === 'play' && round !== null) events.push({ type: 'played', round });
@@ -85,6 +92,9 @@ class World {
       case 'presented':
         this.presenting = false;
         break;
+      case 'held':
+        this.holding = true;
+        break;
       case 'authenticated':
       case 'played':
       case 'ended':
@@ -100,7 +110,10 @@ class World {
   }
 
   /** Ответы окружению обязательны: машина не вправе проигнорировать ответ на свой же запрос. */
-  mustAccept(event: ClientEvent, before: { readonly call: Call | null; readonly lock: string; readonly presenting: boolean; readonly held: boolean }): boolean {
+  mustAccept(
+    event: ClientEvent,
+    before: { readonly call: Call | null; readonly lock: string; readonly presenting: boolean; readonly holding: boolean; readonly held: boolean },
+  ): boolean {
     switch (event.type) {
       case 'lockGranted':
       case 'lockBusy':
@@ -108,7 +121,8 @@ class World {
       case 'lockLost':
         return before.held;
       case 'presented':
-        return before.presenting;
+      case 'held':
+        return before.presenting && !before.holding;
       case 'authenticated':
       case 'played':
       case 'ended':
@@ -164,11 +178,20 @@ class World {
       case 'abandon':
         this.call = null;
         this.presenting = false;
+        this.holding = false;
         break;
       case 'startPresentation':
         busy();
         if (!this.held) this.violations.push('показ без замка');
         this.presenting = true;
+        this.holding = false;
+        break;
+      case 'skipPresentation':
+        if (!this.presenting || this.holding) this.violations.push('пропуск не во время показа');
+        break;
+      case 'resumePresentation':
+        if (!this.holding) this.violations.push('продолжение без стоянки');
+        this.holding = false;
         break;
     }
   }
@@ -189,7 +212,7 @@ describe('FSM против окружения', () => {
           const events = lane === 0 || environment.length === 0 ? world.user() : environment;
           const event = events[Math.floor(pick / 8) % events.length];
           if (event === undefined) throw new Error('пустой выбор');
-          const before = { call: world.call, lock: world.lockRequest, presenting: world.presenting, held: world.held };
+          const before = { call: world.call, lock: world.lockRequest, presenting: world.presenting, holding: world.holding, held: world.held };
           const view = state.view;
           const pendingKey = view.name === 'requesting' ? view.key : view.name === 'error' && view.retry?.call === 'play' ? view.retry.key : null;
           world.deliver(event);
@@ -221,6 +244,11 @@ describe('FSM против окружения', () => {
       'restoring → ending',
       'refilling → idle',
       'refilling → authenticating',
+      'skipPresentation',
+      'resumePresentation',
+      'presenting → featureIntro',
+      'featureIntro → presenting',
+      'featureIntro → restoring',
     ]) {
       expect(coverage.has(reached), reached).toBe(true);
     }

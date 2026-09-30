@@ -7,6 +7,7 @@ import type { ControllerSnapshot } from '../client/index.ts';
 import { toScreen, type Layout, type ZoneName } from '../render/layout.ts';
 import type { Game } from './game.ts';
 import type { MoneyFormat } from './money-format.ts';
+import type { PreferencesView } from './presentation-preferences.ts';
 import { TEXT } from './texts.ts';
 
 interface ZoneProps {
@@ -28,12 +29,20 @@ export interface PanelProps {
   readonly layout: Layout;
   readonly game: Game;
   readonly snapshot: ControllerSnapshot;
+  readonly turbo: PreferencesView;
+  readonly onTurbo: () => void;
   readonly money: MoneyFormat;
 }
 
-export function Panel({ layout, game, snapshot, money }: PanelProps) {
+/** Идёт показ раунда: «Спін» — пропуск или «продолжить» на плашке фриспинов. */
+function showing(state: ControllerSnapshot['state']): boolean {
+  return state.name === 'presenting' || state.name === 'featureIntro' || (state.name === 'restoring' && state.stage === 'show');
+}
+
+export function Panel({ layout, game, snapshot, turbo, onTurbo, money }: PanelProps) {
   const style = { '--u': `${String(layout.scale)}px` } as CSSProperties;
   const playable = snapshot.state.name === 'idle' && snapshot.notice !== 'versionchange';
+  const presenting = showing(snapshot.state);
   return (
     <div className={`panel panel-${layout.orientation}`} style={style}>
       <Zone layout={layout} name="top">
@@ -81,10 +90,11 @@ export function Panel({ layout, game, snapshot, money }: PanelProps) {
         <button
           type="button"
           className="spin"
-          disabled={!playable}
+          disabled={!playable && !presenting}
           aria-busy={snapshot.state.name !== 'idle'}
           onClick={() => {
-            game.spin();
+            if (presenting) game.tap();
+            else game.spin();
           }}
         >
           {TEXT.spin}
@@ -110,7 +120,7 @@ export function Panel({ layout, game, snapshot, money }: PanelProps) {
         </output>
       </Zone>
       <Zone layout={layout} name="toggles">
-        <button type="button" className="toggle">
+        <button type="button" className="toggle" aria-pressed={turbo.turbo} disabled={!turbo.turboAllowed} onClick={onTurbo}>
           {TEXT.turbo}
         </button>
         <button type="button" className="toggle">

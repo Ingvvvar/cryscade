@@ -18,4 +18,6 @@ export type {
   WriteOp,
 } from './ports.ts';
 export { RgsServer, WALLET_LOCK, type RgsServerOptions, type RgsServerPorts } from './rgs-server.ts';
+export type { RoundDraw, RoundSource } from './round-source.ts';
+export type { SeededRounds } from './seeded-rounds.ts';
 export { DB_NAME, DB_VERSION, MIGRATIONS, WALLET_ID, migrate, type Migration, type UpgradeTarget } from './schema.ts';

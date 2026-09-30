@@ -1,4 +1,6 @@
 import type { ShownRound } from '../../src/client/index.ts';
+import { EventRecorder, SeededEngine } from '../../src/core/engine/index.ts';
+import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import type { RoundEvent } from '../../src/core/model/events.ts';
 import { CELL_COUNT } from '../../src/core/model/grid.ts';
 import { winMinor } from '../../src/core/money.ts';
@@ -11,6 +13,13 @@ import { fixtureRound, type FixtureName } from './fixture-rounds.ts';
 export function fixtureShown(name: FixtureName, betMinor = 100): ShownRound {
   const round = fixtureRound(name);
   return { roundId: name, betMinor, winMinor: winMinor(betMinor, round.payX100), events: round.events };
+}
+
+/** Раунд сида на конфиге игры — тот же, что сервер разыграл бы на этом сиде (уровни большого выигрыша без фикстур). */
+export function seedShown(seed: number, betMinor = 100): ShownRound {
+  const recorder = new EventRecorder();
+  const payX100 = new SeededEngine(DEFAULT_CONFIG, recorder, { maxRequests: 1_000_000 }).play(seed);
+  return { roundId: `seed-${String(seed)}`, betMinor, winMinor: winMinor(betMinor, payX100), events: [...recorder.events] };
 }
 
 /**

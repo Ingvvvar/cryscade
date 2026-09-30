@@ -123,6 +123,13 @@ describe('параметры меняют длительности, но не с
     expect(schedule('cascade-3', { ...NORMAL, speed: 'turbo' }).durationMs).toBeLessThan(schedule('cascade-3').durationMs);
     expect(schedule('loss', { ...NORMAL, reducedMotion: true }).profile).toStrictEqual({ touchMs: 200, restitution: 0, bounces: 0, columnDelayMs: 20 });
   });
+
+  it('reduced motion и скорость — поля расписания раунда: рендер берёт из них частицы до конца раунда', () => {
+    expect(schedule('cascade-3', { ...NORMAL, reducedMotion: true }).reducedMotion).toBe(true);
+    expect(schedule('cascade-3').reducedMotion).toBe(false);
+    expect(schedule('cascade-3', { ...NORMAL, speed: 'turbo' }).speed).toBe('turbo');
+    expect(schedule('cascade-3').speed).toBe('normal');
+  });
 });
 
 describe('строгий пресет (§8.5)', () => {
