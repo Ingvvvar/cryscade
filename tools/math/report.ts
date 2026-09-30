@@ -258,7 +258,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
     for (const part of parts) lines.push(part, '');
   };
 
-  push('# Математика Cryscade', '> Сгенерировано `npm run math`. Числа — по симуляции; точные значения после книги — фаза 6.');
+  push('# Математика Cryscade — прообраз книги', '> Сгенерировано `npm run math`. Числа — по симуляции сидов прообраза книги; точные числа игры — по книге, `docs/math.md` (`npm run book`).');
 
   push(
     '## Конфиг',

@@ -1,5 +1,5 @@
 // Пропускная способность одного ядра: node tools/math/speed.ts [--wait=300] [--control]
-// Пишет раздел «Пропускная способность» в docs/math.md между маркерами. Сначала ждёт до 5 минут, пока средняя
+// Пишет раздел «Пропускная способность» в docs/math-prototype.md между маркерами. Сначала ждёт до 5 минут, пока средняя
 // нагрузка за минуту опустится до порога: хвост своего же прогона спадает несколько минут. Не опустилась — или
 // поднялась за время замера — число не пишется: «стенд занят» с цифрами нагрузки.
 // Порог — 0.4 × число логических ядер (os.availableParallelism()): свой поток замера добавляет к нагрузке до 1,
@@ -16,7 +16,7 @@ import { SIMULATOR_MAX_REQUESTS } from './limits.ts';
 import { loadThreshold, verdict, waitForIdle, type Clock, type Verdict } from './speed-verdict.ts';
 import { measureThroughput } from './throughput.ts';
 
-const REPORT = 'docs/math.md';
+const REPORT = 'docs/math-prototype.md';
 const cores = os.availableParallelism();
 const threshold = loadThreshold(cores);
 const WAIT_MS = option('wait', 300) * 1000;

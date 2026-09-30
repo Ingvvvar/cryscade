@@ -1,5 +1,5 @@
 // Симуляция и отчёт: node tools/math/simulate.ts [--rounds=N] [--from=N] [--threads=N] [--task=N] [--max-requests=N] [--out=путь]
-// По умолчанию — прообраз книги (§5): сиды [0, 10⁸), отчёт в docs/math.md. Время и скорость в отчёт не пишутся:
+// По умолчанию — прообраз книги (§5): сиды [0, 10⁸), отчёт в docs/math-prototype.md (docs/math.md — отчёт по книге, npm run book). Время и скорость в отчёт не пишутся:
 // они зависят от нагрузки стенда — их меряет `npm run math:speed`.
 import { writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -9,7 +9,7 @@ import { simulate } from './runner.ts';
 import { option } from './args.ts';
 import { SIMULATOR_MAX_REQUESTS } from './limits.ts';
 
-const out = process.argv.find((arg) => arg.startsWith('--out='))?.slice(6) ?? 'docs/math.md';
+const out = process.argv.find((arg) => arg.startsWith('--out='))?.slice(6) ?? 'docs/math-prototype.md';
 const plan = {
   config: DEFAULT_CONFIG,
   from: option('from', 0),
