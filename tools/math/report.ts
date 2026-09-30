@@ -2,7 +2,7 @@ import type { GameConfig } from '../../src/core/model/config.ts';
 import { CASCADE_SLOTS } from '../../src/core/engine/index.ts';
 import { PAYING_SYMBOL_COUNT } from '../../src/core/model/symbols.ts';
 import { BUCKETS, bucketOf } from './buckets.ts';
-import { DRAFT_PAYTABLE_X100, MAX_CELL_X100 } from './shape.ts';
+import { BAND_RATIO, bandRatios } from './shape.ts';
 import { MULT_SLOTS, type Batch, type MathPlain } from './stats.ts';
 
 // Отчёт по сборщику. Всё считается из целых: суммы — точно, второй момент — в BigInt; дробные числа — только здесь.
@@ -228,20 +228,21 @@ function table(header: readonly string[], rows: readonly (readonly string[])[]):
 }
 
 /**
- * Почему скачок от полосы 5–6 к 7–8 такой крупный: числа — из таблицы конфига и черновика §4.4.
- * Верхние полосы — черновик × k, и предел клетки через самую дорогую клетку черновика держит k низким.
+ * Форма таблицы — числа из таблицы конфига: полоса 5–6 и отношения соседних полос (вариант 4, журнал подбора —
+ * docs/math-tuning.md).
  */
-function jumpNote(config: GameConfig): string {
-  const low = config.paytableX100[0]?.[0] ?? Number.NaN;
-  const next = config.paytableX100[0]?.[1] ?? Number.NaN;
-  const draftLow = DRAFT_PAYTABLE_X100[0]?.[0] ?? Number.NaN;
-  const draftNext = DRAFT_PAYTABLE_X100[0]?.[1] ?? Number.NaN;
-  const draftTop = Math.max(...DRAFT_PAYTABLE_X100.flat());
+function shapeNote(config: GameConfig): string {
+  const table = config.paytableX100;
+  const low = table.map((row) => row[0] ?? Number.NaN);
+  const flat = low.every((value) => value === low[0]);
+  const { min, max } = bandRatios(table);
+  const lowText = flat
+    ? `Полоса 5–6 одна на все символы — ${((low[0] ?? Number.NaN) / 100).toFixed(2)}×: кластер из 5–6 платит меньше ставки, строгий пресет его не празднует; при строгом росте по символам и в ней доля фичи и кап выходят за свои полосы (журнал подбора).`
+    : `Полоса 5–6 — от ${((low[0] ?? Number.NaN) / 100).toFixed(2)}× до ${((low.at(-1) ?? Number.NaN) / 100).toFixed(2)}×.`;
   return (
-    `Форма таблицы: черновик §4.4 × k, полоса 5–6 — ещё × m, выше — пропорции черновика. Скачок от 5–6 к 7–8 крупный: ` +
-    `у Кварца ${(low / 100).toFixed(2)}× → ${(next / 100).toFixed(2)}×, в ${(next / low).toFixed(1)} раза, в черновике — в ${(draftNext / draftLow).toFixed(0)}. ` +
-    `Причина — предел клетки ${String(MAX_CELL_X100 / 100)}×: самая дорогая клетка черновика, Бриллиант 15+ = ${String(draftTop / 100)}×, держит k ≤ ${(MAX_CELL_X100 / draftTop).toFixed(0)}, ` +
-    'поэтому полосы 9–10 и выше дают основной игре немного, и её RTP несёт полоса 7–8. Полоса 5–6 дешевеет, чтобы выигрышей не больше ставки было около двух третей.'
+    `Форма таблицы (вариант 4): у каждого символа соседние полосы — от ×${min.toFixed(2)} до ×${max.toFixed(2)} ` +
+    `(ограничение ×${String(BAND_RATIO.min)}…×${String(BAND_RATIO.max)} — без обрыва между полосами); выше 5–6 символы строго дороже младших. ` +
+    lowText
   );
 }
 
@@ -273,7 +274,7 @@ export function renderMarkdown(report: MathReport, config: GameConfig, meta: Run
       SYMBOL_NAMES.map((name, symbol) => [name, ...(config.paytableX100[symbol] ?? []).map((value) => x(value / 100))]),
     ),
     `Кап ${x(config.capX100 / 100, 0)}; ядра ${config.freeSpinsByScatters.map(String).join(' / ')}; ретриггер ${String(config.retrigger.min)}+ → +${String(config.retrigger.add)}. Самая дорогая клетка — ${x(Math.max(...config.paytableX100.flat()) / 100, 0)} (ограничение — не дороже 1000×: до капа доводят множители и каскады, а не один кластер).`,
-    jumpNote(config),
+    shapeNote(config),
   );
 
   push(

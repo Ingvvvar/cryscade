@@ -13,15 +13,15 @@ const ROUND = {
   idempotencyKey: 'k7',
   betMinor: 100,
   seed: 0,
-  payX100: 35,
-  winMinor: 35,
+  payX100: 95,
+  winMinor: 95,
   events: SMALL.events,
   createdAt: 1,
   status: 'active',
   balanceAfterBet: 99_900,
   balanceAfterEnd: null,
 };
-const CLOSED = { ...ROUND, status: 'closed', balanceAfterEnd: 99_935 };
+const CLOSED = { ...ROUND, status: 'closed', balanceAfterEnd: 99_995 };
 const KEY = { key: 'k7', roundId: 'r7', betMinor: 100 };
 
 describe('граница записей', () => {
@@ -99,8 +99,8 @@ describe('checkRoundCore и checkRound', () => {
     [{ ...ROUND, winMinor: 2 ** 52 + 1 }, 'раунд: payX100 или winMinor — не целые до 2^52'],
     [{ ...ROUND, createdAt: -1 }, 'раунд: createdAt — не целое'],
     [{ ...ROUND, balanceAfterBet: -1 }, 'раунд: balanceAfterBet — не целое до 2^52'],
-    [{ ...ROUND, balanceAfterEnd: 99_935 }, 'раунд: у активного есть balanceAfterEnd'],
-    [{ ...CLOSED, balanceAfterEnd: 99_934 }, 'раунд: balanceAfterEnd ≠ balanceAfterBet + winMinor'],
+    [{ ...ROUND, balanceAfterEnd: 99_995 }, 'раунд: у активного есть balanceAfterEnd'],
+    [{ ...CLOSED, balanceAfterEnd: 99_994 }, 'раунд: balanceAfterEnd ≠ balanceAfterBet + winMinor'],
     [{ ...CLOSED, balanceAfterEnd: null }, 'раунд: balanceAfterEnd ≠ balanceAfterBet + winMinor'],
     [{ ...ROUND, status: 'done' }, 'раунд: статус — не active и не closed'],
   ])('checkRoundCore %#', (round, problem) => {

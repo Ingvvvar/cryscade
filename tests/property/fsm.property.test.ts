@@ -13,7 +13,7 @@ import { fixtureRound } from '../support/fixture-rounds.ts';
 //   машина обязана принять.
 
 const ROUNDS: readonly ShownRound[] = [
-  { roundId: 'r1', betMinor: 100, winMinor: 35, events: fixtureRound('small-win').events },
+  { roundId: 'r1', betMinor: 100, winMinor: 95, events: fixtureRound('small-win').events },
   { roundId: 'r2', betMinor: 20, winMinor: 0, events: fixtureRound('loss').events },
 ];
 const CODES: readonly RejectCode[] = [

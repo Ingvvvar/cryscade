@@ -49,9 +49,9 @@ class ScriptedTransport implements Transport {
 
 const SMALL = fixtureRound('small-win');
 const WALLET = { balanceMinor: 99_900, revision: 1, notice: null };
-const ENDED = { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 2, notice: null } };
+const ENDED = { balanceMinor: 99_995, wallet: { balanceMinor: 99_995, revision: 2, notice: null } };
 const PLAYED = {
-  round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
   balanceMinor: 99_900,
   wallet: WALLET,
 };

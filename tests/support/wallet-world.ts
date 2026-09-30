@@ -85,7 +85,7 @@ const FAULT: fc.Arbitrary<Fault> = fc.oneof(
 const TAB: fc.Arbitrary<TabPlan> = fc.record({
   intents: fc.array(INTENT, { minLength: 1, maxLength: 20 }),
   faults: fc.array(FAULT, { maxLength: 40 }),
-  // Проигрыш чаще, как в игре; фича (сид 48, 25.85×) редко — иначе баланс не кончается.
+  // Проигрыш чаще, как в игре; фича (сид 48, 33.50×) редко — иначе баланс не кончается.
   seeds: fc.array(fc.constantFrom(1, 1, 1, 1, 1, 1, 0, 2, 512, 48), { minLength: 1, maxLength: 12 }),
 });
 

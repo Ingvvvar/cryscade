@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CELL_X100, geometricWeights, isMonotone, maxCellX100, niceTable, niceValueX100, scaledTable } from '../../../tools/math/shape.ts';
+import { MAX_CELL_X100, bandRatios, geometricWeights, isMonotone, maxCellX100, niceTable, niceValueX100, scaledTable } from '../../../tools/math/shape.ts';
 
 describe('веса по ярусам', () => {
   it('поровну: 9930 / 7 = 1418.57 — остаток 4 младшим символам при равных дробных частях', () => {
@@ -72,5 +72,24 @@ describe('красивое округление', () => {
     expect(isMonotone([[20, 40, 30]])).toBe(false);
     expect(isMonotone([[20, 40], [25, 35]])).toBe(false);
     expect(isMonotone([[20, 40], [20, 40]])).toBe(true);
+  });
+});
+
+describe('отношения соседних полос (вариант 4: ×1.25…×4)', () => {
+  it('таблица варианта 3: наибольшее — обрыв Бриллианта 1.50× → 24×, наименьшее — Кварц 7.60× → 14×', () => {
+    const v3 = [
+      [30, 380, 760, 1400, 2900, 5700],
+      [35, 480, 950, 1900, 3800, 7600],
+      [45, 570, 1100, 2400, 4800, 9500],
+      [60, 760, 1500, 2900, 5700, 11400],
+      [90, 1100, 2400, 4800, 9500, 23800],
+      [120, 1500, 3300, 6700, 14300, 38100],
+      [150, 2400, 4800, 9500, 23800, 95300],
+    ];
+    expect(bandRatios(v3)).toStrictEqual({ min: 1400 / 760, max: 2400 / 150 });
+  });
+
+  it('ровная строка — ×1', () => {
+    expect(bandRatios([[100, 100, 100]])).toStrictEqual({ min: 1, max: 1 });
   });
 });

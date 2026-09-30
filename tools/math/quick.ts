@@ -4,7 +4,7 @@
 import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { QUICK_ROUNDS, quickSum } from './quick-sum.ts';
 
-const EXPECTED = { payX100: 18_003_530, wins: 60_127 };
+const EXPECTED = { payX100: 18_014_290, wins: 60_127 };
 
 const actual = quickSum(DEFAULT_CONFIG);
 console.log(

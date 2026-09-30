@@ -41,12 +41,13 @@ describe('расписание фикстур', () => {
     expect([FALL_NORMAL, s.durationMs]).toStrictEqual([854, 220 + 854]);
   });
 
-  it('малый выигрыш: шаг каскада — подсветка, взрыв, точки, досыпка и подсчёт 0.35×', () => {
+  it('малый выигрыш: шаг каскада — подсветка, взрыв, точки, досыпка и подсчёт 0.95×', () => {
     const s = schedule('small-win');
     expect(kinds(s)).toStrictEqual(['fill', 'cascade']);
     expect(segmentsOf(s, 1)).toStrictEqual(['highlight', 'explode', 'spots', 'refill', 'tally']);
-    expect([COUNTER(0.35), s.durationMs]).toStrictEqual([360, 220 + FALL_NORMAL + 450 + 260 + 280 + FALL_NORMAL + 360]);
-    expect(s.tallies).toStrictEqual([{ from: 0, to: 35 }]);
+    // 300 + 1700 × lg 1.95 / lg 5001 = 433.29.
+    expect([COUNTER(0.95), s.durationMs]).toStrictEqual([433, 220 + FALL_NORMAL + 450 + 260 + 280 + FALL_NORMAL + 433]);
+    expect(s.tallies).toStrictEqual([{ from: 0, to: 95 }]);
   });
 
   it('три каскада — три группы шагов, подсчёт один, в конце спина', () => {
@@ -55,7 +56,7 @@ describe('расписание фикстур', () => {
     expect(s.segments.filter((segment) => segment.kind === 'tally').map((segment) => segment.group)).toStrictEqual([3]);
   });
 
-  it('старт фичи: группа фичи с точкой удержания featureIntro после появления плашки; 25.85× — «Крупный»', () => {
+  it('старт фичи: группа фичи с точкой удержания featureIntro после появления плашки; 33.50× — «Крупный»', () => {
     const s = schedule('feature-start');
     const feature = kinds(s).indexOf('feature');
     expect(segmentsOf(s, feature)).toStrictEqual(['scatters', 'plaqueIn', 'plaqueOut']);
@@ -194,9 +195,11 @@ describe('строгий пресет (§8.5)', () => {
     expect(schedule('loss', STRICT).segments.at(-1)?.kind).toBe('pause');
   });
 
-  it('контрпример property (сид раунда 1330553994, ставка 20, турбо): пауза дотягивает цикл ровно до 2500, без недобора', () => {
+  // Прежний контрпример property — сид 1330553994 (недобор 2499.9999999999995): при таблице варианта 4 он платит 1.90×,
+  // празднуется и паузы не даёт (2653 мс). Тот же случай — пауза после подсчёта в турбо — у сида 2 (base-win, 1.90×).
+  it('пауза после подсчёта (сид 2, ставка 20, турбо) дотягивает цикл ровно до 2500, без недобора', () => {
     const recorder = new EventRecorder();
-    const payX100 = new SeededEngine(DEFAULT_CONFIG, recorder).play(1_330_553_994);
+    const payX100 = new SeededEngine(DEFAULT_CONFIG, recorder).play(2);
     const s = buildSchedule(
       { events: [...recorder.events], betMinor: 20, winMinor: Math.floor((20 * payX100) / 100), previousGrid: null },
       { speed: 'turbo', preset: PRESETS.strict, reducedMotion: false },
@@ -214,7 +217,7 @@ describe('строгий пресет (§8.5)', () => {
   });
 });
 
-describe('кадр в ключевые моменты (литералы на small-win: ставка 100, выигрыш 35)', () => {
+describe('кадр в ключевые моменты (литералы на small-win: ставка 100, выигрыш 95)', () => {
   const s = schedule('small-win');
   const segment = (kind: string) => {
     const found = s.segments.find((item) => item.kind === kind);
@@ -262,11 +265,11 @@ describe('кадр в ключевые моменты (литералы на sma
     for (const drop of refill.drops) expect(out.offsetY[drop.cell]).toBe(perColumn.get(drop.cell % 7));
   });
 
-  it('подсчёт на середине: floor(35 × (1 − 0.5³)) = 30', () => {
+  it('подсчёт на середине: floor(95 × (1 − 0.5³)) = 83', () => {
     const out = new SceneState();
     const at = segment('tally');
     sampleScene(s, (at.startMs + at.endMs) / 2, out);
-    expect(out.counterMinor).toBe(30);
+    expect(out.counterMinor).toBe(83);
   });
 });
 
@@ -292,7 +295,7 @@ describe('кадр фичи и большого выигрыша (feature-start)
     const out = new SceneState();
     const at = s.segments.find((item) => item.kind === 'celebrate');
     sampleScene(s, (at?.startMs ?? 0) + 0.7 * ((at?.endMs ?? 0) - (at?.startMs ?? 0)), out);
-    expect([out.bigWinLevel, out.bigWinMinor]).toStrictEqual([1, 2585]);
+    expect([out.bigWinLevel, out.bigWinMinor]).toStrictEqual([1, 3350]);
   });
 });
 
@@ -340,8 +343,11 @@ describe('границы групп, пустые точки, колонки', (
   });
 
   it('старт фичи чистит точки: первое заполнение фриспинов — без точек основного спина', () => {
-    for (const name of ['retrigger', 'biggest'] as const) {
-      const s = schedule(name);
+    // retrigger и сид 466 (уровень 3 большого выигрыша): у обоих основной спин оставил точки перед фичей.
+    const recorder = new EventRecorder();
+    const payX100 = new SeededEngine(DEFAULT_CONFIG, recorder).play(466);
+    const seeded = buildSchedule({ events: [...recorder.events], betMinor: 100, winMinor: payX100, previousGrid: null }, NORMAL);
+    for (const s of [schedule('retrigger'), seeded]) {
       const feature = s.groups.findIndex((group) => group.kind === 'feature');
       const before = s.groups[feature]?.start.spots;
       const firstFree = s.groups[feature + 1]?.start.spots;

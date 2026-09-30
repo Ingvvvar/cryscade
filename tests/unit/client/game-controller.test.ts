@@ -29,8 +29,8 @@ import { verifyRound } from '../../support/round-model.ts';
 
 // GameController на поддельных портах (§6.5, §8.1): вкладки — контроллеры над настоящим RgsServer на общем
 // хранилище в памяти, замок раунда — MemoryRoundLock с семантикой Web Locks, канал — с доставкой позже прямого
-// ответа, время — поддельные таймеры. Сид сервера по умолчанию 0: small-win, ставка 100 → выигрыш 35.
-// Балансы — литералы: 100 000 − 100 = 99 900 после ставки, + 35 = 99 935 после зачисления.
+// ответа, время — поддельные таймеры. Сид сервера по умолчанию 0: small-win, ставка 100 → выигрыш 95.
+// Балансы — литералы: 100 000 − 100 = 99 900 после ставки, + 95 = 99 995 после зачисления.
 
 const SMALL = fixtureRound('small-win');
 const DEMO = fixtureRound('feature-start').events[0];
@@ -238,7 +238,7 @@ const AUTH_RESULT = {
   wallet: { balanceMinor: 100_000, revision: 0, notice: null },
 };
 const PLAY_RESULT = {
-  round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
   balanceMinor: 99_900,
   wallet: { balanceMinor: 99_900, revision: 1, notice: null },
 };
@@ -281,7 +281,7 @@ describe('запуск и спин', () => {
     a.controller.spin();
     expect(a.state).toStrictEqual({ name: 'requesting', stage: 'lock', key: 'ak1', betMinor: 100 });
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35, grid: SMALL_GRID });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95, grid: SMALL_GRID });
     expect(a.port.received).toStrictEqual([
       { type: 'authenticate' },
       { type: 'play', betMinor: 100, idempotencyKey: 'ak1' },
@@ -291,7 +291,7 @@ describe('запуск и спин', () => {
     expect(await world.lockFree()).toBe(true);
     // Свои оповещения (ревизии 1 и 2) пришли после ответа на endRound — и не откатили баланс к 99 900.
     expect(world.bus.sent.map((message) => message.revision)).toStrictEqual([1, 2]);
-    expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_935]);
+    expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_995]);
     expect(a.snapshots.map((snapshot) => snapshot.state.name)).toStrictEqual(['authenticating', 'idle', 'requesting', 'requesting', 'ending', 'idle']);
   });
 
@@ -345,7 +345,7 @@ describe('запуск и спин', () => {
     expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_000 });
     a.controller.spin();
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(a.calls).toStrictEqual(['authenticate', 'play', 'resetBalance', 'play', 'endRound']);
   });
 
@@ -414,7 +414,7 @@ describe('повторы и экран ошибки', () => {
     await settle(3000);
     expect(a.state).toStrictEqual({ name: 'requesting', stage: 'play', key: 'ak1', betMinor: 100 });
     await settle(300);
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(plays(a)).toStrictEqual([
       { type: 'play', betMinor: 100, idempotencyKey: 'ak1' },
       { type: 'play', betMinor: 100, idempotencyKey: 'ak1' },
@@ -432,12 +432,12 @@ describe('повторы и экран ошибки', () => {
     await settle();
     a.lab.set({ latencyMs: 0 });
     await settle(20_000);
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95 });
     // Повтор (3250 мс) дошёл раньше оригинала (3500 мс): раунд записал повтор, оригинал получил его же, уже закрытым.
     expect(a.calls).toStrictEqual(['authenticate', 'play', 'endRound', 'play']);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
-    expect(world.bus.sent.map((message) => message.balanceMinor)).toStrictEqual([99_900, 99_935]);
-    expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_935]);
+    expect(world.bus.sent.map((message) => message.balanceMinor)).toStrictEqual([99_900, 99_995]);
+    expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_995]);
     expect(a.client.pendingAttempts).toBe(0);
   });
 
@@ -458,7 +458,7 @@ describe('повторы и экран ошибки', () => {
     a.lab.set({ requestLoss: 0 });
     a.controller.retry();
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(plays(a)).toStrictEqual([{ type: 'play', betMinor: 100, idempotencyKey: 'ak1' }]);
     expect(await world.lockFree()).toBe(true);
   });
@@ -474,7 +474,7 @@ describe('повторы и экран ошибки', () => {
     a.lab.set({ responseLoss: 0 });
     a.controller.retry();
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95 });
     expect(plays(a)).toHaveLength(6);
     expect(new Set(plays(a).map((body) => JSON.stringify(body)))).toStrictEqual(new Set([JSON.stringify({ type: 'play', betMinor: 100, idempotencyKey: 'ak1' })]));
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
@@ -490,7 +490,7 @@ describe('повторы и экран ошибки', () => {
     expect(a.calls).toStrictEqual(['authenticate', 'play']);
     a.controller.retry();
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     // id ar1 сгорел на упавшей записи: сервер берёт его до транзакции.
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar2', status: 'closed', idempotencyKey: 'ak1' }]);
   });
@@ -513,7 +513,7 @@ describe('повторы и экран ошибки', () => {
     expect(a.state).toStrictEqual({ name: 'error', kind: 'invalid', retry: { call: 'play', key: 'ak1', betMinor: 100 }, holdsLock: true });
     a.controller.retry();
     await settle();
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
   });
 
@@ -649,7 +649,7 @@ describe('показ по часам', () => {
     show.tick(1);
     await settle();
     expect(a.calls).toStrictEqual(['authenticate', 'play', 'endRound']);
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
   });
 
   it('фича: часы встают на плашке — featureIntro; тап — показ дальше, endRound после конца', async () => {
@@ -744,7 +744,7 @@ describe('восстановление', () => {
     a.close();
     const reloaded = world.open('a2');
     await settle();
-    expect(reloaded.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35, grid: SMALL_GRID });
+    expect(reloaded.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95, grid: SMALL_GRID });
     expect(reloaded.port.received).toStrictEqual([{ type: 'authenticate' }, { type: 'authenticate' }, { type: 'endRound', roundId: 'ar1' }]);
     expect(reloaded.snapshots.map((snapshot) => snapshot.state.name)).toStrictEqual(['authenticating', 'restoring', 'authenticating', 'ending', 'idle']);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
@@ -763,7 +763,7 @@ describe('восстановление', () => {
     a.close();
     b.controller.spin();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35, grid: SMALL_GRID });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95, grid: SMALL_GRID });
     expect(b.port.received).toStrictEqual([
       { type: 'authenticate' },
       { type: 'play', betMinor: 100, idempotencyKey: 'bk1' },
@@ -810,9 +810,9 @@ describe('чужая вкладка', () => {
     a.lab.releaseHeld();
     await settle();
     expect(a.state).toStrictEqual(IDLE);
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(b.calls).toStrictEqual(['authenticate', 'authenticate']);
-    expect(balancePath(b)).toStrictEqual([null, 100_000, 99_900, 99_935]);
+    expect(balancePath(b)).toStrictEqual([null, 100_000, 99_900, 99_995]);
     expect(await world.lockFree()).toBe(true);
   });
 
@@ -828,10 +828,10 @@ describe('чужая вкладка', () => {
     await settle();
     a.close();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95 });
     expect(b.calls).toStrictEqual(['authenticate', 'authenticate', 'endRound']);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
-    expect(world.bus.sent.map((message) => message.balanceMinor)).toStrictEqual([99_900, 99_935]);
+    expect(world.bus.sent.map((message) => message.balanceMinor)).toStrictEqual([99_900, 99_995]);
   });
 
   it('вкладка открылась посреди чужого раунда: ждёт в очереди и чужой раунд не трогает', async () => {
@@ -847,7 +847,7 @@ describe('чужая вкладка', () => {
     expect(b.snapshot.balanceMinor).toBe(99_900);
     a.lab.releaseHeld();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, grid: SMALL_GRID });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, grid: SMALL_GRID });
     expect(b.calls).toStrictEqual(['authenticate', 'authenticate']);
   });
 
@@ -872,7 +872,7 @@ describe('чужая вкладка', () => {
     expect(a.state).toStrictEqual(IDLE);
     (gate as GatedLock | null)?.open();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(b.calls).toStrictEqual(['authenticate', 'authenticate']);
     expect(await world.lockFree()).toBe(true);
   });
@@ -902,7 +902,7 @@ describe('чужая вкладка', () => {
     expect(await world.lockFree()).toBe(true);
     b.controller.spin();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_005 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_090 });
   });
 
   it('«Грати тут»: раунд хозяина записан, ответы потеряны — отнявшая доигрывает его; одно списание, одно зачисление', async () => {
@@ -920,9 +920,9 @@ describe('чужая вкладка', () => {
     await settle();
     b.controller.takeOver();
     await settle();
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95 });
     expect(b.port.received.slice(-2)).toStrictEqual([{ type: 'authenticate' }, { type: 'endRound', roundId: 'ar1' }]);
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(plays(a)).toHaveLength(before);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
   });
@@ -943,7 +943,7 @@ describe('чужая вкладка', () => {
     await settle(30_000);
     // Первая попытка записала раунд; отнявшая его доиграла. Повторы брошенного play не ушли.
     expect(plays(a)).toHaveLength(before);
-    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
   });
 
@@ -962,8 +962,8 @@ describe('чужая вкладка', () => {
     expect(b.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_000 });
     expect(a.state).toStrictEqual({ name: 'authenticating', holdsLock: true });
     await settle(3000);
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935, winMinor: 35 });
-    expect(b.snapshot.balanceMinor).toBe(99_935);
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995, winMinor: 95 });
+    expect(b.snapshot.balanceMinor).toBe(99_995);
     expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
     expect(await world.lockFree()).toBe(true);
   });
@@ -995,7 +995,7 @@ describe('баланс и уведомления', () => {
     await settle();
     a.controller.spin();
     await settle();
-    expect(a.snapshot.balanceMinor).toBe(100_010);
+    expect(a.snapshot.balanceMinor).toBe(100_180);
     const [wallet] = world.storage.snapshot().wallet;
     expect((wallet?.[1] as { revision: number }).revision).toBe(4);
     await plant(world.storage, [{ op: 'delete', store: 'wallet', key: 'main' }]);
@@ -1004,7 +1004,7 @@ describe('баланс и уведомления', () => {
     expect(a.snapshot).toMatchObject({ balanceMinor: 100_000, notice: 'reset' });
     b.controller.spin();
     await settle();
-    expect(a.snapshot.balanceMinor).toBe(99_935);
+    expect(a.snapshot.balanceMinor).toBe(99_995);
   });
 
   it('оповещения до первого authenticate копятся и применяются после него по ревизии', async () => {
@@ -1024,7 +1024,7 @@ describe('баланс и уведомления', () => {
     (held as HeldPort | null)?.release();
     await settle();
     // authenticate a прочитан до спина b (ревизия 0): без накопленных оповещений баланс остался бы 100 000.
-    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_935 });
+    expect(a.snapshot).toMatchObject({ state: IDLE, balanceMinor: 99_995 });
   });
 
   it('хранилище в памяти: полоса volatile, свой замок вкладки, оповещения других вкладок — мимо', async () => {
@@ -1044,11 +1044,11 @@ describe('баланс и уведомления', () => {
     expect(await world.lockFree()).toBe(false);
     v.controller.spin();
     await settle();
-    expect(v.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_005, notice: 'volatile' });
+    expect(v.snapshot).toMatchObject({ state: IDLE, balanceMinor: 100_090, notice: 'volatile' });
     a.lab.releaseHeld();
     await settle();
-    expect(a.snapshot.balanceMinor).toBe(99_870);
-    expect(v.snapshot.balanceMinor).toBe(100_005);
+    expect(a.snapshot.balanceMinor).toBe(99_990);
+    expect(v.snapshot.balanceMinor).toBe(100_090);
   });
 
   it('хранилище в памяти: «Поповнити» — баланс из ответа resetBalance, оповещений нет вовсе', async () => {

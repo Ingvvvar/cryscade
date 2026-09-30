@@ -81,7 +81,7 @@ const MOMENTS: readonly Moment[] = [
   {
     file: 'counter',
     title: 'Счётчик на середине подсчёта',
-    look: 'число в зоне выигрыша растёт от 0 к итогу 16,35 (кривая замедляется к концу), разделитель — запятая',
+    look: 'число в зоне выигрыша растёт от 0 к итогу 15,00 (кривая замедляется к концу), разделитель — запятая',
     round: fixtureShown('multiplier-8'),
     segment: 'tally',
     share: 0.5,
@@ -125,7 +125,7 @@ const MOMENTS: readonly Moment[] = [
   },
   {
     file: 'big-win-1',
-    title: 'Большой выигрыш: «Великий» (25.85×)',
+    title: 'Большой выигрыш: «Великий» (33.50×)',
     look: 'затемнение, надпись уровня, сумма досчитывается',
     round: seedShown(FORCED_SEEDS.bigWin1),
     segment: 'celebrate',
@@ -134,7 +134,7 @@ const MOMENTS: readonly Moment[] = [
   },
   {
     file: 'big-win-2',
-    title: 'Большой выигрыш: «Величезний» (57×)',
+    title: 'Большой выигрыш: «Величезний» (72×)',
     look: 'то же, уровень 2',
     round: seedShown(FORCED_SEEDS.bigWin2),
     segment: 'celebrate',
@@ -143,7 +143,7 @@ const MOMENTS: readonly Moment[] = [
   },
   {
     file: 'big-win-3',
-    title: 'Большой выигрыш: «Епічний» (132.85×)',
+    title: 'Большой выигрыш: «Епічний» (153.90×)',
     look: 'то же, уровень 3',
     round: seedShown(FORCED_SEEDS.bigWin3),
     segment: 'celebrate',
@@ -162,7 +162,7 @@ const MOMENTS: readonly Moment[] = [
   },
   {
     file: 'strict',
-    title: 'Строгий пресет: выигрыш 0.35× ≤ ставки без празднования',
+    title: 'Строгий пресет: выигрыш 0.95× ≤ ставки без празднования',
     look: 'подсветка — только контур, без свечения; подсчёт мгновенный (на следующих кадрах — сразу итог)',
     round: fixtureShown('small-win'),
     segment: 'highlight',

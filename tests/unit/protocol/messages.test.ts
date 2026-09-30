@@ -15,7 +15,7 @@ import { fixtureRound } from '../../support/fixture-rounds.ts';
 // Конверт, сообщения и ошибки протокола v1 (§6.1): литеральные случаи на каждое поле гарда.
 
 const SMALL = fixtureRound('small-win');
-const ROUND = { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events };
+const ROUND = { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events };
 const GRID = new Array<number>(49).fill(3);
 const CONFIG = { betLevelsMinor: [20, 40, 100], capX100: 500_000 };
 const WALLET = { balanceMinor: 99_900, revision: 7, notice: null };
@@ -117,13 +117,13 @@ describe('checkResult', () => {
     ['authenticate', { ...AUTH, wallet: { ...WALLET, notice: 'volatile' } }, 'authenticate: wallet: неизвестное уведомление'],
     ['play', { round: ROUND, balanceMinor: 99_900, wallet: WALLET }, null],
     ['play', { round: ROUND, balanceMinor: -1, wallet: WALLET }, 'play: balanceMinor — не целое'],
-    ['play', { round: { ...ROUND, events: [{ t: 'end', payX100: 35 }] }, balanceMinor: 0, wallet: WALLET }, 'play: раунд: событие 0: end не на месте'],
+    ['play', { round: { ...ROUND, events: [{ t: 'end', payX100: 95 }] }, balanceMinor: 0, wallet: WALLET }, 'play: раунд: событие 0: end не на месте'],
     ['play', { round: ROUND, balanceMinor: 99_900 }, 'play: wallet — не объект'],
     ['play', { round: ROUND, balanceMinor: 99_900, wallet: { ...WALLET, balanceMinor: 0.5 } }, 'play: wallet: balanceMinor или revision — не целые'],
-    ['endRound', { balanceMinor: 99_935, wallet: WALLET }, null],
+    ['endRound', { balanceMinor: 99_995, wallet: WALLET }, null],
     ['endRound', { balanceMinor: '99935', wallet: WALLET }, 'endRound: balanceMinor — не целое'],
-    ['endRound', { balanceMinor: 99_935, wallet: { ...WALLET, revision: '7' } }, 'endRound: wallet: balanceMinor или revision — не целые'],
-    ['endRound', { balanceMinor: 99_935, wallet: [] }, 'endRound: wallet — не объект'],
+    ['endRound', { balanceMinor: 99_995, wallet: { ...WALLET, revision: '7' } }, 'endRound: wallet: balanceMinor или revision — не целые'],
+    ['endRound', { balanceMinor: 99_995, wallet: [] }, 'endRound: wallet — не объект'],
     ['resetBalance', { balanceMinor: 100_000, wallet: { balanceMinor: 100_000, revision: 1, notice: null } }, null],
     ['resetBalance', { wallet: WALLET }, 'resetBalance: balanceMinor — не целое'],
     ['resetBalance', { balanceMinor: 100_000, wallet: { ...WALLET, notice: 'ok' } }, 'resetBalance: wallet: неизвестное уведомление'],
@@ -159,7 +159,7 @@ describe('checkError', () => {
 
 describe('parseResponse', () => {
   it('результат под тип запроса', () => {
-    const result = { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 8, notice: null } };
+    const result = { balanceMinor: 99_995, wallet: { balanceMinor: 99_995, revision: 8, notice: null } };
     const raw = responseEnvelope(5, { ok: true, result });
     expect(parseResponse('endRound', raw)).toStrictEqual({ kind: 'result', id: 5, result });
   });

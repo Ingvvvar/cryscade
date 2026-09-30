@@ -3,14 +3,14 @@
   "description": "Выигрыш не больше ставки, без фичи: строгий пресет его не празднует.",
   "seed": 0,
   "config": "DEFAULT_CONFIG",
-  "configSha256": "d73090f232d26c55ffdc5b576c5913295ed6af89b1bbe939e641b78790f46401",
-  "payX100": 35,
+  "configSha256": "2e6bc06aa2d7e85b901c2e784d1b66b128b162b52ab254991c990e5706fa02d4",
+  "payX100": 95,
   "events": [
     {"t":"fill","grid":[5,3,6,5,0,3,0,2,1,0,1,2,4,1,0,1,1,1,3,4,3,0,0,6,5,1,6,0,0,3,3,1,3,3,2,2,4,4,5,2,4,6,1,2,3,6,4,3,0]},
-    {"t":"win","clusters":[{"symbol":1,"cells":[8,10,15,16,17],"payX100":35,"mult":1}]},
+    {"t":"win","clusters":[{"symbol":1,"cells":[8,10,15,16,17],"payX100":95,"mult":1}]},
     {"t":"explode","cells":[8,10,15,16,17]},
     {"t":"spots","cells":[8,10,15,16,17],"levels":[1,1,1,1,1]},
     {"t":"refill","moves":[[1,15],[9,16],[2,9],[3,17]],"drops":[{"cell":1,"symbol":5},{"cell":2,"symbol":0},{"cell":3,"symbol":2},{"cell":8,"symbol":1},{"cell":10,"symbol":3}]},
-    {"t":"end","payX100":35}
+    {"t":"end","payX100":95}
   ]
 }

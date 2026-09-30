@@ -70,6 +70,23 @@ export function maxCellX100(table: readonly (readonly number[])[]): number {
   return Math.max(...table.flat());
 }
 
+/** Вариант 4: у каждого символа соседние полосы — от ×1.25 до ×4, без обрыва между полосами. */
+export const BAND_RATIO = { min: 1.25, max: 4 } as const;
+
+/** Наименьшее и наибольшее отношение соседних полос по всем символам. */
+export function bandRatios(table: readonly (readonly number[])[]): { readonly min: number; readonly max: number } {
+  let min = Number.POSITIVE_INFINITY;
+  let max = 0;
+  for (const row of table) {
+    for (let band = 1; band < row.length; band++) {
+      const ratio = (row[band] ?? 0) / (row[band - 1] ?? 1);
+      min = Math.min(min, ratio);
+      max = Math.max(max, ratio);
+    }
+  }
+  return { min, max };
+}
+
 /** Выплата не убывает по полосам и по ярусам: крупный кластер и старший символ не платят меньше. */
 export function isMonotone(table: readonly (readonly number[])[]): boolean {
   return table.every((row, symbol) =>

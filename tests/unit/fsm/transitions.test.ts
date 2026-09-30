@@ -25,7 +25,7 @@ import { fixtureRound } from '../../support/fixture-rounds.ts';
 // состояние снаружи и команды литералами. Пара, которой в таблице нет, обязана вернуть то же состояние с пометкой
 // ignored и без команд. Варианты состояний — все формы данных, от которых зависит переход.
 
-const ROUND: ShownRound = { roundId: 'r1', betMinor: 100, winMinor: 35, events: fixtureRound('small-win').events };
+const ROUND: ShownRound = { roundId: 'r1', betMinor: 100, winMinor: 95, events: fixtureRound('small-win').events };
 const OTHER: ShownRound = { roundId: 'r9', betMinor: 200, winMinor: 210, events: fixtureRound('base-win').events };
 
 const STATES: Readonly<Record<string, () => ClientState>> = {

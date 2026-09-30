@@ -27,15 +27,15 @@ const wallet = (over: Fields = {}): Fields => ({
   ...over,
 });
 
-/** Активный раунд 7: small-win, сид 0, ставка 100 → выигрыш 35. */
+/** Активный раунд 7: small-win, сид 0, ставка 100 → выигрыш 95. */
 const active = (over: Fields = {}): Fields => ({
   roundId: 'r7',
   seq: 7,
   idempotencyKey: 'k7',
   betMinor: 100,
   seed: 0,
-  payX100: 35,
-  winMinor: 35,
+  payX100: 95,
+  winMinor: 95,
   events: SMALL.events,
   createdAt: EARLIER,
   status: 'active',
@@ -44,19 +44,19 @@ const active = (over: Fields = {}): Fields => ({
   ...over,
 });
 
-/** Закрытый раунд 6: base-win, сид 2, ставка 100 → выигрыш 105. */
+/** Закрытый раунд 6: base-win, сид 2, ставка 100 → выигрыш 190. */
 const closed = (over: Fields = {}): Fields => ({
   roundId: 'r6',
   seq: 6,
   idempotencyKey: 'k6',
   betMinor: 100,
   seed: 2,
-  payX100: 105,
-  winMinor: 105,
+  payX100: 190,
+  winMinor: 190,
   events: BASE.events,
   createdAt: EARLIER,
   status: 'closed',
-  balanceAfterBet: 99_895,
+  balanceAfterBet: 99_810,
   balanceAfterEnd: 100_000,
   ...over,
 });
@@ -107,7 +107,7 @@ describe('лечение по сиду', () => {
     const before = storage.snapshot();
     const rig = new Rig({ storage });
     const result = await authenticated(rig);
-    expect(result['activeRound']).toStrictEqual({ roundId: 'r7', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events });
+    expect(result['activeRound']).toStrictEqual({ roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events });
     expect([result['balanceMinor'], result['notice']]).toStrictEqual([99_900, null]);
     expect(storage.snapshot()).toStrictEqual(before);
     expect(rig.broadcast.messages).toStrictEqual([]);
@@ -115,9 +115,9 @@ describe('лечение по сиду', () => {
     // Закрытая запись несёт уже пересчитанные события.
     expect(await rig.send({ type: 'endRound', roundId: 'r7' })).toStrictEqual({
       ok: true,
-      result: { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 13, notice: null } },
+      result: { balanceMinor: 99_995, wallet: { balanceMinor: 99_995, revision: 13, notice: null } },
     });
-    expect(await storage.get('rounds', 'r7')).toStrictEqual(active({ status: 'closed', balanceAfterEnd: 99_935 }));
+    expect(await storage.get('rounds', 'r7')).toStrictEqual(active({ status: 'closed', balanceAfterEnd: 99_995 }));
   });
 
   it('повтор play с ключом раунда, чьи события испорчены, — тот же раунд с пересчитанными событиями', async () => {
@@ -125,7 +125,7 @@ describe('лечение по сиду', () => {
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k7' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r7', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 12, notice: null },
       },
@@ -211,7 +211,7 @@ describe('починка: сброс до 1000, карантин, полоса',
   it.each([
     ['сердцевина раунда испорчена', { seed: -1 }, 'раунд: сид — не u32'],
     ['ставка раунда не сходится с кошельком', { balanceAfterBet: 99_800 }, 'активный раунд не сходится с кошельком'],
-    ['кошелёк указывает на закрытый раунд', { status: 'closed', balanceAfterEnd: 99_935 }, 'активный раунд не сходится с кошельком'],
+    ['кошелёк указывает на закрытый раунд', { status: 'closed', balanceAfterEnd: 99_995 }, 'активный раунд не сходится с кошельком'],
     ['выигрыш цельного раунда не тот, что даёт итог', { winMinor: 3500 }, 'активный раунд не сходится с кошельком'],
   ])('%s — раунд в карантин и снят с ключами, 1000', async (_what, over, reason) => {
     const storage = await planted({ active: active(over) });
@@ -344,7 +344,7 @@ describe('испорченная запись ключа', () => {
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k7' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r7', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 12, notice: null },
       },
@@ -408,7 +408,7 @@ describe('испорченная история', () => {
   it('у закрытого раунда ставка × итог вне точных целых — раунд испорчен: сетка покоя его пропускает, ответ есть', async () => {
     const storage = await planted({
       wallet: wallet({ activeRoundId: null, balanceMinor: 100_000 }),
-      active: { ...closed({ roundId: 'r7', seq: 7, idempotencyKey: 'k7' }), betMinor: 85_782_850_045_153 },
+      active: { ...closed({ roundId: 'r7', seq: 7, idempotencyKey: 'k7' }), betMinor: 47_406_311_867_058 },
     });
     const rig = new Rig({ storage });
     const result = await authenticated(rig);
@@ -652,7 +652,7 @@ describe('запас до границы записей (2^52)', () => {
   });
 
   it('активный раунд не закрыть в границах — починка: раунд в карантин, 1000', async () => {
-    const balance = RECORD_LIMIT - 34;
+    const balance = RECORD_LIMIT - 94;
     const storage = await storageOf(wallet({ balanceMinor: balance }), [OLD6, active({ balanceAfterBet: balance })], [key('k7', 'r7')]);
     const rig = new Rig({ storage, seeds: LOSSES });
     expect(await rig.send({ type: 'endRound', roundId: 'r7' })).toStrictEqual({ ok: false, error: { code: 'ROUND_NOT_FOUND', roundId: 'r7' } });
@@ -663,7 +663,7 @@ describe('запас до границы записей (2^52)', () => {
   });
 
   it('активный раунд закрывается ровно на границе — без починки', async () => {
-    const balance = RECORD_LIMIT - 35;
+    const balance = RECORD_LIMIT - 95;
     const storage = await storageOf(wallet({ balanceMinor: balance }), [OLD6, active({ balanceAfterBet: balance })], [key('k7', 'r7')]);
     const rig = new Rig({ storage, seeds: LOSSES });
     expect(await rig.send({ type: 'endRound', roundId: 'r7' })).toMatchObject({ ok: true, result: { balanceMinor: RECORD_LIMIT } });

@@ -51,9 +51,9 @@ describe('ForcedRoundSource', () => {
     const played = (await server.handle({ v: 1, id: 2, body: { type: 'play', betMinor: 100, idempotencyKey: 'k1' } })).body as ResponseBody<PlayResult>;
     if (!played.ok) throw new Error('play отказан');
     expect(played.result.balanceMinor).toBe(99_900);
-    expect([played.result.round.payX100, played.result.round.winMinor]).toStrictEqual([1635, 1635]);
+    expect([played.result.round.payX100, played.result.round.winMinor]).toStrictEqual([1500, 1500]);
     expect(played.result.round.events).toStrictEqual(fixtureRound('multiplier-8').events);
     const ended = (await server.handle({ v: 1, id: 3, body: { type: 'endRound', roundId: played.result.round.roundId } })).body;
-    expect(ended).toMatchObject({ ok: true, result: { balanceMinor: 99_900 + 1635 } });
+    expect(ended).toMatchObject({ ok: true, result: { balanceMinor: 99_900 + 1500 } });
   });
 });

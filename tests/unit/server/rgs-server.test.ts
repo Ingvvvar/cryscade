@@ -15,8 +15,8 @@ import { fixtureRound } from '../../support/fixture-rounds.ts';
 import { FixedClock, Rig, ScriptedEntropy, T0, plant } from '../../support/rgs-rig.ts';
 import { verifyRound } from '../../support/round-model.ts';
 
-// Правила сервера §6.2 литералами. Сиды — из фикстур, их итоги известны: 1 → 0, 0 → 35, 2 → 105, 512 → 155,
-// 48 → 2585. Выигрыш посчитан вручную: floor(ставка × payX100 / 100).
+// Правила сервера §6.2 литералами. Сиды — из фикстур, их итоги известны: 1 → 0, 0 → 95, 2 → 190, 512 → 285,
+// 48 → 3350. Выигрыш посчитан вручную: floor(ставка × payX100 / 100).
 
 const LOSS = fixtureRound('loss');
 const SMALL = fixtureRound('small-win');
@@ -69,7 +69,7 @@ describe('play и endRound', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 1, notice: null },
       },
@@ -80,8 +80,8 @@ describe('play и endRound', () => {
       idempotencyKey: 'k1',
       betMinor: 100,
       seed: 0,
-      payX100: 35,
-      winMinor: 35,
+      payX100: 95,
+      winMinor: 95,
       events: SMALL.events,
       createdAt: T0,
       status: 'active',
@@ -97,17 +97,17 @@ describe('play и endRound', () => {
 
     expect(await rig.send(endRound('r1'))).toStrictEqual({
       ok: true,
-      result: { balanceMinor: 99_935, wallet: { balanceMinor: 99_935, revision: 2, notice: null } },
+      result: { balanceMinor: 99_995, wallet: { balanceMinor: 99_995, revision: 2, notice: null } },
     });
     expect(rig.storage.snapshot()).toStrictEqual({
-      wallet: [['main', { id: 'main', balanceMinor: 99_935, activeRoundId: null, nextSeq: 2, revision: 2, resetSeq: 1 }]],
-      rounds: [['r1', { ...active, status: 'closed', balanceAfterEnd: 99_935 }]],
+      wallet: [['main', { id: 'main', balanceMinor: 99_995, activeRoundId: null, nextSeq: 2, revision: 2, resetSeq: 1 }]],
+      rounds: [['r1', { ...active, status: 'closed', balanceAfterEnd: 99_995 }]],
       keys: [['k1', { key: 'k1', roundId: 'r1', betMinor: 100 }]],
       quarantine: [],
     });
     expect(rig.broadcast.messages).toStrictEqual([
       { v: 1, type: 'walletChanged', balanceMinor: 99_900, activeRoundId: 'r1', revision: 1, notice: null },
-      { v: 1, type: 'walletChanged', balanceMinor: 99_935, activeRoundId: null, revision: 2, notice: null },
+      { v: 1, type: 'walletChanged', balanceMinor: 99_995, activeRoundId: null, revision: 2, notice: null },
     ]);
   });
 
@@ -115,11 +115,11 @@ describe('play и endRound', () => {
     const rig = new Rig({ seeds: [0, 48, 1, 512, 2] });
     const rounds: [number, number, number, number, number][] = [
       // ставка, выигрыш, после ставки, после зачисления, payX100
-      [100, 35, 99_900, 99_935, 35],
-      [20, 517, 99_915, 100_432, 2585],
-      [10_000, 0, 90_432, 90_432, 0],
-      [1000, 1550, 89_432, 90_982, 155],
-      [200, 210, 90_782, 90_992, 105],
+      [100, 95, 99_900, 99_995, 95],
+      [20, 670, 99_975, 100_645, 3350],
+      [10_000, 0, 90_645, 90_645, 0],
+      [1000, 2850, 89_645, 92_495, 285],
+      [200, 380, 92_295, 92_675, 190],
     ];
     for (const [index, [bet, win, afterBet, afterEnd, payX100]] of rounds.entries()) {
       const played = await rig.send(play(bet, `k${String(index + 1)}`));
@@ -135,7 +135,7 @@ describe('play и endRound', () => {
       });
     }
     expect(rig.storage.snapshot().wallet).toStrictEqual([
-      ['main', { id: 'main', balanceMinor: 90_992, activeRoundId: null, nextSeq: 6, revision: 10, resetSeq: 1 }],
+      ['main', { id: 'main', balanceMinor: 92_675, activeRoundId: null, nextSeq: 6, revision: 10, resetSeq: 1 }],
     ]);
   });
 
@@ -175,9 +175,9 @@ describe('идемпотентность', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 100, payX100: 35, winMinor: 35, events: SMALL.events },
+        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
         balanceMinor: 99_900,
-        wallet: { balanceMinor: 99_935, revision: 2, notice: null },
+        wallet: { balanceMinor: 99_995, revision: 2, notice: null },
       },
     });
     expect(rig.storage.snapshot()).toStrictEqual(written);
@@ -194,7 +194,7 @@ describe('идемпотентность', () => {
   it('повтор endRound — тот же ответ, без второго зачисления и без оповещения', async () => {
     const rig = new Rig({ seeds: [2] });
     await rig.send(play(1000, 'k1'));
-    const ended = { ok: true, result: { balanceMinor: 100_050, wallet: { balanceMinor: 100_050, revision: 2, notice: null } } };
+    const ended = { ok: true, result: { balanceMinor: 100_900, wallet: { balanceMinor: 100_900, revision: 2, notice: null } } };
     expect(await rig.send(endRound('r1'))).toStrictEqual(ended);
     const written = rig.storage.snapshot();
     expect(await rig.send(endRound('r1'))).toStrictEqual(ended);
@@ -210,7 +210,7 @@ describe('идемпотентность', () => {
     const written = rig.storage.snapshot();
     expect(await rig.send(endRound('r1'))).toStrictEqual({
       ok: true,
-      result: { balanceMinor: 100_050, wallet: { balanceMinor: 99_950, revision: 3, notice: null } },
+      result: { balanceMinor: 100_900, wallet: { balanceMinor: 100_800, revision: 3, notice: null } },
     });
     expect(rig.storage.snapshot()).toStrictEqual(written);
   });
@@ -343,12 +343,12 @@ describe('authenticate', () => {
     expect(await rig.send(AUTHENTICATE)).toStrictEqual({
       ok: true,
       result: {
-        balanceMinor: 99_835,
+        balanceMinor: 99_895,
         config: { betLevelsMinor: BET_LEVELS, capX100: 500_000 },
-        activeRound: { roundId: 'r2', betMinor: 100, payX100: 105, winMinor: 105, events: BASE.events },
+        activeRound: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events },
         idleGrid: verifyRound(DEFAULT_CONFIG, SMALL.events).finalGrid,
         notice: null,
-        wallet: { balanceMinor: 99_835, revision: 3, notice: null },
+        wallet: { balanceMinor: 99_895, revision: 3, notice: null },
       },
     });
   });
@@ -423,7 +423,7 @@ describe('сбои записи', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r2', betMinor: 100, payX100: 105, winMinor: 105, events: BASE.events },
+        round: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 1, notice: null },
       },

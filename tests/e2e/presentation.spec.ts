@@ -89,9 +89,9 @@ test('фича на принудительном раунде: плашка жд
   await expect.poll(async () => (await presentation(page))?.clock ?? 0).toBeGreaterThan(held?.clock ?? 0);
   await autoSkip(page);
   const after = await waitForState(page, 'idle');
-  expect(after.balanceMinor).toBe(100_000 - BET + 2585);
+  expect(after.balanceMinor).toBe(100_000 - BET + 3350);
   const stored = await readStorage(page);
-  expect(stored.rounds.map((round) => [round.status, round.winMinor])).toStrictEqual([['closed', 2585]]);
+  expect(stored.rounds.map((round) => [round.status, round.winMinor])).toStrictEqual([['closed', 3350]]);
   expect(after.balanceMinor).toBe(reconciled(stored));
   expect(problems).toEqual([]);
 });
@@ -118,7 +118,7 @@ test('пропуск: клик по сцене — к концу группы, �
   await setHidden(page, false);
   expect((await sentBodies(page)).filter((body) => body.type === 'play')).toHaveLength(1);
   const after = await waitForState(page, 'idle');
-  expect(after.balanceMinor).toBe(100_000 - BET + 1635);
+  expect(after.balanceMinor).toBe(100_000 - BET + 1500);
   expect(problems).toEqual([]);
 });
 
@@ -165,7 +165,7 @@ test('пропуск во фриспине: два клика — к концу 
   const done = await clockNow(page);
   expect([done.finished, done.clock]).toStrictEqual([true, schedule.durationMs]);
   expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play', 'endRound']);
-  expect(after.balanceMinor).toBe(100_000 - BET + 2585);
+  expect(after.balanceMinor).toBe(100_000 - BET + 3350);
   expect(problems).toEqual([]);
 });
 
@@ -215,8 +215,8 @@ test('перезагрузка посреди каскада: показ про�
   await autoSkip(page);
   const after = await waitForState(page, 'idle');
   const stored = await readStorage(page);
-  expect(stored.rounds.map((round) => [round.status, round.betMinor, round.winMinor])).toStrictEqual([['closed', BET, 1635]]);
-  expect(after.balanceMinor).toBe(100_000 - BET + 1635);
+  expect(stored.rounds.map((round) => [round.status, round.betMinor, round.winMinor])).toStrictEqual([['closed', BET, 1500]]);
+  expect(after.balanceMinor).toBe(100_000 - BET + 1500);
   expect(after.balanceMinor).toBe(reconciled(stored));
   expect((await sentBodies(page)).filter((body) => body.type === 'play')).toStrictEqual([]);
   expect(problems).toEqual([]);

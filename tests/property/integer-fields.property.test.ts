@@ -7,8 +7,8 @@ import { fixtureRound } from '../support/fixture-rounds.ts';
 
 // Класс «целое по смыслу поле» (после 2^53 и дробного seq): в записях хранилища и сообщениях протокола каждое число —
 // целое по смыслу, поэтому гард обязан отвергнуть дробное и 2^53 в любом числовом листе любого образца. Образцы —
-// годные записи и сообщения всех видов; события — из фикстуры biggest, в ней все одиннадцать типов событий. Каждый
-// образец сам по себе годен — отказ идёт от подменённого листа.
+// годные записи и сообщения всех видов; события — из фикстур biggest (кап) и retrigger (ретриггер), вместе в них все
+// одиннадцать типов событий. Каждый образец сам по себе годен — отказ идёт от подменённого листа.
 
 type Path = readonly (string | number)[];
 
@@ -19,6 +19,7 @@ interface Sample {
 }
 
 const BIGGEST = fixtureRound('biggest');
+const RETRIGGER = fixtureRound('retrigger');
 const SMALL = fixtureRound('small-win');
 const EVENT_TYPES = ['fill', 'win', 'explode', 'spots', 'refill', 'scatters', 'fsStart', 'fsSpin', 'fsRetrigger', 'cap', 'end'] as const;
 
@@ -29,7 +30,7 @@ const ACTIVE = {
   seq: 7,
   idempotencyKey: 'k7',
   betMinor: 100,
-  seed: 727_733,
+  seed: 801_200,
   payX100: 500_000,
   winMinor: 500_000,
   events: BIGGEST.events,
@@ -38,8 +39,10 @@ const ACTIVE = {
   balanceAfterBet: 99_900,
   balanceAfterEnd: null,
 };
-/** Закрытый раунд small-win: ставка 100, итог 0.35× — выигрыш 35. */
-const CLOSED = { ...ACTIVE, roundId: 'r6', seq: 6, seed: 0, payX100: 35, winMinor: 35, events: SMALL.events, status: 'closed', balanceAfterEnd: 99_935 };
+/** Закрытый раунд small-win: ставка 100, итог 0.95× — выигрыш 95. */
+const CLOSED = { ...ACTIVE, roundId: 'r6', seq: 6, seed: 0, payX100: 95, winMinor: 95, events: SMALL.events, status: 'closed', balanceAfterEnd: 99_995 };
+/** Закрытый раунд retrigger: ставка 100, итог 18.40× — выигрыш 1840. */
+const RETRIGGERED = { ...CLOSED, roundId: 'r5', seq: 5, seed: 3407, payX100: 1840, winMinor: 1840, events: RETRIGGER.events, balanceAfterEnd: 101_740 };
 const KEY = { key: 'k7', roundId: 'r7', betMinor: 100 };
 
 const view = (events: readonly RoundEvent[], payX100: number, winMinor: number) => ({ roundId: 'r7', betMinor: 100, payX100, winMinor, events });
@@ -52,6 +55,7 @@ const SAMPLES: readonly Sample[] = [
   { name: 'запись кошелька', value: WALLET, accepts: (value) => checkWallet(value) === null },
   { name: 'запись активного раунда', value: ACTIVE, accepts: (value) => checkRound(value) === null },
   { name: 'запись закрытого раунда', value: CLOSED, accepts: (value) => checkRound(value) === null },
+  { name: 'запись закрытого раунда с ретриггером', value: RETRIGGERED, accepts: (value) => checkRound(value) === null },
   { name: 'запись ключа', value: KEY, accepts: (value) => checkKey(value) === null },
   { name: 'запрос play', value: { v: 1, id: 7, body: { type: 'play', betMinor: 100, idempotencyKey: 'k7' } }, accepts: (value) => parseRequest(value).ok },
   {
@@ -68,10 +72,10 @@ const SAMPLES: readonly Sample[] = [
   },
   {
     name: 'ответ play',
-    value: result({ round: view(SMALL.events, 35, 35), balanceMinor: 99_900, wallet: WALLET_VIEW }),
+    value: result({ round: view(SMALL.events, 95, 95), balanceMinor: 99_900, wallet: WALLET_VIEW }),
     accepts: (value) => parseResponse('play', value).kind === 'result',
   },
-  { name: 'ответ endRound', value: result({ balanceMinor: 99_935, wallet: WALLET_VIEW }), accepts: (value) => parseResponse('endRound', value).kind === 'result' },
+  { name: 'ответ endRound', value: result({ balanceMinor: 99_995, wallet: WALLET_VIEW }), accepts: (value) => parseResponse('endRound', value).kind === 'result' },
   {
     name: 'ответ resetBalance',
     value: result({ balanceMinor: 100_000, wallet: WALLET_VIEW }),
@@ -128,7 +132,8 @@ describe('целые поля хранилища и протокола', () => {
     expect(SAMPLES.map((sample) => [sample.name, sample.accepts(sample.value)])).toStrictEqual(SAMPLES.map((sample) => [sample.name, true]));
     expect(SAMPLES.filter((sample) => numericLeaves(sample.value).length === 0).map((sample) => sample.name)).toStrictEqual([]);
     expect(LEAVES.length).toBeGreaterThan(1000);
-    expect(EVENT_TYPES.filter((type) => !BIGGEST.events.some((event) => event.t === type))).toStrictEqual([]);
+    const events = [...BIGGEST.events, ...RETRIGGER.events];
+    expect(EVENT_TYPES.filter((type) => !events.some((event) => event.t === type))).toStrictEqual([]);
   });
 
   it('каждый лист: своё значение + 0.5 и 2^53 — отказ', () => {

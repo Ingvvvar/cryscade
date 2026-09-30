@@ -21,6 +21,7 @@
     "math:quick": "node tools/math/quick.ts",
     "math:speed": "node tools/math/speed.ts",
     "math:tune": "node tools/math/tune.ts",
+    "math:fit": "node tools/math/fit-table.ts",
     "fixtures": "node tools/math/fixtures.ts"
   },
   "dependencies": {
