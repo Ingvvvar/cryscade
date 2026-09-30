@@ -5,7 +5,9 @@ import type { IndexName, StoreName } from './ports.ts';
 // шагами — поэтому схема в памяти и в IndexedDB одна.
 
 export const DB_NAME = 'cryscade';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
+/** Состояние честности одно, у него постоянный ключ, как у кошелька. */
+export const FAIRNESS_ID = 'main';
 /** Кошелёк один, у него постоянный ключ. */
 export const WALLET_ID = 'main';
 
@@ -37,6 +39,15 @@ export const MIGRATIONS: readonly Migration[] = [
       // Ключи раунда — чтобы вытеснять их вместе с раундом, не доверяя содержимому самой записи раунда.
       target.createIndex('keys', 'roundId', 'roundId', false);
       target.createStore('quarantine', { keyPath: null, autoIncrement: true });
+    },
+  },
+  {
+    // Фаза 6, честность (§7): текущие обязательство, сид игрока и nonce; секреты — текущий и раскрытые прошлые, по
+    // обязательству. Раунды v1 остаются как есть: без полей честности они — живые, «до честности».
+    version: 2,
+    up(target) {
+      target.createStore('fairness', { keyPath: 'id', autoIncrement: false });
+      target.createStore('secrets', { keyPath: 'commitment', autoIncrement: false });
     },
   },
 ];

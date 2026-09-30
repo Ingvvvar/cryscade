@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { NON_KEYS, ORDERED_KEYS, buildKey, buildNonKey, describeKey, returnedSpec } from '../support/key-order-table.ts';
-import { gameSnapshot, readStorage, reconciled, waitForState } from '../support/game-page.ts';
+import { blankOnOrigin, gameSnapshot, readStorage, reconciled, waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 
 // Хранилище (§6.6) в настоящей IndexedDB: испорченное — сброс и полоса, недоступное — игра в памяти, versionchange —
@@ -8,12 +8,6 @@ import { collectConsole } from '../support/page-probe.ts';
 // записью в IndexedDB того же origin — синтетический ввод, чтобы привести игру в состояние.
 
 const spinButton = (page: Page) => page.getByRole('button', { name: 'Спін' });
-
-/** Пустая страница того же origin — чтобы готовить IndexedDB до запуска игры. */
-async function blankOnOrigin(page: Page): Promise<void> {
-  await page.route('**/cryscade/__blank', (route) => route.fulfill({ body: '<!doctype html><title>blank</title>', contentType: 'text/html' }));
-  await page.goto('./__blank');
-}
 
 /** Записи в IndexedDB cryscade мимо игры: put и delete по хранилищам. */
 async function plantRecords(page: Page, ops: readonly { readonly store: string; readonly put?: unknown; readonly delete?: string }[]): Promise<void> {
@@ -124,7 +118,7 @@ test('IndexedDB недоступна (база версии 99): игра в п�
   expect(problems).toEqual([]);
 });
 
-test('versionchange: вторая страница открывает cryscade версии 2 — первая закрыла соединение, показала полосу, спин выключен', async ({ context }) => {
+test('versionchange: вторая страница открывает cryscade версии 3 — первая закрыла соединение, показала полосу, спин выключен', async ({ context }) => {
   const a = await context.newPage();
   const { problems } = collectConsole(a);
   await a.goto('./?autoskip=1');
@@ -134,7 +128,7 @@ test('versionchange: вторая страница открывает cryscade �
   const upgraded = await b.evaluate(
     () =>
       new Promise<string>((resolve, reject) => {
-        const request = indexedDB.open('cryscade', 2);
+        const request = indexedDB.open('cryscade', 3);
         request.onupgradeneeded = (event) => {
           resolve(`обновлено ${String(event.oldVersion)} → ${String(event.newVersion)}`);
         };
@@ -143,7 +137,7 @@ test('versionchange: вторая страница открывает cryscade �
         };
       }),
   );
-  expect(upgraded).toBe('обновлено 1 → 2');
+  expect(upgraded).toBe('обновлено 2 → 3');
   await expect(a.getByText('Гру оновлено в іншій вкладці — перезавантажте')).toBeVisible();
   expect((await gameSnapshot(a)).notice).toBe('versionchange');
   await expect(spinButton(a)).toBeDisabled();

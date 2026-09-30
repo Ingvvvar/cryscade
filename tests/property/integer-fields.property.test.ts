@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import type { RoundEvent } from '../../src/core/model/events.ts';
 import { checkWalletChanged, parseRequest, parseResponse } from '../../src/protocol/index.ts';
-import { checkKey, checkRound, checkWallet } from '../../src/server/records.ts';
+import { checkFairness, checkKey, checkRound, checkSecret, checkWallet } from '../../src/server/records.ts';
 import { fixtureRound } from '../support/fixture-rounds.ts';
 
 // Класс «целое по смыслу поле» (после 2^53 и дробного seq): в записях хранилища и сообщениях протокола каждое число —
@@ -44,8 +44,23 @@ const CLOSED = { ...ACTIVE, roundId: 'r6', seq: 6, seed: 0, payX100: 95, winMino
 /** Закрытый раунд retrigger: ставка 100, итог 18.40× — выигрыш 1840. */
 const RETRIGGERED = { ...CLOSED, roundId: 'r5', seq: 5, seed: 3407, payX100: 1840, winMinor: 1840, events: RETRIGGER.events, balanceAfterEnd: 101_740 };
 const KEY = { key: 'k7', roundId: 'r7', betMinor: 100 };
+const HEX = 'ab'.repeat(32);
+/** Раунд книги (фаза 6): индекс записи, nonce, обязательство и сид игрока. */
+const BOOK_ROUND = { ...CLOSED, roundId: 'r4', seq: 4, source: 'book', bookIndex: 1234, nonce: 5, commitment: HEX, clientSeed: 'Seed01' };
+const FAIRNESS = { id: 'main', commitment: HEX, clientSeed: 'Seed01', nonce: 6 };
+const SECRET = { commitment: HEX, secret: 'cd'.repeat(32), createdAt: 1_790_000_000_000, revealedAt: 1_790_000_100_000 };
+const FAIRNESS_VIEW = { commitment: HEX, clientSeed: 'Seed01', nonce: 6 };
 
-const view = (events: readonly RoundEvent[], payX100: number, winMinor: number) => ({ roundId: 'r7', betMinor: 100, payX100, winMinor, events });
+const view = (events: readonly RoundEvent[], payX100: number, winMinor: number) => ({
+  roundId: 'r7',
+  betMinor: 100,
+  payX100,
+  winMinor,
+  events,
+  source: 'book',
+  bookIndex: 1234,
+  nonce: 5,
+});
 const WALLET_VIEW = { balanceMinor: 99_900, revision: 12, notice: null };
 const response = (body: unknown) => ({ v: 1, id: 3, body });
 const result = (value: unknown) => response({ ok: true, result: value });
@@ -57,7 +72,45 @@ const SAMPLES: readonly Sample[] = [
   { name: 'запись закрытого раунда', value: CLOSED, accepts: (value) => checkRound(value) === null },
   { name: 'запись закрытого раунда с ретриггером', value: RETRIGGERED, accepts: (value) => checkRound(value) === null },
   { name: 'запись ключа', value: KEY, accepts: (value) => checkKey(value) === null },
+  { name: 'запись раунда книги', value: BOOK_ROUND, accepts: (value) => checkRound(value) === null },
+  { name: 'запись честности', value: FAIRNESS, accepts: (value) => checkFairness(value) === null },
+  { name: 'запись секрета', value: SECRET, accepts: (value) => checkSecret(value) === null },
   { name: 'запрос play', value: { v: 1, id: 7, body: { type: 'play', betMinor: 100, idempotencyKey: 'k7' } }, accepts: (value) => parseRequest(value).ok },
+  { name: 'запрос history', value: { v: 1, id: 8, body: { type: 'history', limit: 20 } }, accepts: (value) => parseRequest(value).ok },
+  { name: 'запрос replay книги', value: { v: 1, id: 9, body: { type: 'replay', book: 58_353 } }, accepts: (value) => parseRequest(value).ok },
+  {
+    name: 'ответ rotateSeed',
+    value: result({ fairness: FAIRNESS_VIEW, revealed: { commitment: HEX, secret: 'cd'.repeat(32) } }),
+    accepts: (value) => parseResponse('rotateSeed', value).kind === 'result',
+  },
+  {
+    name: 'ответ history',
+    value: result({
+      rounds: [
+        {
+          roundId: 'r4',
+          createdAt: 1_790_000_000_000,
+          betMinor: 100,
+          payX100: 95,
+          winMinor: 95,
+          status: 'closed',
+          source: 'book',
+          bookIndex: 1234,
+          nonce: 5,
+          commitment: HEX,
+          clientSeed: 'Seed01',
+          secret: null,
+        },
+      ],
+    }),
+    accepts: (value) => parseResponse('history', value).kind === 'result',
+  },
+  {
+    name: 'ответ replay книги',
+    value: result({ roundId: null, bookIndex: 58_353, betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events }),
+    accepts: (value) => parseResponse('replay', value).kind === 'result',
+  },
+  { name: 'ответ loadBook', value: result({ records: 58_354 }), accepts: (value) => parseResponse('loadBook', value).kind === 'result' },
   {
     name: 'ответ authenticate',
     value: result({
@@ -67,6 +120,7 @@ const SAMPLES: readonly Sample[] = [
       idleGrid: BIGGEST.events[0]?.t === 'fill' ? BIGGEST.events[0].grid : [],
       notice: null,
       wallet: WALLET_VIEW,
+      fairness: FAIRNESS_VIEW,
     }),
     accepts: (value) => parseResponse('authenticate', value).kind === 'result',
   },

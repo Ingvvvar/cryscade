@@ -22,6 +22,7 @@ import { FIXTURE_NAMES, fixtureRound } from '../support/fixture-rounds.ts';
 import { RUN_TIMEOUT_MS } from '../support/property-run.ts';
 import { FixedClock, ScriptedEntropy, T0 } from '../support/rgs-rig.ts';
 import { guarded } from '../support/watchdog.ts';
+import { NodeCrypto } from '../support/node-crypto.ts';
 
 // Гарды на границе (§6.1): на произвольном мусоре не бросают и отвечают «нет»; на записанных раундах с поломками
 // в случайном месте не бросают, а всё, что пропустили, презентация собирает в полную сетку, не падая.
@@ -153,8 +154,8 @@ describe('сервер на мусоре', () => {
   it('не бросает, отвечает BAD_REQUEST или VERSION_MISMATCH и ничего не пишет', async () => {
     const storage = new MemoryStorage({ durable: true });
     const server = new RgsServer(
-      { storage, lock: new MemoryLock(), clock: new FixedClock(T0), entropy: new ScriptedEntropy([]), broadcast: { walletChanged: () => undefined } },
-      { config: DEFAULT_CONFIG },
+      { storage, lock: new MemoryLock(), clock: new FixedClock(T0), entropy: new ScriptedEntropy([]), broadcast: { walletChanged: () => undefined }, crypto: new NodeCrypto() },
+      { config: DEFAULT_CONFIG, rounds: { kind: 'live' } },
     );
     await fc.assert(
       fc.asyncProperty(fc.oneof(GARBAGE, fc.record({ v: fc.oneof(fc.constant(1), GARBAGE), id: fc.oneof(fc.nat(), GARBAGE), body: GARBAGE })), async (raw) => {
@@ -164,7 +165,7 @@ describe('сервер на мусоре', () => {
       }),
       { numRuns: 1000, timeout: RUN_TIMEOUT_MS },
     );
-    expect(storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [] });
+    expect(storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
   });
 });
 
@@ -205,7 +206,7 @@ describe('настоящие раунды движка гард пропуска
       fc.property(fc.integer({ min: 0, max: 0xffffffff }), (seed) => {
         const payX100 = engine.play(seed);
         expect(checkRoundEvents(recorder.events)).toBeNull();
-        expect(checkRoundView({ roundId: 'r1', betMinor: 20, payX100, winMinor: 0, events: recorder.events })).toBeNull();
+        expect(checkRoundView({ roundId: 'r1', betMinor: 20, payX100, winMinor: 0, events: recorder.events, source: 'live', bookIndex: null, nonce: null })).toBeNull();
       }),
       { numRuns: 1000 },
     );

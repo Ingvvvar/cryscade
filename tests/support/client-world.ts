@@ -1,3 +1,4 @@
+import { NodeCrypto, ScriptedBytes } from './node-crypto.ts';
 import {
   GameController,
   MemoryRoundLock,
@@ -108,10 +109,12 @@ class TabEntropy implements Entropy {
   readonly #prefix: string;
   #next = 0;
   #rounds = 0;
+  readonly #bytes: ScriptedBytes;
 
   constructor(seeds: readonly number[], prefix: string) {
     this.#seeds = seeds;
     this.#prefix = prefix;
+    this.#bytes = new ScriptedBytes(prefix);
   }
 
   seed(): number {
@@ -125,6 +128,10 @@ class TabEntropy implements Entropy {
     this.#rounds += 1;
     return `${this.#prefix}r${String(this.#rounds)}`;
   }
+  bytes(length: number): Uint8Array {
+    return this.#bytes.next(length);
+  }
+
 }
 
 class SequentialKeys implements KeySource {
@@ -225,8 +232,9 @@ export class Tab {
             if (options.silent !== true) world.bus.post(message);
           },
         },
+        crypto: new NodeCrypto(),
       },
-      { config: DEFAULT_CONFIG },
+      { config: DEFAULT_CONFIG, rounds: { kind: 'live' } },
     );
     this.port = new WorkerPort(server);
     const sleep = new TimeoutSleep();

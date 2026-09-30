@@ -1,18 +1,22 @@
 import type { KeyRange, Storage, StoreKey } from './ports.ts';
 import {
   RECORD_LIMIT,
+  checkFairness,
   checkKey,
   checkRound,
   checkRoundCore,
+  checkSecret,
   checkWallet,
   isResumableSeq,
   isSeq,
+  type FairnessRecord,
   type KeyRecord,
   type RoundCore,
   type RoundRecord,
+  type SecretRecord,
   type WalletRecord,
 } from './records.ts';
-import { WALLET_ID } from './schema.ts';
+import { FAIRNESS_ID, WALLET_ID } from './schema.ts';
 
 // Репозитории поверх Storage: кошелёк, раунды, ключи идемпотентности. Каждый проверяет гардом то, что прочитал, и
 // отвечает «цело», «нет» или «испорчено» — с сырыми данными для карантина. Пишет только сервер, одной транзакцией.
@@ -68,6 +72,10 @@ function coreOf(round: RoundCore): RoundCore {
     status: round.status,
     balanceAfterBet: round.balanceAfterBet,
     balanceAfterEnd: round.balanceAfterEnd,
+    // Поля честности v2 — как есть; у записи v1 их нет, и цельная часть остаётся записью v1.
+    ...(round.source === undefined
+      ? {}
+      : { source: round.source, bookIndex: round.bookIndex ?? null, nonce: round.nonce ?? null, commitment: round.commitment ?? null, clientSeed: round.clientSeed ?? null }),
   };
 }
 
@@ -152,5 +160,39 @@ export class IdempotencyRepository {
   /** Ключи, записанные за раундом — по индексу, а не по содержимому записи раунда. */
   ofRound(roundId: StoreKey): Promise<StoreKey[]> {
     return this.#storage.keysByIndex('keys', 'roundId', { lower: roundId, upper: roundId });
+  }
+}
+
+/** Запись по ключу через гард: цела, нет или испорчена — с сырыми данными для карантина. */
+async function readChecked<T>(storage: Storage, store: 'fairness' | 'secrets', key: StoreKey, check: (value: unknown) => string | null): Promise<Read<T>> {
+  const raw = await storage.get(store, key);
+  if (raw === undefined) return { kind: 'absent' };
+  const reason = check(raw);
+  return reason === null ? { kind: 'ok', value: raw as T } : { kind: 'damaged', raw, reason };
+}
+
+/** Состояние честности (§7): одна запись — обязательство текущего секрета, сид игрока, nonce. */
+export class FairnessRepository {
+  readonly #storage: Storage;
+
+  constructor(storage: Storage) {
+    this.#storage = storage;
+  }
+
+  read(): Promise<Read<FairnessRecord>> {
+    return readChecked(this.#storage, 'fairness', FAIRNESS_ID, checkFairness);
+  }
+}
+
+/** Секреты сервера по обязательству: текущий и раскрытые прошлые — по ним проверяются раунды истории. */
+export class SecretRepository {
+  readonly #storage: Storage;
+
+  constructor(storage: Storage) {
+    this.#storage = storage;
+  }
+
+  read(commitment: string): Promise<Read<SecretRecord>> {
+    return readChecked(this.#storage, 'secrets', commitment, checkSecret);
   }
 }

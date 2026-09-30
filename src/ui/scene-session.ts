@@ -17,6 +17,8 @@ export interface MountObserver {
 
 export interface SceneSessionOptions {
   readonly create: () => Renderer;
+  /** Рендерер дошёл до готовности — его первый кадр на следующем тике. */
+  readonly onReady?: () => void;
   readonly onLayout: (layout: Layout) => void;
   readonly onError: (error: unknown) => void;
   readonly observer: MountObserver | null;
@@ -78,5 +80,6 @@ export class SceneSession implements ViewportSink, SourceSink {
     if (this.#viewport !== null) renderer.resize(this.#viewport.viewport, this.#viewport.pixelRatio);
     renderer.setReducedMotion(this.#reducedMotion);
     renderer.setSource(this.#source);
+    this.#options.onReady?.();
   }
 }

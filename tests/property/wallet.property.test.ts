@@ -16,6 +16,7 @@ describe('сверка кошелька: замок держит', () => {
     expect(totals.takeovers).toBeGreaterThan(0);
     expect(totals.restored).toBeGreaterThan(0);
     expect(totals.resets).toBeGreaterThan(0);
+    expect(totals.rotations).toBeGreaterThan(0);
     expect(totals.funds).toBeGreaterThan(0);
     expect(totals.timeouts).toBeGreaterThan(0);
     expect(totals.duplicates).toBeGreaterThan(0);

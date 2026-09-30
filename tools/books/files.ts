@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 
 // Где лежит книга и как её зовут: генератор, сборка (vite.config.ts вшивает хеш в воркер) и тесты находят её одинаково.
@@ -17,4 +18,11 @@ export function findBook(dir: string = BOOK_DIR): string {
   const [name] = found;
   if (found.length !== 1 || name === undefined) throw new Error(`в ${dir} книг ${String(found.length)}, нужна одна`);
   return name;
+}
+
+/** SHA-256 несжатой книги; имя файла обязано нести его первые 12 знаков — иначе ошибка сборки, а не старая книга в кэше. */
+export function bookIdentity(file: string, raw: Uint8Array): string {
+  const sha256 = createHash('sha256').update(raw).digest('hex');
+  if (file !== bookFileName(sha256)) throw new Error(`${file}: имя не несёт хеш содержимого ${sha256.slice(0, 12)}`);
+  return sha256;
 }

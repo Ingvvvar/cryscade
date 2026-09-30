@@ -4,12 +4,14 @@
 //   записи по 12 байт — seed u32, payX100 u32, weight u32.
 // Всё прочитанное проходит гард: битая книга — ошибка с причиной, а не игра на битых данных.
 
+import { BOOK_RECORDS_MAX } from '../protocol/index.ts';
+
 const MAGIC = [0x43, 0x52, 0x59, 0x42] as const;
 export const BOOK_VERSION = 1;
 const HEADER = 18;
 const RECORD = 12;
-/** Не больше 80 000 записей (§5): книга с запасом ложится в 1 МБ gzip. */
-export const BOOK_MAX_RECORDS = 80_000;
+/** Не больше 80 000 записей (§5): книга с запасом ложится в 1 МБ gzip. Индекс книги в протоколе — тот же предел. */
+export const BOOK_MAX_RECORDS = BOOK_RECORDS_MAX;
 
 export interface BookRecord {
   readonly seed: number;

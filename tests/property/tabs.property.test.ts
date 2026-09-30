@@ -156,7 +156,7 @@ async function run(actions: readonly Action[], seen: Seen): Promise<string[]> {
       if (body.type === 'endRound' && keyOf.get(body.roundId)?.startsWith(tab.name) === false) seen.restores += 1;
     }
   }
-  const problems = audit(snapshot);
+  const problems = audit(snapshot, false);
   const wallet = snapshot.wallet[0]?.[1] as { balanceMinor: number; activeRoundId: string | null } | undefined;
   const rounds = snapshot.rounds.map(([, round]) => round as { roundId: string; status: string });
   seen.closedRounds += rounds.filter((round) => round.status === 'closed').length;

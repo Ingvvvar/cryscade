@@ -1,3 +1,4 @@
+import { NodeCrypto, ScriptedBytes } from './node-crypto.ts';
 import { DEFAULT_CONFIG, type GameConfig } from '../../src/core/model/config.ts';
 import type { ResponseBody, WalletChanged } from '../../src/protocol/index.ts';
 import {
@@ -8,6 +9,7 @@ import {
   type Clock,
   type Entropy,
   type Lock,
+  type RoundsOption,
   type Storage,
   type WriteOp,
 } from '../../src/server/index.ts';
@@ -22,6 +24,7 @@ export class ScriptedEntropy implements Entropy {
   readonly #seeds: readonly number[];
   #next = 0;
   #rounds = 0;
+  readonly #bytes = new ScriptedBytes();
 
   constructor(seeds: readonly number[]) {
     this.#seeds = seeds;
@@ -43,6 +46,10 @@ export class ScriptedEntropy implements Entropy {
     this.#rounds += 1;
     return `r${String(this.#rounds)}`;
   }
+  bytes(length: number): Uint8Array {
+    return this.#bytes.next(length);
+  }
+
 }
 
 export class FixedClock implements Clock {
@@ -83,6 +90,8 @@ export interface RigOptions {
   readonly clock?: Clock;
   readonly maxRequests?: number;
   readonly config?: GameConfig;
+  /** Источник раундов; по умолчанию — живой по сценарию сидов (честности нет). Книга — с загрузчиком. */
+  readonly rounds?: RoundsOption;
 }
 
 export class Rig {
@@ -102,9 +111,11 @@ export class Rig {
       clock: options.clock ?? new FixedClock(T0),
       entropy: this.entropy,
       broadcast: this.broadcast,
+      crypto: new NodeCrypto(),
     };
     const config = options.config ?? DEFAULT_CONFIG;
-    this.server = new RgsServer(ports, options.maxRequests === undefined ? { config } : { config, maxRequests: options.maxRequests });
+    const rounds = options.rounds ?? { kind: 'live' };
+    this.server = new RgsServer(ports, options.maxRequests === undefined ? { config, rounds } : { config, rounds, maxRequests: options.maxRequests });
   }
 
   /** Запрос в конверте с новым id; ответ обязан нести тот же id. Возвращает тело ответа. */

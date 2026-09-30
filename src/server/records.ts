@@ -1,10 +1,10 @@
 import type { RoundEvent } from '../core/model/events.ts';
-import { checkRoundEvents, isIntIn, isNat, isRecord, isToken } from '../protocol/index.ts';
+import { BOOK_RECORDS_MAX, checkRoundEvents, isClientSeed, isHex64, isIntIn, isNat, isRecord, isToken, type RoundOrigin } from '../protocol/index.ts';
 import type { StoreName } from './ports.ts';
-import { WALLET_ID } from './schema.ts';
+import { FAIRNESS_ID, WALLET_ID } from './schema.ts';
 
-// Записи IndexedDB v1 (§6.6) и их гарды. Всё, что прочитано из хранилища, проходит гард: испорченное не роняет
-// сервер, а уходит по пути починки.
+// Записи IndexedDB (§6.6) и их гарды. Всё, что прочитано из хранилища, проходит гард: испорченное не роняет
+// сервер, а уходит по пути починки. v2 (фаза 6): у раунда — происхождение и поля честности; раунд v1 без них — живой.
 
 export interface WalletRecord {
   readonly id: typeof WALLET_ID;
@@ -34,6 +34,50 @@ export interface RoundRecord {
   readonly balanceAfterBet: number;
   /** null, пока раунд активен. */
   readonly balanceAfterEnd: number | null;
+  /**
+   * Фаза 6. Происхождение: book — выбран по HMAC (секрет с обязательством commitment, сид игрока clientSeed, nonce) из
+   * записи bookIndex; forced и live — без честности, поля — null. У раунда v1 полей нет — он live.
+   */
+  readonly source?: RoundOrigin;
+  readonly bookIndex?: number | null;
+  readonly nonce?: number | null;
+  readonly commitment?: string | null;
+  readonly clientSeed?: string | null;
+}
+
+/** Честность раунда, как её видят ответы и история: у записи v1 — live и null. */
+export interface RoundFairness {
+  readonly source: RoundOrigin;
+  readonly bookIndex: number | null;
+  readonly nonce: number | null;
+  readonly commitment: string | null;
+  readonly clientSeed: string | null;
+}
+
+export function fairnessOf(round: RoundRecord): RoundFairness {
+  return {
+    source: round.source ?? 'live',
+    bookIndex: round.bookIndex ?? null,
+    nonce: round.nonce ?? null,
+    commitment: round.commitment ?? null,
+    clientSeed: round.clientSeed ?? null,
+  };
+}
+
+/** Состояние честности (§7): обязательство текущего секрета, сид игрока и nonce следующего раунда книги. */
+export interface FairnessRecord {
+  readonly id: typeof FAIRNESS_ID;
+  readonly commitment: string;
+  readonly clientSeed: string;
+  readonly nonce: number;
+}
+
+/** Секрет сервера: 32 байта hex; обязательство — его SHA-256. revealedAt — когда раскрыт, null — текущий. */
+export interface SecretRecord {
+  readonly commitment: string;
+  readonly secret: string;
+  readonly createdAt: number;
+  readonly revealedAt: number | null;
 }
 
 /** Раунд без событий. Цел — значит события можно пересчитать движком по сиду. */
@@ -108,12 +152,29 @@ export function checkRoundCore(value: unknown): string | null {
   if (!isAmount(afterBet)) return 'раунд: balanceAfterBet — не целое до 2^52';
   switch (value['status']) {
     case 'active':
-      return afterEnd === null ? null : 'раунд: у активного есть balanceAfterEnd';
+      if (afterEnd !== null) return 'раунд: у активного есть balanceAfterEnd';
+      break;
     case 'closed':
-      return isAmount(afterEnd) && afterEnd === afterBet + winMinor ? null : 'раунд: balanceAfterEnd ≠ balanceAfterBet + winMinor';
+      if (!isAmount(afterEnd) || afterEnd !== afterBet + winMinor) return 'раунд: balanceAfterEnd ≠ balanceAfterBet + winMinor';
+      break;
     default:
       return 'раунд: статус — не active и не closed';
   }
+  return roundFairnessProblem(value);
+}
+
+/** Поля честности раунда v2; у раунда v1 их нет — он живой. У книги — все по формату, у остальных — null. */
+function roundFairnessProblem(value: Readonly<Record<string, unknown>>): string | null {
+  const source = value['source'];
+  const fields = ['bookIndex', 'nonce', 'commitment', 'clientSeed'] as const;
+  if (source === undefined) return fields.some((name) => name in value) ? 'раунд: поля честности без source' : null;
+  if (source === 'book') {
+    if (!isIntIn(value['bookIndex'], 0, BOOK_RECORDS_MAX - 1)) return 'раунд: bookIndex — не индекс книги';
+    if (!isAmount(value['nonce'])) return 'раунд: nonce — не целое до 2^52';
+    return isHex64(value['commitment']) && isClientSeed(value['clientSeed']) ? null : 'раунд: обязательство или сид игрока не по формату';
+  }
+  if (source !== 'forced' && source !== 'live') return 'раунд: source — не book, forced или live';
+  return fields.every((name) => value[name] === null) ? null : 'раунд: у раунда не из книги есть поля честности';
 }
 
 export function checkRound(value: unknown): string | null {
@@ -130,4 +191,20 @@ export function checkKey(value: unknown): string | null {
   if (!isRecord(value)) return 'ключ — не объект';
   if (!isToken(value['key']) || !isToken(value['roundId'])) return 'ключ: key или roundId — не id';
   return isOrdinal(value['betMinor']) ? null : 'ключ: betMinor — не положительное целое до 2^52';
+}
+
+export function checkFairness(value: unknown): string | null {
+  if (!isRecord(value)) return 'честность — не объект';
+  if (value['id'] !== FAIRNESS_ID) return 'честность: чужой id';
+  if (!isHex64(value['commitment'])) return 'честность: обязательство — не 64 знака hex';
+  if (!isClientSeed(value['clientSeed'])) return 'честность: сид игрока не по формату';
+  return isAmount(value['nonce']) ? null : 'честность: nonce — не целое до 2^52';
+}
+
+export function checkSecret(value: unknown): string | null {
+  if (!isRecord(value)) return 'секрет — не объект';
+  if (!isHex64(value['commitment']) || !isHex64(value['secret'])) return 'секрет: обязательство или секрет — не 64 знака hex';
+  if (!isNat(value['createdAt'])) return 'секрет: createdAt — не целое';
+  const revealedAt = value['revealedAt'];
+  return revealedAt === null || isNat(revealedAt) ? null : 'секрет: revealedAt — не целое и не null';
 }

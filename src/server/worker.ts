@@ -1,5 +1,7 @@
-// Корень композиции воркера (§3, §6.4). Только здесь — IndexedDB, Web Locks, BroadcastChannel, crypto и время:
-// настоящие адаптеры портов живут в этом файле, логика сервера — на портах в остальном server/. Недоступная IndexedDB
+// Корень композиции воркера (§3, §6.4). Только здесь — IndexedDB, Web Locks, BroadcastChannel, crypto, fetch и время:
+// настоящие адаптеры портов живут в этом файле, логика сервера — на портах в остальном server/. Книга исходов (§5) —
+// файл с хешем содержимого в имени; эталонный SHA-256 несжатых байт вшит сюда сборкой (vite.config.ts), а не читается
+// из манифеста рядом. Недоступная IndexedDB
 // (сбой open, VersionError — база новее нашей, SecurityError) — хранилище в памяти на сессию воркера, уведомление
 // volatile, свой замок кошелька и молчание в общем канале: баланс в памяти — не баланс вкладок с IndexedDB.
 
@@ -22,11 +24,15 @@ import {
   RgsServer,
   StorageError,
   WALLET_ID,
+  decodeBook,
   migrate,
+  type Book,
+  type BookLoader,
   type Broadcast,
   type Clock,
   type CommitBatch,
   type CommitOutcome,
+  type Crypto,
   type Entropy,
   type IndexName,
   type IndexedRecord,
@@ -40,7 +46,7 @@ import {
   type WriteOp,
 } from './index.ts';
 
-const STORES: readonly StoreName[] = ['wallet', 'rounds', 'keys', 'quarantine'];
+const STORES: readonly StoreName[] = ['wallet', 'rounds', 'keys', 'quarantine', 'fairness', 'secrets'];
 
 const CLOSED: StorageClosed = { v: PROTOCOL_VERSION, type: 'storageClosed', reason: 'versionchange' };
 
@@ -226,6 +232,59 @@ class CryptoEntropy implements Entropy {
   roundId(): string {
     return crypto.randomUUID();
   }
+
+  bytes(length: number): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(length));
+  }
+}
+
+/** HMAC-SHA256 и SHA-256 честности (§7) — WebCrypto; в Node тот же порт — node:crypto. */
+class WebCrypto implements Crypto {
+  async hmacSha256(key: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
+    const imported = await crypto.subtle.importKey('raw', key.slice(), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return new Uint8Array(await crypto.subtle.sign('HMAC', imported, message.slice()));
+  }
+
+  async sha256(data: Uint8Array): Promise<Uint8Array> {
+    return new Uint8Array(await crypto.subtle.digest('SHA-256', data.slice()));
+  }
+}
+
+const hex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+async function gunzip(packed: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([packed.slice()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/**
+ * Книга исходов (§5): fetch → DecompressionStream('gzip') → SHA-256 несжатых байт против эталона сборки → гард формата.
+ * Сервер вправе отдать .gz с Content-Encoding: gzip (vite preview так и делает) — тогда браузер уже распаковал тело:
+ * распаковка — только если байты начинаются с сигнатуры gzip 1f 8b (несжатая книга начинается с 'CRYB').
+ * Не сошлось — ошибка с понятным текстом: игры на битых данных нет, отката на живой ГСЧ — тоже.
+ */
+class FetchBookLoader implements BookLoader {
+  readonly #url: URL;
+  readonly #sha256: string;
+  readonly #crypto: Crypto;
+
+  constructor(url: URL, sha256: string, hashing: Crypto) {
+    this.#url = url;
+    this.#sha256 = sha256;
+    this.#crypto = hashing;
+  }
+
+  async load(): Promise<Book> {
+    const response = await fetch(this.#url);
+    if (!response.ok) throw new StorageError(`${this.#url.pathname}: HTTP ${String(response.status)}`);
+    const body = new Uint8Array(await response.arrayBuffer());
+    const raw = body[0] === 0x1f && body[1] === 0x8b ? await gunzip(body) : body;
+    const digest = hex(await this.#crypto.sha256(raw));
+    if (digest !== this.#sha256) throw new StorageError(`SHA-256 ${digest.slice(0, 12)}… не сошёлся с эталоном сборки ${this.#sha256.slice(0, 12)}…`);
+    const read = decodeBook(raw, DEFAULT_CONFIG.capX100);
+    if (!read.ok) throw new StorageError(read.problem);
+    return read.book;
+  }
 }
 
 /** Оповещения остальным вкладкам (§6.3). */
@@ -286,9 +345,18 @@ async function forcedRounds(): Promise<RgsServerOptions['decorateSource']> {
 
 /** Сервер собирается один раз; запросы, пришедшие раньше, ждут готовности и уходят по порядку. */
 function start(scope: DedicatedWorkerGlobalScope): void {
+  const hashing = new WebCrypto();
+  const book = new FetchBookLoader(
+    new URL(`${import.meta.env.BASE_URL}books/${import.meta.env.CRYSCADE_BOOK_FILE}`, scope.location.origin),
+    import.meta.env.CRYSCADE_BOOK_SHA256,
+    hashing,
+  );
   const ready = Promise.all([storageParts(scope), forcedRounds()]).then(
     ([parts, decorateSource]) =>
-      new RgsServer({ ...parts, clock: new SystemClock(), entropy: new CryptoEntropy() }, { config: DEFAULT_CONFIG, ...(decorateSource === undefined ? {} : { decorateSource }) }),
+      new RgsServer(
+        { ...parts, clock: new SystemClock(), entropy: new CryptoEntropy(), crypto: hashing },
+        { config: DEFAULT_CONFIG, rounds: { kind: 'book', loader: book }, ...(decorateSource === undefined ? {} : { decorateSource }) },
+      ),
   );
   scope.onmessage = (event: MessageEvent<unknown>) => {
     void ready

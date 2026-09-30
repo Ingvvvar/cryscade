@@ -236,9 +236,10 @@ const AUTH_RESULT = {
   idleGrid: DEMO_GRID,
   notice: null,
   wallet: { balanceMinor: 100_000, revision: 0, notice: null },
+  fairness: null,
 };
 const PLAY_RESULT = {
-  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
   balanceMinor: 99_900,
   wallet: { balanceMinor: 99_900, revision: 1, notice: null },
 };
@@ -293,6 +294,22 @@ describe('запуск и спин', () => {
     expect(world.bus.sent.map((message) => message.revision)).toStrictEqual([1, 2]);
     expect(balancePath(a)).toStrictEqual([null, 100_000, 99_900, 99_995]);
     expect(a.snapshots.map((snapshot) => snapshot.state.name)).toStrictEqual(['authenticating', 'idle', 'requesting', 'requesting', 'ending', 'idle']);
+  });
+
+  it('книга исходов: prefetchBook шлёт loadBook один раз за жизнь контроллера, и не после dispose', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.controller.prefetchBook();
+    a.controller.prefetchBook();
+    await settle();
+    expect(a.port.received.filter((body) => body.type === 'loadBook')).toHaveLength(1);
+    const b = world.open('b');
+    await settle();
+    b.controller.dispose();
+    b.controller.prefetchBook();
+    await settle();
+    expect(b.port.received.filter((body) => body.type === 'loadBook')).toHaveLength(0);
   });
 
   it('ставка ±: по уровням, упирается в края, меняется только в idle; спин идёт с выбранной', async () => {

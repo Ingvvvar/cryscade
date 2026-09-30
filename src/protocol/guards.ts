@@ -37,3 +37,13 @@ export function isAscendingInts(value: unknown, min: number, max: number): value
   }
   return true;
 }
+
+/** Сид игрока (§7): от 1 до 64 знаков [0-9A-Za-z]. Двоеточие разделяет поля сообщения HMAC — в сиде его нет. */
+export function isClientSeed(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9A-Za-z]{1,64}$/.test(value);
+}
+
+/** SHA-256 и секрет сервера в hex: 64 знака [0-9a-f]. */
+export function isHex64(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}

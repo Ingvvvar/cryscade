@@ -4,6 +4,10 @@
 interface ImportMetaEnv {
   readonly DEV: boolean;
   readonly MODE: string;
+  readonly BASE_URL: string;
+  /** Книга исходов (§5): имя файла в public/books и эталонный SHA-256 несжатых байт — вшиты сборкой (vite.config.ts). */
+  readonly CRYSCADE_BOOK_FILE: string;
+  readonly CRYSCADE_BOOK_SHA256: string;
 }
 
 interface ImportMeta {

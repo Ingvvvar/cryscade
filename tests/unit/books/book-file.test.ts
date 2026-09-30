@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { SeededEngine, SilentRecorder } from '../../../src/core/engine/index.ts';
 import { DEFAULT_CONFIG } from '../../../src/core/model/config.ts';
 import { BOOK_MAX_RECORDS, decodeBook, encodeBook, type Book } from '../../../src/server/book.ts';
-import { BOOK_DIR, BOOK_MANIFEST, bookFileName, findBook } from '../../../tools/books/files.ts';
+import { BOOK_DIR, BOOK_MANIFEST, bookFileName, bookIdentity, findBook } from '../../../tools/books/files.ts';
 import { prototype, prototypeInProcess } from '../../../tools/books/runner.ts';
 import { selectBook } from '../../../tools/books/select.ts';
 import { SIMULATOR_MAX_REQUESTS } from '../../../tools/math/limits.ts';
@@ -105,4 +105,14 @@ describe('конвейер книги', () => {
     expect(threaded).toStrictEqual(single);
     expect(single.length).toBeGreaterThan(18 + 12 * 100);
   }, 60_000);
+});
+
+describe('имя книги — хеш её содержимого', () => {
+  it('имя с первыми 12 знаками SHA-256 несжатых байт — годно; другое имя — ошибка сборки', () => {
+    const raw = Uint8Array.from([0x43, 0x52, 0x59, 0x42, 1, 2, 3]);
+    const sha256 = createHash('sha256').update(raw).digest('hex');
+    expect(bookIdentity(`base.v1.${sha256.slice(0, 12)}.bin.gz`, raw)).toBe(sha256);
+    expect(() => bookIdentity('base.v1.000000000000.bin.gz', raw)).toThrow(/имя не несёт хеш содержимого/);
+    expect(() => bookIdentity(`base.v1.${sha256.slice(0, 12)}.bin.gz`, Uint8Array.from([0x43, 0x52, 0x59, 0x42, 1, 2, 4]))).toThrow(/имя не несёт хеш/);
+  });
 });

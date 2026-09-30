@@ -15,11 +15,29 @@ import { fixtureRound } from '../../support/fixture-rounds.ts';
 // Конверт, сообщения и ошибки протокола v1 (§6.1): литеральные случаи на каждое поле гарда.
 
 const SMALL = fixtureRound('small-win');
-const ROUND = { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events };
+const ROUND = { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null };
+const BOOK_ROUND = { ...ROUND, source: 'book', bookIndex: 12, nonce: 3 };
+const HEX = 'ab'.repeat(32);
+const FAIRNESS = { commitment: HEX, clientSeed: 'Seed01', nonce: 0 };
 const GRID = new Array<number>(49).fill(3);
 const CONFIG = { betLevelsMinor: [20, 40, 100], capX100: 500_000 };
 const WALLET = { balanceMinor: 99_900, revision: 7, notice: null };
-const AUTH = { balanceMinor: 100_000, config: CONFIG, activeRound: null, idleGrid: GRID, notice: null, wallet: WALLET };
+const AUTH = { balanceMinor: 100_000, config: CONFIG, activeRound: null, idleGrid: GRID, notice: null, wallet: WALLET, fairness: null };
+const HISTORY_ENTRY = {
+  roundId: 'r1',
+  createdAt: 1_790_000_000_000,
+  betMinor: 100,
+  payX100: 95,
+  winMinor: 95,
+  status: 'closed',
+  source: 'book',
+  bookIndex: 12,
+  nonce: 3,
+  commitment: HEX,
+  clientSeed: 'Seed01',
+  secret: null,
+};
+const REPLAY = { roundId: 'r1', bookIndex: null, betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events };
 
 describe('parseRequest', () => {
   it('годный конверт', () => {
@@ -37,7 +55,7 @@ describe('parseRequest', () => {
     ['id дробный', { v: 1, id: 1.5, body: { type: 'authenticate' } }, null, 'BAD_REQUEST'],
     ['id отрицательный', { v: 1, id: -1, body: { type: 'authenticate' } }, null, 'BAD_REQUEST'],
     ['тело не объект', { v: 1, id: 3, body: 'authenticate' }, 3, 'BAD_REQUEST'],
-    ['неизвестный тип', { v: 1, id: 3, body: { type: 'rotateSeed' } }, 3, 'BAD_REQUEST'],
+    ['неизвестный тип', { v: 1, id: 3, body: { type: 'verify' } }, 3, 'BAD_REQUEST'],
   ])('%s → %s', (_what, raw, id, code) => {
     const parsed = parseRequest(raw);
     expect(parsed.ok).toBe(false);
@@ -74,6 +92,30 @@ describe('checkRequestBody', () => {
     [{ type: 'endRound' }, 'endRound: roundId — не id раунда'],
     [{}, 'неизвестный тип запроса'],
     [[], 'тело запроса — не объект'],
+    [{ type: 'rotateSeed' }, null],
+    [{ type: 'loadBook' }, null],
+    [{ type: 'setClientSeed', clientSeed: 'Abc123' }, null],
+    [{ type: 'setClientSeed', clientSeed: 'a'.repeat(64) }, null],
+    [{ type: 'setClientSeed', clientSeed: 'a'.repeat(65) }, 'setClientSeed: сид игрока — 1…64 знака [0-9A-Za-z]'],
+    [{ type: 'setClientSeed', clientSeed: '' }, 'setClientSeed: сид игрока — 1…64 знака [0-9A-Za-z]'],
+    [{ type: 'setClientSeed', clientSeed: 'a:b' }, 'setClientSeed: сид игрока — 1…64 знака [0-9A-Za-z]'],
+    [{ type: 'setClientSeed', clientSeed: 'a_b' }, 'setClientSeed: сид игрока — 1…64 знака [0-9A-Za-z]'],
+    [{ type: 'setClientSeed' }, 'setClientSeed: сид игрока — 1…64 знака [0-9A-Za-z]'],
+    [{ type: 'history', limit: 1 }, null],
+    [{ type: 'history', limit: 100 }, null],
+    [{ type: 'history', limit: 0 }, 'history: limit — целое 1…100'],
+    [{ type: 'history', limit: 101 }, 'history: limit — целое 1…100'],
+    [{ type: 'history', limit: 1.5 }, 'history: limit — целое 1…100'],
+    [{ type: 'history' }, 'history: limit — целое 1…100'],
+    [{ type: 'replay', round: 'r1' }, null],
+    [{ type: 'replay', book: 0 }, null],
+    [{ type: 'replay', book: 79_999 }, null],
+    [{ type: 'replay', book: 80_000 }, 'replay: book — не индекс книги'],
+    [{ type: 'replay', book: -1 }, 'replay: book — не индекс книги'],
+    [{ type: 'replay', book: 2.5 }, 'replay: book — не индекс книги'],
+    [{ type: 'replay', round: '' }, 'replay: round — не id раунда'],
+    [{ type: 'replay', round: 'r1', book: 0 }, 'replay: нужен ровно один из round и book'],
+    [{ type: 'replay' }, 'replay: нужен ровно один из round и book'],
   ])('%j → %s', (body, problem) => {
     expect(checkRequestBody(body)).toBe(problem);
   });
@@ -92,6 +134,16 @@ describe('checkRoundView', () => {
     [{ ...ROUND, events: SMALL.events.slice(0, -1) }, 'раунд: раунд без end'],
     [{ ...ROUND, events: [] }, 'раунд: события — не непустой массив'],
     ['r1', 'раунд — не объект'],
+    [BOOK_ROUND, null],
+    [{ ...ROUND, source: 'forced' }, null],
+    [{ ...BOOK_ROUND, bookIndex: 80_000 }, 'раунд: bookIndex — не индекс книги'],
+    [{ ...BOOK_ROUND, bookIndex: null }, 'раунд: bookIndex — не индекс книги'],
+    [{ ...BOOK_ROUND, nonce: 1.5 }, 'раунд: nonce — не целое'],
+    [{ ...BOOK_ROUND, nonce: null }, 'раунд: nonce — не целое'],
+    [{ ...ROUND, bookIndex: 1 }, 'раунд: у раунда не из книги есть bookIndex или nonce'],
+    [{ ...ROUND, source: 'forced', nonce: 0 }, 'раунд: у раунда не из книги есть bookIndex или nonce'],
+    [{ ...ROUND, source: 'magic' }, 'раунд: source — не book, forced или live'],
+    [{ ...ROUND, source: undefined }, 'раунд: source — не book, forced или live'],
   ])('%#', (view, problem) => {
     expect(checkRoundView(view)).toBe(problem);
   });
@@ -115,6 +167,42 @@ describe('checkResult', () => {
     ['authenticate', { ...AUTH, wallet: undefined }, 'authenticate: wallet — не объект'],
     ['authenticate', { ...AUTH, wallet: { ...WALLET, revision: -1 } }, 'authenticate: wallet: balanceMinor или revision — не целые'],
     ['authenticate', { ...AUTH, wallet: { ...WALLET, notice: 'volatile' } }, 'authenticate: wallet: неизвестное уведомление'],
+    ['authenticate', { ...AUTH, fairness: FAIRNESS }, null],
+    ['authenticate', { ...AUTH, fairness: undefined }, 'authenticate: fairness — не объект'],
+    ['authenticate', { ...AUTH, fairness: { ...FAIRNESS, commitment: HEX.toUpperCase() } }, 'authenticate: fairness: обязательство — не 64 знака hex'],
+    ['authenticate', { ...AUTH, fairness: { ...FAIRNESS, commitment: HEX.slice(1) } }, 'authenticate: fairness: обязательство — не 64 знака hex'],
+    ['authenticate', { ...AUTH, fairness: { ...FAIRNESS, clientSeed: 'a:b' } }, 'authenticate: fairness: сид игрока не по формату'],
+    ['authenticate', { ...AUTH, fairness: { ...FAIRNESS, nonce: -1 } }, 'authenticate: fairness: nonce — не целое'],
+    ['authenticate', { ...AUTH, fairness: { ...FAIRNESS, nonce: 2 ** 53 } }, 'authenticate: fairness: nonce — не целое'],
+    ['play', { round: BOOK_ROUND, balanceMinor: 99_900, wallet: WALLET }, null],
+    ['setClientSeed', { fairness: FAIRNESS, revealed: { commitment: HEX, secret: 'cd'.repeat(32) } }, null],
+    ['rotateSeed', { fairness: FAIRNESS, revealed: { commitment: HEX, secret: 'cd'.repeat(32) } }, null],
+    ['rotateSeed', { fairness: { ...FAIRNESS, nonce: 0.5 }, revealed: { commitment: HEX, secret: 'cd'.repeat(32) } }, 'rotateSeed: fairness: nonce — не целое'],
+    ['rotateSeed', { fairness: FAIRNESS, revealed: { commitment: HEX, secret: 'cd' } }, 'rotateSeed: раскрытый секрет не по формату'],
+    ['rotateSeed', { fairness: FAIRNESS }, 'rotateSeed: раскрытый секрет не по формату'],
+    ['history', { rounds: [HISTORY_ENTRY, { ...HISTORY_ENTRY, source: 'live', bookIndex: null, nonce: null, commitment: null, clientSeed: null }] }, null],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, secret: 'cd'.repeat(32), status: 'active' }] }, null],
+    ['history', { rounds: [] }, null],
+    ['history', { rounds: Array.from({ length: 101 }, () => HISTORY_ENTRY) }, 'history: rounds — не список до 100'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, createdAt: 1.5 }] }, 'history: раунд 0: время, ставка или выигрыш — не целые'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, betMinor: 0 }] }, 'history: раунд 0: время, ставка или выигрыш — не целые'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, status: 'lost' }] }, 'history: раунд 0: статус — не active и не closed'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, commitment: null }] }, 'history: раунд 0: обязательство или сид игрока не по формату'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, source: 'live', bookIndex: null, nonce: null }] }, 'history: раунд 0: у раунда не из книги есть обязательство'],
+    ['history', { rounds: [{ ...HISTORY_ENTRY, secret: 'xyz' }] }, 'history: раунд 0: секрет — не 64 знака hex'],
+    ['history', { rounds: [HISTORY_ENTRY, { ...HISTORY_ENTRY, roundId: '' }] }, 'history: раунд 1: roundId — не id'],
+    ['replay', REPLAY, null],
+    ['replay', { ...REPLAY, roundId: null, bookIndex: 79_999 }, null],
+    ['replay', { ...REPLAY, bookIndex: 5 }, 'replay: нужен ровно один из roundId и bookIndex'],
+    ['replay', { ...REPLAY, roundId: null }, 'replay: нужен ровно один из roundId и bookIndex'],
+    ['replay', { ...REPLAY, roundId: null, bookIndex: 80_000 }, 'replay: нужен ровно один из roundId и bookIndex'],
+    ['replay', { ...REPLAY, betMinor: 0 }, 'replay: betMinor — не положительное целое'],
+    ['replay', { ...REPLAY, winMinor: -1 }, 'replay: payX100 или winMinor — не целые'],
+    ['replay', { ...REPLAY, payX100: 96 }, 'replay: payX100 не равен итогу end'],
+    ['replay', { ...REPLAY, events: [] }, 'replay: события — не непустой массив'],
+    ['loadBook', { records: 58_354 }, null],
+    ['loadBook', { records: 0 }, 'loadBook: records — не число записей книги'],
+    ['loadBook', { records: 80_001 }, 'loadBook: records — не число записей книги'],
     ['play', { round: ROUND, balanceMinor: 99_900, wallet: WALLET }, null],
     ['play', { round: ROUND, balanceMinor: -1, wallet: WALLET }, 'play: balanceMinor — не целое'],
     ['play', { round: { ...ROUND, events: [{ t: 'end', payX100: 95 }] }, balanceMinor: 0, wallet: WALLET }, 'play: раунд: событие 0: end не на месте'],

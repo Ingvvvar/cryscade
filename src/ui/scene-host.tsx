@@ -25,6 +25,8 @@ export interface SceneHostProps {
   readonly preferences: TurboSwitch;
   readonly money: MoneyFormat;
   readonly reload: () => void;
+  /** Сцена готова: корень композиции просит книгу исходов после её первого кадра. */
+  readonly onSceneReady: () => void;
 }
 
 /** Пробел: в покое — спин, во время показа — пропуск или «продолжить». Кнопку и поле ввода пробел нажимает сам. */
@@ -44,7 +46,7 @@ function useSpaceKey(game: Game): void {
   }, [game]);
 }
 
-export function SceneHost({ create, choice, observer, game, source, preferences, money, reload }: SceneHostProps) {
+export function SceneHost({ create, choice, observer, game, source, preferences, money, reload, onSceneReady }: SceneHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const insetRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<SceneSession | null>(null);
@@ -65,6 +67,7 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
     if (host === null || insets === null) return;
     sessionRef.current ??= new SceneSession({
       create,
+      onReady: onSceneReady,
       onLayout: setLayout,
       onError: () => {
         setFailed(true);
@@ -85,7 +88,7 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
       watcher.dispose();
       session.detach();
     };
-  }, [create, observer, source]);
+  }, [create, observer, source, onSceneReady]);
 
   return (
     <div className="scene">

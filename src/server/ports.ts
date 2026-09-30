@@ -1,9 +1,10 @@
 import type { WalletChanged } from '../protocol/index.ts';
+import type { Book } from './book.ts';
 
 // Порты сервера (§6.4). Логика зависит от них, а не от браузера: адаптеры в памяти — в server/, настоящие —
-// IndexedDB, Web Locks, crypto, BroadcastChannel — только в worker.ts.
+// IndexedDB, Web Locks, crypto, BroadcastChannel, fetch книги — только в worker.ts.
 
-export type StoreName = 'wallet' | 'rounds' | 'keys' | 'quarantine';
+export type StoreName = 'wallet' | 'rounds' | 'keys' | 'quarantine' | 'fairness' | 'secrets';
 export type IndexName = 'seq' | 'roundId';
 /**
  * Ключ записи и значение индекса — любой ключ IndexedDB: число, дата, строка, двоичные данные, массив ключей.
@@ -75,6 +76,19 @@ export interface Entropy {
   seed(): number;
   /** Новый id раунда: уникальный, из знаков [0-9A-Za-z_-], не длиннее 64. */
   roundId(): string;
+  /** Криптостойкие байты: секрет сервера (32) и сид игрока по умолчанию (8 → 16 знаков hex). */
+  bytes(length: number): Uint8Array;
+}
+
+/** Криптография честности (§7): в воркере — WebCrypto, в тестах и инструментах — node:crypto. */
+export interface Crypto {
+  hmacSha256(key: Uint8Array, message: Uint8Array): Promise<Uint8Array>;
+  sha256(data: Uint8Array): Promise<Uint8Array>;
+}
+
+/** Книга исходов (§5): байты сошлись с эталонным хешем и прошли гард. Сбой — Error с понятным текстом. */
+export interface BookLoader {
+  load(): Promise<Book>;
 }
 
 export interface Broadcast {

@@ -201,7 +201,14 @@ export class MemoryStorage implements Storage {
   /** Снимок всех хранилищ — простые данные: тесты сравнивают состояние через публичный API. */
   snapshot(): StorageSnapshot {
     const of = (store: StoreName): [StoreKey, unknown][] => this.#store(this.#stores, store).entries();
-    return { wallet: of('wallet'), rounds: of('rounds'), keys: of('keys'), quarantine: of('quarantine') };
+    return {
+      wallet: of('wallet'),
+      rounds: of('rounds'),
+      keys: of('keys'),
+      quarantine: of('quarantine'),
+      fairness: of('fairness'),
+      secrets: of('secrets'),
+    };
   }
 
   #apply(stores: ReadonlyMap<StoreName, MemoryStore>, op: WriteOp): void {

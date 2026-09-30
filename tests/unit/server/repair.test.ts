@@ -107,7 +107,7 @@ describe('лечение по сиду', () => {
     const before = storage.snapshot();
     const rig = new Rig({ storage });
     const result = await authenticated(rig);
-    expect(result['activeRound']).toStrictEqual({ roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events });
+    expect(result['activeRound']).toStrictEqual({ roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null });
     expect([result['balanceMinor'], result['notice']]).toStrictEqual([99_900, null]);
     expect(storage.snapshot()).toStrictEqual(before);
     expect(rig.broadcast.messages).toStrictEqual([]);
@@ -125,7 +125,7 @@ describe('лечение по сиду', () => {
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k7' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 12, notice: null },
       },
@@ -170,6 +170,8 @@ describe('починка: сброс до 1000, карантин, полоса',
         [1, { store: 'wallet', raw: damaged, reason, at: T0 }],
         [2, { store: 'rounds', raw: active(), reason, at: T0 }],
       ],
+      fairness: [],
+      secrets: [],
     });
     expect(rig.broadcast.messages).toStrictEqual([RESET_NOTICE(13)]);
   });
@@ -186,6 +188,8 @@ describe('починка: сброс до 1000, карантин, полоса',
       rounds: [['r6', closed()]],
       keys: [['k6', key('k6', 'r6')]],
       quarantine: [],
+      fairness: [],
+      secrets: [],
     });
   });
 
@@ -223,6 +227,8 @@ describe('починка: сброс до 1000, карантин, полоса',
       rounds: [['r6', closed()]],
       keys: [['k6', key('k6', 'r6')]],
       quarantine: [[1, { store: 'rounds', raw: active(over), reason, at: T0 }]],
+      fairness: [],
+      secrets: [],
     });
   });
 
@@ -235,6 +241,8 @@ describe('починка: сброс до 1000, карантин, полоса',
       rounds: [['r6', closed()]],
       keys: [['k6', key('k6', 'r6')]],
       quarantine: [],
+      fairness: [],
+      secrets: [],
     });
   });
 
@@ -244,7 +252,7 @@ describe('починка: сброс до 1000, карантин, полоса',
     expect(await rig.send({ type: 'play', betMinor: 1000, idempotencyKey: 'k8' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 1000, payX100: 0, winMinor: 0, events: fixtureRound('loss').events },
+        round: { roundId: 'r1', betMinor: 1000, payX100: 0, winMinor: 0, events: fixtureRound('loss').events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_000,
         // Починка — в этом же запросе: у play нет своего уведомления, о сбросе говорит кошелёк ответа.
         wallet: { balanceMinor: 99_000, revision: 2, notice: 'reset' },
@@ -344,7 +352,7 @@ describe('испорченная запись ключа', () => {
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k7' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+        round: { roundId: 'r7', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 12, notice: null },
       },
@@ -494,6 +502,8 @@ describe('дробный seq и испорченный верх индекса',
       rounds: [],
       keys: [],
       quarantine: [[1, { store: 'rounds', raw: broken, reason: 'кошелька нет, а раунды есть', at: T0 }]],
+      fairness: [],
+      secrets: [],
     });
     expect(await spins(rig, 3)).toStrictEqual([]);
   });

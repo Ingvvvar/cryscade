@@ -13,7 +13,7 @@ const round = (roundId: string, seq: number): { roundId: string; seq: number } =
 
 describe('MemoryStorage', () => {
   it('новое хранилище пусто, хранилища — из миграций', () => {
-    expect(new MemoryStorage().snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [] });
+    expect(new MemoryStorage().snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
   });
 
   it('durable: по умолчанию нет — это режим без IndexedDB', () => {
@@ -46,7 +46,7 @@ describe('MemoryStorage', () => {
     });
     expect(outcome).toBe('conflict');
     expect(seen).toStrictEqual([{ id: 'main', revision: 1 }]);
-    expect(storage.snapshot()).toStrictEqual({ wallet: [['main', { id: 'main', revision: 1 }]], rounds: [], keys: [], quarantine: [] });
+    expect(storage.snapshot()).toStrictEqual({ wallet: [['main', { id: 'main', revision: 1 }]], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
   });
 
   it('условие на пустом месте получает undefined', async () => {

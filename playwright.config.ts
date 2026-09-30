@@ -22,7 +22,7 @@ export default defineConfig({
     { name: 'fallback', testMatch: 'fallback.spec.ts', use: { ...devices['Desktop Chrome'], baseURL: url(E2E) } },
     { name: 'bundle', testMatch: 'bundle.spec.ts' },
     // Игра на e2e-сборке: зонд видит контроллер и лабораторию сети; вкладки одного профиля делят IndexedDB и замки.
-    { name: 'game', testMatch: /(game|resilience|storage|presentation)\.spec\.ts$/, use: { ...chrome, baseURL: url(E2E) } },
+    { name: 'game', testMatch: /(game|resilience|storage|presentation|fairness)\.spec\.ts$/, use: { ...chrome, baseURL: url(E2E) } },
   ],
   webServer: [
     {

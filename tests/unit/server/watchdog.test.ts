@@ -23,13 +23,13 @@ describe('сторож сервера', () => {
     if (tripped.ok) return;
     expect(tripped.error.code).toBe('INTERNAL');
     expect(tripped.error.code === 'INTERNAL' && tripped.error.message).toContain('раунд с сидом 0 сделал больше 50 запросов');
-    expect(rig.storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [] });
+    expect(rig.storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
     expect(rig.broadcast.messages).toStrictEqual([]);
 
     expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k1' })).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 100, payX100: 0, winMinor: 0, events: fixtureRound('loss').events },
+        round: { roundId: 'r1', betMinor: 100, payX100: 0, winMinor: 0, events: fixtureRound('loss').events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 1, notice: null },
       },

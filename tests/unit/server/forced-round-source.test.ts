@@ -2,34 +2,46 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../../src/core/model/config.ts';
 import type { PlayResult, ResponseBody } from '../../../src/protocol/index.ts';
 import { ForcedRoundSource } from '../../../src/server/forced-round-source.ts';
-import { MemoryLock, MemoryStorage, RgsServer, type RoundDraw, type RoundSource } from '../../../src/server/index.ts';
+import { MemoryLock, MemoryStorage, RgsServer, type FairnessContext, type RoundDraw, type RoundSource } from '../../../src/server/index.ts';
 import { SeededRounds } from '../../../src/server/seeded-rounds.ts';
 import { fixtureRound } from '../../support/fixture-rounds.ts';
 import { BroadcastLog, FixedClock, ScriptedEntropy, T0 } from '../../support/rgs-rig.ts';
+import { NodeCrypto } from '../../support/node-crypto.ts';
 
 // Принудительный раунд (dev и e2e, фаза 5): Strategy-декоратор над источником раундов. Ожидания — записанные фикстуры:
 // сид фикстуры даёт её события и итог. Деньги идут обычным путём — проверка на сервере в памяти.
 
+const LIVE = { source: 'live', bookIndex: null, nonce: null, commitment: null, clientSeed: null } as const;
+
 class CountingSource implements RoundSource {
   draws = 0;
+  contexts: unknown[] = [];
 
-  draw(): RoundDraw {
+  draw(fairness: FairnessContext | null): Promise<RoundDraw> {
     this.draws += 1;
-    return { seed: 0, ...new SeededRounds(DEFAULT_CONFIG, 100_000).play(0) };
+    this.contexts.push(fairness);
+    return Promise.resolve({ seed: 0, ...new SeededRounds(DEFAULT_CONFIG, 100_000).play(0), fairness: LIVE });
   }
 }
 
+const CONTEXT: FairnessContext = { secret: '00'.repeat(32), commitment: 'ab'.repeat(32), clientSeed: 'seed', nonce: 7 };
+
 describe('ForcedRoundSource', () => {
-  it('без сида — живой источник; сид — раунд этого сида один раз, дальше снова живой', () => {
+  it('без сида — источник под ним с тем же контекстом честности; сид — раунд этого сида один раз, помечен forced', async () => {
     const live = new CountingSource();
     const forced = new ForcedRoundSource(live, new SeededRounds(DEFAULT_CONFIG, 100_000));
-    expect(forced.draw().seed).toBe(0);
-    expect(live.draws).toBe(1);
+    expect((await forced.draw(CONTEXT)).seed).toBe(0);
+    expect([live.draws, live.contexts]).toStrictEqual([1, [CONTEXT]]);
     const feature = fixtureRound('feature-start');
     forced.force(feature.seed);
-    expect(forced.draw()).toStrictEqual({ seed: 48, payX100: feature.payX100, events: feature.events });
+    expect(await forced.draw(CONTEXT)).toStrictEqual({
+      seed: 48,
+      payX100: feature.payX100,
+      events: feature.events,
+      fairness: { source: 'forced', bookIndex: null, nonce: null, commitment: null, clientSeed: null },
+    });
     expect(live.draws).toBe(1);
-    forced.draw();
+    await forced.draw(null);
     expect(live.draws).toBe(2);
   });
 
@@ -37,9 +49,10 @@ describe('ForcedRoundSource', () => {
     const storage = new MemoryStorage({ durable: true });
     const holder: { forced: ForcedRoundSource | null } = { forced: null };
     const server = new RgsServer(
-      { storage, lock: new MemoryLock(), clock: new FixedClock(T0), entropy: new ScriptedEntropy([0]), broadcast: new BroadcastLog(storage) },
+      { storage, lock: new MemoryLock(), clock: new FixedClock(T0), entropy: new ScriptedEntropy([0]), broadcast: new BroadcastLog(storage), crypto: new NodeCrypto() },
       {
         config: DEFAULT_CONFIG,
+        rounds: { kind: 'live' },
         decorateSource: (live, rounds) => {
           holder.forced = new ForcedRoundSource(live, rounds);
           return holder.forced;

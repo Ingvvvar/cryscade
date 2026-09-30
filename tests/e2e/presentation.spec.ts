@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ShownRound } from '../../src/client/index.ts';
 import type { PresentationInfo, ScheduleSummary } from '../../src/ui/probe-api.ts';
-import { gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';
+import { gameCalls, gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 import { fixtureShown } from '../support/shown-rounds.ts';
 
@@ -83,7 +83,7 @@ test('фича на принудительном раунде: плашка жд
   // Часы стоят на точке удержания: через секунду — то же время, endRound не ушёл.
   await page.waitForTimeout(1000);
   expect((await presentation(page))?.clock).toBe(held?.clock);
-  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
   expect((await gameSnapshot(page)).balanceMinor).toBe(100_000 - BET);
   await page.keyboard.press('Space');
   await expect.poll(async () => (await presentation(page))?.clock ?? 0).toBeGreaterThan(held?.clock ?? 0);
@@ -146,7 +146,7 @@ test('пропуск во фриспине: два клика — к концу 
   const skipped = await clockNow(page);
   expect(skipped.clock, 'два клика — конец первого фриспина, а не раунда').toBe(unitStart(2));
   expect(skipped.finished).toBe(false);
-  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
   // Дальше показ идёт сам. В спине из двух групп клик — снова к концу группы: на старте спина счёт с нуля.
   const long = schedule.groups.find((group, k) => group.kind === 'fill' && group.unit >= 2 && schedule.groups[k + 1]?.unit === group.unit);
   if (long === undefined) throw new Error('нет фриспина из двух групп');
@@ -159,12 +159,12 @@ test('пропуск во фриспине: два клика — к концу 
   const late = await clockNow(page);
   expect(schedule.groups[late.group]?.kind, 'все фриспины показаны, идёт празднование').toBe('bigWin');
   expect(late.finished).toBe(false);
-  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
   await page.clock.resume();
   const after = await waitForState(page, 'idle');
   const done = await clockNow(page);
   expect([done.finished, done.clock]).toStrictEqual([true, schedule.durationMs]);
-  expect((await sentBodies(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play', 'endRound']);
+  expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play', 'endRound']);
   expect(after.balanceMinor).toBe(100_000 - BET + 3350);
   expect(problems).toEqual([]);
 });

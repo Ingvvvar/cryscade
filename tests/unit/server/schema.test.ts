@@ -24,22 +24,30 @@ const V1 = [
   'index keys.roundId keyPath=roundId unique=false',
   'store quarantine keyPath=null auto=true',
 ];
+/** Фаза 6: честность — состояние и секреты; раунды v1 остаются как есть. */
+const V2 = ['store fairness keyPath=id auto=false', 'store secrets keyPath=commitment auto=false'];
 
 describe('схема IndexedDB', () => {
-  it('БД cryscade версии 1', () => {
+  it('БД cryscade версии 2', () => {
     expect(DB_NAME).toBe('cryscade');
-    expect(DB_VERSION).toBe(1);
+    expect(DB_VERSION).toBe(2);
   });
 
   it('шаги миграций — версии по порядку с единицы, последняя — DB_VERSION', () => {
-    expect(MIGRATIONS.map((migration) => migration.version)).toStrictEqual([1]);
+    expect(MIGRATIONS.map((migration) => migration.version)).toStrictEqual([1, 2]);
     expect(MIGRATIONS.at(-1)?.version).toBe(DB_VERSION);
   });
 
-  it('с нуля: хранилища и индексы версии 1', () => {
+  it('с нуля: хранилища и индексы версий 1 и 2', () => {
     const target = new RecordingTarget();
     migrate(target, 0);
-    expect(target.calls).toStrictEqual(V1);
+    expect(target.calls).toStrictEqual([...V1, ...V2]);
+  });
+
+  it('с версии 1 — только шаг версии 2: хранилища честности; данные v1 не трогаются', () => {
+    const target = new RecordingTarget();
+    migrate(target, 1);
+    expect(target.calls).toStrictEqual(V2);
   });
 
   it('с каждой версии до последней — только недостающие шаги', () => {
@@ -49,7 +57,7 @@ describe('схема IndexedDB', () => {
   });
 
   it.each([
-    ['версия выше нашей — игрок откатился на старую сборку', 2],
+    ['версия выше нашей — игрок откатился на старую сборку', 3],
     ['отрицательная', -1],
     ['дробная', 0.5],
   ])('%s: RangeError', (_what, from) => {

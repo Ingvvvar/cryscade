@@ -95,6 +95,7 @@ export class GameController {
   #snapshot: ControllerSnapshot;
   #draining = false;
   #disposed = false;
+  #bookRequested = false;
   /** Хранилище сервера в памяти: вкладки независимы — замок свой, оповещения других вкладок не про наш кошелёк. */
   #volatile = false;
   /** Хранилище чинилось — баланс восстановлен до 1000. */
@@ -177,6 +178,17 @@ export class GameController {
   /** «Поповнити»: баланс снова 1000. */
   refill(): void {
     this.#dispatch({ type: 'refill' });
+  }
+
+  /**
+   * Книга исходов — загрузить заранее (§5, фаза 6): корень композиции зовёт это после первого кадра сцены, чтобы первый
+   * спин её не ждал. Один раз за жизнь контроллера; исход не важен — play всё равно дождётся книги, а сбой загрузки
+   * сервер переживает: следующий запрос качает её заново.
+   */
+  prefetchBook(): void {
+    if (this.#bookRequested || this.#disposed) return;
+    this.#bookRequested = true;
+    void this.#rgs.call({ type: 'loadBook' });
   }
 
   betUp(): void {

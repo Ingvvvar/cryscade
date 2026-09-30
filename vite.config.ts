@@ -1,6 +1,22 @@
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { defineConfig, type Plugin, type Rolldown, type UserConfig } from 'vite';
+import { BOOK_DIR, bookIdentity, findBook } from './tools/books/files.ts';
 import { BundleBudget, INITIAL_JS_BUDGET, type BudgetChunk } from './tools/bundle-budget.ts';
+
+/**
+ * Книга исходов (§5, фаза 6): эталон для воркера — SHA-256 несжатых байт, посчитанный здесь из самого файла, а не
+ * прочитанный из манифеста рядом; имя файла обязано нести этот хеш — иначе кэш после деплоя отдал бы старую книгу.
+ */
+function bookDefines(): Record<string, string> {
+  const file = findBook();
+  const sha256 = bookIdentity(file, gunzipSync(readFileSync(`${BOOK_DIR}/${file}`)));
+  return {
+    'import.meta.env.CRYSCADE_BOOK_FILE': JSON.stringify(file),
+    'import.meta.env.CRYSCADE_BOOK_SHA256': JSON.stringify(sha256),
+  };
+}
 
 function chunksOf(bundle: Rolldown.OutputBundle): Map<string, BudgetChunk> {
   const chunks = new Map<string, BudgetChunk>();
@@ -65,6 +81,7 @@ export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig 
         ];
   return {
     base: '/cryscade/',
+    define: bookDefines(),
     plugins: [react(), ...inject, budget.main],
     worker: { plugins: budget.worker },
     // Порог Vite на размер чанка снят: гейт — бюджет начального JS выше.

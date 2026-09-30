@@ -98,6 +98,12 @@ async function mount(): Promise<void> {
         preferences={preferences}
         money={money}
         reload={reload}
+        onSceneReady={() => {
+          // Книга исходов — после первого кадра (§5): кадр на следующем тике, запрос — после него.
+          requestAnimationFrame(() => {
+            controller.prefetchBook();
+          });
+        }}
       />
     </StrictMode>,
   );

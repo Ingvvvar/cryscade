@@ -6,6 +6,12 @@ import type { ControllerSnapshot } from '../../src/client/index.ts';
 import type { SentBody } from '../../src/ui/probe-api.ts';
 import type { ProbeWindow } from './page-probe.ts';
 
+/** Пустая страница того же origin — чтобы готовить IndexedDB до запуска игры. */
+export async function blankOnOrigin(page: Page): Promise<void> {
+  await page.route('**/cryscade/__blank', (route) => route.fulfill({ body: '<!doctype html><title>blank</title>', contentType: 'text/html' }));
+  await page.goto('./__blank');
+}
+
 export async function gameSnapshot(page: Page): Promise<ControllerSnapshot> {
   const snapshot = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.game() ?? null);
   if (snapshot === null) throw new Error('зонд не видит игру');
@@ -85,6 +91,11 @@ export async function shownRounds(page: Page): Promise<string[]> {
 /** Тела запросов, ушедших в воркер после лаборатории сети: что на самом деле дошло до сервера. */
 export async function sentBodies(page: Page): Promise<SentBody[]> {
   return page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.sent() ?? []);
+}
+
+/** Запросы игры — без предзагрузки книги: её страница шлёт сама после первого кадра сцены (фаза 6). */
+export async function gameCalls(page: Page): Promise<SentBody[]> {
+  return (await sentBodies(page)).filter((body) => body.type !== 'loadBook');
 }
 
 type LabAction = 'loseNextResponse' | 'reloadMidNextRound' | 'holdNextEndRound' | 'releaseHeld';

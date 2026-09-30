@@ -14,6 +14,7 @@ import {
 import { fixtureRound } from '../../support/fixture-rounds.ts';
 import { FixedClock, Rig, ScriptedEntropy, T0, plant } from '../../support/rgs-rig.ts';
 import { verifyRound } from '../../support/round-model.ts';
+import { NodeCrypto } from '../../support/node-crypto.ts';
 
 // Правила сервера §6.2 литералами. Сиды — из фикстур, их итоги известны: 1 → 0, 0 → 95, 2 → 190, 512 → 285,
 // 48 → 3350. Выигрыш посчитан вручную: floor(ставка × payX100 / 100).
@@ -24,7 +25,7 @@ const BASE = fixtureRound('base-win');
 const CASCADE = fixtureRound('cascade-3');
 const FEATURE = fixtureRound('feature-start');
 
-const EMPTY = { wallet: [], rounds: [], keys: [], quarantine: [] };
+const EMPTY = { wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] };
 const BET_LEVELS = [20, 40, 100, 200, 400, 1000, 2000, 5000, 10000];
 
 const firstGrid = (events: typeof FEATURE.events): readonly number[] => {
@@ -50,6 +51,7 @@ describe('новый кошелёк', () => {
         idleGrid: firstGrid(FEATURE.events),
         notice: null,
         wallet: { balanceMinor: 100_000, revision: 0, notice: null },
+        fairness: null,
       },
     });
     expect(rig.storage.snapshot()).toStrictEqual(EMPTY);
@@ -69,7 +71,7 @@ describe('play и endRound', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 1, notice: null },
       },
@@ -93,6 +95,8 @@ describe('play и endRound', () => {
       rounds: [['r1', active]],
       keys: [['k1', { key: 'k1', roundId: 'r1', betMinor: 100 }]],
       quarantine: [],
+      fairness: [],
+      secrets: [],
     });
 
     expect(await rig.send(endRound('r1'))).toStrictEqual({
@@ -104,6 +108,8 @@ describe('play и endRound', () => {
       rounds: [['r1', { ...active, status: 'closed', balanceAfterEnd: 99_995 }]],
       keys: [['k1', { key: 'k1', roundId: 'r1', betMinor: 100 }]],
       quarantine: [],
+      fairness: [],
+      secrets: [],
     });
     expect(rig.broadcast.messages).toStrictEqual([
       { v: 1, type: 'walletChanged', balanceMinor: 99_900, activeRoundId: 'r1', revision: 1, notice: null },
@@ -175,7 +181,7 @@ describe('идемпотентность', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+        round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_995, revision: 2, notice: null },
       },
@@ -345,10 +351,11 @@ describe('authenticate', () => {
       result: {
         balanceMinor: 99_895,
         config: { betLevelsMinor: BET_LEVELS, capX100: 500_000 },
-        activeRound: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events },
+        activeRound: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events, source: 'live', bookIndex: null, nonce: null },
         idleGrid: verifyRound(DEFAULT_CONFIG, SMALL.events).finalGrid,
         notice: null,
         wallet: { balanceMinor: 99_895, revision: 3, notice: null },
+        fairness: null,
       },
     });
   });
@@ -423,7 +430,7 @@ describe('сбои записи', () => {
     expect(await rig.send(play(100, 'k1'))).toStrictEqual({
       ok: true,
       result: {
-        round: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events },
+        round: { roundId: 'r2', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events, source: 'live', bookIndex: null, nonce: null },
         balanceMinor: 99_900,
         wallet: { balanceMinor: 99_900, revision: 1, notice: null },
       },
@@ -454,8 +461,9 @@ describe('сбои записи', () => {
             throw new Error('канал закрыт');
           },
         },
+        crypto: new NodeCrypto(),
       },
-      { config: DEFAULT_CONFIG },
+      { config: DEFAULT_CONFIG, rounds: { kind: 'live' } },
     );
     const response = await server.handle({ v: 1, id: 1, body: play(100, 'k1') });
     expect(response.body.ok).toBe(true);

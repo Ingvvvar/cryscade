@@ -10,32 +10,47 @@ import {
   responseEnvelope,
   type AuthenticateResult,
   type BalanceResult,
+  type FairnessView,
+  type HistoryEntry,
+  type HistoryResult,
+  type LoadBookResult,
   type PlayResult,
   type ProtocolError,
+  type ReplayResult,
   type RequestBody,
   type ResponseBody,
   type ResponseEnvelope,
   type RoundView,
+  type SeedResult,
   type WalletView,
 } from '../protocol/index.ts';
+import type { Book } from './book.ts';
+import { fromHex, toHex } from './fairness.ts';
 import { COMMIT_ATTEMPTS, DEMO_SEED, HISTORY_LIMIT, SERVER_MAX_REQUESTS } from './limits.ts';
-import type { Broadcast, Clock, Entropy, Lock, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
+import type { BookLoader, Broadcast, Clock, Crypto, Entropy, Lock, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
 import {
   RECORD_LIMIT,
   RESUME_LIMIT,
+  checkFairness,
   checkKey,
   checkRound,
+  checkSecret,
   checkWallet,
+  fairnessOf,
   isWallet,
+  type FairnessRecord,
   type KeyRecord,
   type QuarantineRecord,
   type RoundCore,
   type RoundRecord,
+  type SecretRecord,
   type WalletRecord,
 } from './records.ts';
 import {
+  FairnessRepository,
   IdempotencyRepository,
   RoundRepository,
+  SecretRepository,
   WalletRepository,
   type LatestRound,
   type Read,
@@ -43,8 +58,8 @@ import {
   type SeqScan,
   type StrayRound,
 } from './repositories.ts';
-import { LiveRoundSource, type RoundSource } from './round-source.ts';
-import { WALLET_ID } from './schema.ts';
+import { BookRoundSource, LiveRoundSource, type FairnessContext, type RoundSource } from './round-source.ts';
+import { FAIRNESS_ID, WALLET_ID } from './schema.ts';
 import { SeededRounds } from './seeded-rounds.ts';
 
 /** Все изменения кошелька — под этим замком (§6.3): у всех вкладок один писатель. */
@@ -56,24 +71,44 @@ export interface RgsServerPorts {
   readonly clock: Clock;
   readonly entropy: Entropy;
   readonly broadcast: Broadcast;
+  readonly crypto: Crypto;
 }
+
+/**
+ * Источник раундов сервера. Книга (§5, §7) — в игре: раунд выбирается по HMAC, у кошелька есть честность. Живой ГСЧ —
+ * только тесты сервера и клиента: без честности (fairness в authenticate — null, смена сида — BAD_REQUEST).
+ * Умолчания нет: корень композиции называет источник сам.
+ */
+export type RoundsOption = { readonly kind: 'book'; readonly loader: BookLoader } | { readonly kind: 'live' };
 
 export interface RgsServerOptions {
   readonly config: GameConfig;
+  readonly rounds: RoundsOption;
   /** Порог сторожа; по умолчанию SERVER_MAX_REQUESTS. */
   readonly maxRequests?: number;
-  /** Декоратор источника раундов (Strategy, §3): принудительный раунд dev и e2e. По умолчанию — живой источник как есть. */
-  readonly decorateSource?: (live: RoundSource, rounds: SeededRounds) => RoundSource;
+  /** Декоратор источника раундов (Strategy, §3): принудительный раунд dev и e2e. По умолчанию — источник как есть. */
+  readonly decorateSource?: (inner: RoundSource, rounds: SeededRounds) => RoundSource;
 }
 
-/** Состояние под замком: кошелёк прошёл гард или починен, активный раунд цел и сходится с кошельком. */
-interface Loaded {
+/** Честность под замком: запись и её текущий секрет — цел, не раскрыт, и его SHA-256 — это обязательство. */
+interface Fairness {
+  readonly record: FairnessRecord;
+  readonly secret: SecretRecord;
+}
+
+/** Кошелёк под замком: прошёл гард или починен, активный раунд цел и сходится с кошельком. */
+interface LoadedWallet {
   readonly wallet: WalletRecord;
   /** Кошелёк лежит в хранилище. Нет — первый запуск, и условие записи — пустое место. */
   readonly stored: boolean;
   readonly active: RoundRecord | null;
   /** В этом вызове хранилище чинилось: баланс восстановлен до 1000. */
   readonly repaired: boolean;
+}
+
+/** Состояние под замком: кошелёк и, у книги, честность; null — источник без честности. */
+interface Loaded extends LoadedWallet {
+  readonly fairness: Fairness | null;
 }
 
 /** Кошелёк изменился между чтением и записью: транзакция отменена, операция начинается заново. */
@@ -94,7 +129,13 @@ function messageOf(error: unknown): string {
 }
 
 function viewOf(round: RoundRecord): RoundView {
-  return { roundId: round.roundId, betMinor: round.betMinor, payX100: round.payX100, winMinor: round.winMinor, events: round.events };
+  const { source, bookIndex, nonce } = fairnessOf(round);
+  return { roundId: round.roundId, betMinor: round.betMinor, payX100: round.payX100, winMinor: round.winMinor, events: round.events, source, bookIndex, nonce };
+}
+
+function fairnessView(fairness: Fairness): FairnessView {
+  const { commitment, clientSeed, nonce } = fairness.record;
+  return { commitment, clientSeed, nonce };
 }
 
 /** Кошелёк в ответе — прочитанный под замком или только что записанный: по revision клиент упорядочивает ответы с оповещениями. */
@@ -112,7 +153,7 @@ function freshWallet(): WalletRecord {
 }
 
 /** Условие CAS: кошелёк в хранилище тот же, что прочитан под замком. */
-function unchanged(state: Loaded): (stored: unknown) => boolean {
+function unchanged(state: LoadedWallet): (stored: unknown) => boolean {
   if (!state.stored) return (stored) => stored === undefined;
   const { revision } = state.wallet;
   return (stored) => isWallet(stored) && stored.revision === revision;
@@ -136,10 +177,17 @@ function ownProblem(op: WriteOp): string | null {
       return checkRound(op.value);
     case 'keys':
       return checkKey(op.value);
+    case 'fairness':
+      return checkFairness(op.value);
+    case 'secrets':
+      return checkSecret(op.value);
     case 'quarantine':
       return null;
   }
 }
+
+/** Ставка повтора записи книги: запись ставки не знает — 1.00, выигрыш = payX100 (§6.1). */
+const REPLAY_BET_MINOR = 100;
 
 /**
  * RGS (§6): кошелёк, раунды, идемпотентность — на портах. Каждый запрос — под замком кошелька; порядок в play:
@@ -153,12 +201,20 @@ export class RgsServer {
   readonly #clock: Clock;
   readonly #entropy: Entropy;
   readonly #broadcast: Broadcast;
+  readonly #crypto: Crypto;
   readonly #config: GameConfig;
   readonly #wallets: WalletRepository;
   readonly #rounds: RoundRepository;
   readonly #keys: IdempotencyRepository;
+  readonly #fairness: FairnessRepository;
+  readonly #secrets: SecretRepository;
   readonly #seeded: SeededRounds;
   readonly #source: RoundSource;
+  /** Загрузчик книги; null — живой источник без честности. */
+  readonly #bookLoader: BookLoader | null;
+  /** Загрузка в пути; сбой её сбрасывает — следующий запрос грузит заново. */
+  #bookLoading: Promise<Book> | null = null;
+  #book: Book | null = null;
   /** Наибольший выигрыш одного спина — наибольшая ставка на кап: запас баланса до границы записей. */
   readonly #maxWin: number;
 
@@ -168,13 +224,18 @@ export class RgsServer {
     this.#clock = ports.clock;
     this.#entropy = ports.entropy;
     this.#broadcast = ports.broadcast;
+    this.#crypto = ports.crypto;
     this.#config = options.config;
     this.#wallets = new WalletRepository(ports.storage);
     this.#rounds = new RoundRepository(ports.storage);
     this.#keys = new IdempotencyRepository(ports.storage);
+    this.#fairness = new FairnessRepository(ports.storage);
+    this.#secrets = new SecretRepository(ports.storage);
     this.#seeded = new SeededRounds(options.config, options.maxRequests ?? SERVER_MAX_REQUESTS);
-    const live = new LiveRoundSource(ports.entropy, this.#seeded);
-    this.#source = options.decorateSource?.(live, this.#seeded) ?? live;
+    this.#bookLoader = options.rounds.kind === 'book' ? options.rounds.loader : null;
+    const inner: RoundSource =
+      options.rounds.kind === 'book' ? new BookRoundSource(() => this.#loadedBook(), ports.crypto, this.#seeded) : new LiveRoundSource(ports.entropy, this.#seeded);
+    this.#source = options.decorateSource?.(inner, this.#seeded) ?? inner;
     this.#maxWin = this.#price(Math.max(...BET_LEVELS_MINOR), options.config.capX100);
   }
 
@@ -184,6 +245,12 @@ export class RgsServer {
     if (!request.ok) return responseEnvelope(request.id, fail(request.error));
     const { id, body } = request;
     if (body.type === 'play' && !isBetLevel(body.betMinor)) return responseEnvelope(id, fail({ code: 'INVALID_BET', betMinor: body.betMinor }));
+    // Книга — до замка кошелька (§5, фаза 6): замок не держится, пока она качается. Не загрузилась — INTERNAL,
+    // следующий запрос грузит заново.
+    if (this.#bookLoader !== null && (body.type === 'play' || body.type === 'loadBook' || (body.type === 'replay' && 'book' in body))) {
+      const problem = await this.#ensureBook(this.#bookLoader);
+      if (problem !== null) return responseEnvelope(id, fail({ code: 'INTERNAL', message: problem }));
+    }
     let response: ResponseBody;
     try {
       response = await this.#lock.withLock(WALLET_LOCK, () => this.#serve(body));
@@ -213,7 +280,40 @@ export class RgsServer {
         return this.#endRound(body.roundId);
       case 'resetBalance':
         return this.#resetBalance();
+      case 'setClientSeed':
+        return this.#changeSeed(body.clientSeed);
+      case 'rotateSeed':
+        return this.#changeSeed(null);
+      case 'history':
+        return this.#history(body.limit);
+      case 'replay':
+        return 'round' in body ? this.#replayRound(body.round) : this.#replayBook(body.book);
+      case 'loadBook':
+        return Promise.resolve(this.#bookSize());
     }
+  }
+
+  /** Книга загружена и сверена; null — готово, иначе понятный текст ошибки. Один запрос на всех ждущих. */
+  async #ensureBook(loader: BookLoader): Promise<string | null> {
+    if (this.#book !== null) return null;
+    this.#bookLoading ??= loader.load();
+    try {
+      this.#book = await this.#bookLoading;
+      return null;
+    } catch (error) {
+      this.#bookLoading = null;
+      return `книга исходов не загрузилась: ${messageOf(error)}`;
+    }
+  }
+
+  #loadedBook(): Book {
+    if (this.#book === null) throw new Error('книга исходов не загружена');
+    return this.#book;
+  }
+
+  #bookSize(): ResponseBody<LoadBookResult> {
+    if (this.#bookLoader === null) return fail({ code: 'BAD_REQUEST', message: 'книги нет: источник раундов — живой' });
+    return ok({ records: this.#loadedBook().size });
   }
 
   async #authenticate(): Promise<ResponseBody<AuthenticateResult>> {
@@ -225,6 +325,7 @@ export class RgsServer {
       idleGrid: await this.#idleGrid(),
       notice: !this.#storage.durable ? 'volatile' : state.repaired ? 'reset' : null,
       wallet: walletView(state.wallet, state.repaired),
+      fairness: state.fairness === null ? null : fairnessView(state.fairness),
     });
   }
 
@@ -239,8 +340,12 @@ export class RgsServer {
     const { wallet } = state;
     if (wallet.balanceMinor < betMinor) return fail({ code: 'INSUFFICIENT_FUNDS', balanceMinor: wallet.balanceMinor });
 
-    // Энтропия и движок — до транзакции: сработавший сторож не оставляет ни одной записи.
-    const draw = this.#source.draw();
+    // Энтропия, HMAC и движок — до транзакции: сработавший сторож не оставляет ни одной записи, а транзакция IndexedDB
+    // не ждёт криптографию.
+    const fairness = state.fairness;
+    const context: FairnessContext | null =
+      fairness === null ? null : { secret: fairness.secret.secret, commitment: fairness.record.commitment, clientSeed: fairness.record.clientSeed, nonce: fairness.record.nonce };
+    const draw = await this.#source.draw(context);
     const seq = wallet.nextSeq;
     const at = this.#clock.now();
     const round: RoundRecord = {
@@ -256,8 +361,13 @@ export class RgsServer {
       status: 'active',
       balanceAfterBet: wallet.balanceMinor - betMinor,
       balanceAfterEnd: null,
+      // Живой раунд пишется формой v1 — без полей честности: такой раунд гард и история читают как live.
+      ...(draw.fairness.source === 'live' ? {} : draw.fairness),
     };
     const keyRecord: KeyRecord = { key, roundId: round.roundId, betMinor };
+    // nonce растёт ровно на один за раунд книги — в той же транзакции, что списание и запись раунда (§7).
+    const nonceOps: WriteOp[] =
+      draw.fairness.source === 'book' && fairness !== null ? [{ op: 'put', store: 'fairness', value: { ...fairness.record, nonce: fairness.record.nonce + 1 } }] : [];
     // Испорченная запись ключа без своего раунда ничего не защищает: уходит в карантин, на её место — новая.
     const keyOps: WriteOp[] =
       known.kind === 'damaged'
@@ -279,6 +389,7 @@ export class RgsServer {
       [
         { op: 'add', store: 'rounds', value: round },
         ...keyOps,
+        ...nonceOps,
         ...evicted.map((roundId): WriteOp => ({ op: 'delete', store: 'rounds', key: roundId })),
         ...evictedKeys.map((stale): WriteOp => ({ op: 'delete', store: 'keys', key: stale })),
       ],
@@ -326,6 +437,69 @@ export class RgsServer {
     return fail({ code: 'ROUND_NOT_FOUND', roundId });
   }
 
+  /**
+   * Смена сида игрока (clientSeed) или только секрета (null): прежний секрет раскрыт, новое обязательство, nonce с нуля
+   * (§7). Активный раунд — ROUND_ACTIVE: его nonce уже записан под прежним секретом. Запись — как любая: ревизия
+   * кошелька + 1, CAS по ней.
+   */
+  async #changeSeed(clientSeed: string | null): Promise<ResponseBody<SeedResult>> {
+    const state = await this.#load();
+    const { fairness, active, wallet } = state;
+    if (fairness === null) return fail({ code: 'BAD_REQUEST', message: 'честности нет: источник раундов — живой' });
+    if (active !== null) return fail({ code: 'ROUND_ACTIVE', roundId: active.roundId });
+    const at = this.#clock.now();
+    const fresh = await this.#newSecret(at);
+    const record: FairnessRecord = { id: FAIRNESS_ID, commitment: fresh.commitment, clientSeed: clientSeed ?? fairness.record.clientSeed, nonce: 0 };
+    const next: WalletRecord = { ...wallet, revision: wallet.revision + 1 };
+    await this.#commit(unchanged(state), next, [
+      { op: 'put', store: 'secrets', value: { ...fairness.secret, revealedAt: at } satisfies SecretRecord },
+      { op: 'add', store: 'secrets', value: fresh },
+      { op: 'put', store: 'fairness', value: record },
+    ]);
+    return ok({ fairness: fairnessView({ record, secret: fresh }), revealed: { commitment: fairness.secret.commitment, secret: fairness.secret.secret } });
+  }
+
+  /** Последние раунды, новые первыми: деньги, происхождение, раскрытый секрет. Испорченные — пропускаются. */
+  async #history(limit: number): Promise<ResponseBody<HistoryResult>> {
+    const rounds: HistoryEntry[] = [];
+    for (const { read } of await this.#rounds.latest(Math.min(limit, HISTORY_LIMIT))) {
+      if (read.kind !== 'ok') continue;
+      const round = read.value;
+      const fairness = fairnessOf(round);
+      const secret = fairness.commitment === null ? null : await this.#secrets.read(fairness.commitment);
+      rounds.push({
+        roundId: round.roundId,
+        createdAt: round.createdAt,
+        betMinor: round.betMinor,
+        payX100: round.payX100,
+        winMinor: round.winMinor,
+        status: round.status,
+        ...fairness,
+        secret: secret?.kind === 'ok' && secret.value.revealedAt !== null ? secret.value.secret : null,
+      });
+    }
+    return ok({ rounds });
+  }
+
+  /** Повтор раунда из своей истории: события и деньги записи, без движения денег. */
+  async #replayRound(roundId: string): Promise<ResponseBody<ReplayResult>> {
+    const round = this.#usable(await this.#rounds.read(roundId));
+    if (round === null) return fail({ code: 'ROUND_NOT_FOUND', roundId });
+    return ok({ roundId, bookIndex: null, betMinor: round.betMinor, payX100: round.payX100, winMinor: round.winMinor, events: round.events });
+  }
+
+  /** Повтор записи книги в любом браузере: движок по её сиду; ставка — 1.00. */
+  #replayBook(index: number): Promise<ResponseBody<ReplayResult>> {
+    if (this.#bookLoader === null) return Promise.resolve(fail({ code: 'BAD_REQUEST', message: 'книги нет: источник раундов — живой' }));
+    const book = this.#loadedBook();
+    if (index >= book.size) return Promise.resolve(fail({ code: 'BAD_REQUEST', message: `индекс книги ${String(index)} вне 0…${String(book.size - 1)}` }));
+    const record = book.record(index);
+    const played = this.#seeded.play(record.seed);
+    if (played.payX100 !== record.payX100) throw new Error(`книга и движок разошлись: запись ${String(index)}`);
+    const won = this.#price(REPLAY_BET_MINOR, played.payX100);
+    return Promise.resolve(ok({ roundId: null, bookIndex: index, betMinor: REPLAY_BET_MINOR, payX100: played.payX100, winMinor: won, events: played.events }));
+  }
+
   async #resetBalance(): Promise<ResponseBody<BalanceResult>> {
     const state = await this.#load();
     const { wallet, active } = state;
@@ -340,6 +514,48 @@ export class RgsServer {
    * чинится здесь же, отдельной транзакцией, до самой операции.
    */
   async #load(): Promise<Loaded> {
+    const wallet = await this.#loadWallet();
+    return this.#bookLoader === null ? { ...wallet, fairness: null } : this.#loadFairness(wallet);
+  }
+
+  /**
+   * Честность под замком (§7): запись цела, её секрет цел, не раскрыт и даёт обязательство, у nonce есть запас. Нет или
+   * испорчено — новый секрет и nonce 0 (сид игрока — прежний, если цел), испорченное — в карантин; записано одной
+   * транзакцией с ревизией кошелька + 1 — дальше запрос идёт от записанного кошелька. Раунды со старым обязательством
+   * остаются в истории, секрет — если был цел.
+   */
+  async #loadFairness(state: LoadedWallet): Promise<Loaded> {
+    const read = await this.#fairness.read();
+    const secretRead = read.kind === 'ok' ? await this.#secrets.read(read.value.commitment) : null;
+    if (read.kind === 'ok' && secretRead?.kind === 'ok') {
+      const secret = secretRead.value;
+      const whole = secret.revealedAt === null && (await this.#commitmentOf(secret.secret)) === read.value.commitment && read.value.nonce + 1 <= RECORD_LIMIT;
+      if (whole) return { ...state, fairness: { record: read.value, secret } };
+    }
+    const at = this.#clock.now();
+    const ops: WriteOp[] = [];
+    if (read.kind === 'damaged') ops.push(quarantined('fairness', read.raw, read.reason, at));
+    if (secretRead?.kind === 'damaged') ops.push(quarantined('secrets', secretRead.raw, secretRead.reason, at));
+    const fresh = await this.#newSecret(at);
+    const clientSeed = read.kind === 'ok' ? read.value.clientSeed : toHex(this.#entropy.bytes(8));
+    const record: FairnessRecord = { id: FAIRNESS_ID, commitment: fresh.commitment, clientSeed, nonce: 0 };
+    ops.push({ op: 'put', store: 'secrets', value: fresh }, { op: 'put', store: 'fairness', value: record });
+    const next: WalletRecord = { ...state.wallet, revision: state.wallet.revision + 1 };
+    await this.#commit(unchanged(state), next, ops);
+    return { ...state, wallet: next, stored: true, fairness: { record, secret: fresh } };
+  }
+
+  /** Новый секрет — 32 криптостойких байта; обязательство — SHA-256 в hex. */
+  async #newSecret(at: number): Promise<SecretRecord> {
+    const secret = toHex(this.#entropy.bytes(32));
+    return { commitment: await this.#commitmentOf(secret), secret, createdAt: at, revealedAt: null };
+  }
+
+  async #commitmentOf(secret: string): Promise<string> {
+    return toHex(await this.#crypto.sha256(fromHex(secret)));
+  }
+
+  async #loadWallet(): Promise<LoadedWallet> {
     const [walletRead, scan] = await Promise.all([this.#wallets.read(), this.#rounds.descend()]);
     if (walletRead.kind === 'absent' && scan.newest === null && scan.above.length === 0) {
       return { wallet: freshWallet(), stored: false, active: null, repaired: false };
@@ -389,7 +605,7 @@ export class RgsServer {
     drop: { readonly key: StoreKey; readonly read: RoundRead } | null,
     scan: SeqScan,
     reason: string,
-  ): Promise<Loaded> {
+  ): Promise<LoadedWallet> {
     const at = this.#clock.now();
     const ops: WriteOp[] = [];
     if (walletRead.kind === 'damaged') ops.push(quarantined('wallet', walletRead.raw, reason, at));

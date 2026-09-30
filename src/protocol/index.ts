@@ -10,8 +10,9 @@ export {
   type RequestEnvelope,
   type ResponseEnvelope,
 } from './envelope.ts';
-export { isAscendingInts, isIntIn, isNat, isPositive, isRecord, isToken } from './guards.ts';
+export { isAscendingInts, isClientSeed, isHex64, isIntIn, isNat, isPositive, isRecord, isToken } from './guards.ts';
 export {
+  BOOK_RECORDS_MAX,
   checkError,
   checkRequestBody,
   checkResult,
@@ -20,13 +21,20 @@ export {
   type BalanceResult,
   type ClientConfig,
   type ErrorCode,
+  type FairnessView,
+  type HistoryEntry,
+  type HistoryResult,
+  type LoadBookResult,
   type PlayResult,
   type ProtocolError,
+  type ReplayResult,
   type RequestBody,
   type RequestType,
   type ResponseBody,
   type Results,
+  type RoundOrigin,
   type RoundView,
+  type SeedResult,
   type StorageNotice,
   type WalletView,
 } from './messages.ts';

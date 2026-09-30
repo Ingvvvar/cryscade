@@ -1,3 +1,4 @@
+import { NodeCrypto, ScriptedBytes } from './node-crypto.ts';
 import fc from 'fast-check';
 import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import {
@@ -24,6 +25,7 @@ import {
 } from '../../src/server/index.ts';
 import { fixtureRound, type FixtureName } from './fixture-rounds.ts';
 import { FixedClock, T0 } from './rgs-rig.ts';
+import { ScriptedBookLoader, testBook } from './test-book.ts';
 
 // Property сверки кошелька (§14). Две вкладки — два RgsServer на общем хранилище и общем замке. Транспорт теряет
 // запрос, теряет ответ, дублирует запрос; fc.scheduler перемежает доставку, ответы, таймауты и каждое обращение
@@ -34,8 +36,10 @@ import { FixedClock, T0 } from './rgs-rig.ts';
 //   из фикстуры его сида, выигрыш — своей формулой, не winMinor;
 // - ключ → не больше одного раунда; активный — не больше одного, и на него указывает кошелёк;
 // - подтверждённые ответы совпадают с записями; ROUND_ACTIVE не отвечает на повтор собственного раунда;
-// - оповещения — по одному на запись, ревизии подряд; починки без порчи нет.
-// Вариант «замок подвёл»: замок без исключения — деньги держит CAS внутри транзакции.
+// - оповещения — по одному на запись, ревизии подряд; починки без порчи нет;
+// - честность (фаза 6): раунды — из книги; в пределах секрета nonce раундов — 0…n−1 без дыр и повторов, у текущего
+//   секрета следующий nonce — n. Вкладки меняют секрет (rotateSeed) — счёт с нуля под новым обязательством.
+// Вариант «замок подвёл»: замок без исключения — деньги и nonce держит CAS внутри транзакции.
 
 const START = 100_000;
 const ATTEMPTS = 5;
@@ -50,6 +54,17 @@ const SEEDED: ReadonlyMap<number, FixtureName> = new Map([
 ]);
 const RECORDED = new Map([...SEEDED].map(([seed, name]) => [seed, fixtureRound(name)] as const));
 
+/** Книга мира — те же сиды фикстур; проигрыш чаще, как в игре; фича (сид 48, 33.50×) редко — иначе баланс не кончается. */
+const WORLD_BOOK = testBook(
+  [
+    [1, 60],
+    [0, 10],
+    [2, 10],
+    [512, 5],
+    [48, 1],
+  ].map(([seed = 1, weight = 1]) => ({ seed, weight, payX100: RECORDED.get(seed)?.payX100 ?? 0 })),
+);
+
 /** Своя формула выигрыша — BigInt, мимо winMinor: floor(ставка × payX100 / 100). */
 const ownWin = (betMinor: number, payX100: number): number => Number((BigInt(betMinor) * BigInt(payX100)) / 100n);
 
@@ -59,13 +74,14 @@ type Intent =
   /** Крупная ставка подряд, пока не кончатся деньги, — путь INSUFFICIENT_FUNDS. */
   | { readonly kind: 'drain' }
   | { readonly kind: 'reset' }
-  | { readonly kind: 'restore' };
+  | { readonly kind: 'restore' }
+  /** Смена секрета: прежний раскрыт, nonce с нуля. */
+  | { readonly kind: 'rotate' };
 type Fault = 'deliver' | 'loseRequest' | 'loseResponse' | 'duplicate';
 
 interface TabPlan {
   readonly intents: readonly Intent[];
   readonly faults: readonly Fault[];
-  readonly seeds: readonly number[];
 }
 
 const BET = fc.constantFrom(20, 100, 1000, 10_000);
@@ -75,6 +91,7 @@ const INTENT: fc.Arbitrary<Intent> = fc.oneof(
   { weight: 1, arbitrary: fc.constant<Intent>({ kind: 'drain' }) },
   { weight: 1, arbitrary: fc.constant<Intent>({ kind: 'reset' }) },
   { weight: 1, arbitrary: fc.constant<Intent>({ kind: 'restore' }) },
+  { weight: 1, arbitrary: fc.constant<Intent>({ kind: 'rotate' }) },
 );
 const FAULT: fc.Arbitrary<Fault> = fc.oneof(
   { weight: 5, arbitrary: fc.constant<Fault>('deliver') },
@@ -85,8 +102,6 @@ const FAULT: fc.Arbitrary<Fault> = fc.oneof(
 const TAB: fc.Arbitrary<TabPlan> = fc.record({
   intents: fc.array(INTENT, { minLength: 1, maxLength: 20 }),
   faults: fc.array(FAULT, { maxLength: 40 }),
-  // Проигрыш чаще, как в игре; фича (сид 48, 33.50×) редко — иначе баланс не кончается.
-  seeds: fc.array(fc.constantFrom(1, 1, 1, 1, 1, 1, 0, 2, 512, 48), { minLength: 1, maxLength: 12 }),
 });
 
 interface WalletLike {
@@ -109,6 +124,9 @@ interface RoundLike {
   readonly status: string;
   readonly balanceAfterBet: number;
   readonly balanceAfterEnd: number | null;
+  readonly source?: string;
+  readonly nonce?: number | null;
+  readonly commitment?: string | null;
 }
 
 interface KeyLike {
@@ -116,8 +134,11 @@ interface KeyLike {
   readonly betMinor: number;
 }
 
-/** Сверка одного состояния хранилища: деньги, ключи, активный раунд, seq. Сиды раундов — из фикстур: 1, 0, 2, 512, 48. */
-export function audit(snapshot: StorageSnapshot): string[] {
+/**
+ * Сверка одного состояния хранилища: деньги, ключи, активный раунд, seq. Сиды раундов — из фикстур: 1, 0, 2, 512, 48.
+ * fairness — раунды из книги и nonce по секретам (мир кошелька); мир контроллеров крутит живой источник — без неё.
+ */
+export function audit(snapshot: StorageSnapshot, fairness: boolean): string[] {
   const wallet = snapshot.wallet[0]?.[1] as WalletLike | undefined;
   if (wallet === undefined) return snapshot.rounds.length > 0 ? ['раунды есть, кошелька нет'] : [];
   const problems: string[] = [];
@@ -157,6 +178,32 @@ export function audit(snapshot: StorageSnapshot): string[] {
   if (keys.size !== rounds.length) problems.push(`ключей ${String(keys.size)} на ${String(rounds.length)} раундов`);
   if (new Set(rounds.map((round) => round.seq)).size !== rounds.length) problems.push('seq повторяется');
   if (snapshot.quarantine.length > 0) problems.push('карантин не пуст: починка без порчи');
+  if (fairness) problems.push(...auditFairness(snapshot, rounds));
+  return problems;
+}
+
+/** Честность: все раунды — из книги; nonce под каждым обязательством — 0…n−1; у текущего следующий — n. */
+function auditFairness(snapshot: StorageSnapshot, rounds: readonly RoundLike[]): string[] {
+  const problems: string[] = [];
+  const byCommitment = new Map<string, number[]>();
+  for (const round of rounds) {
+    if (round.source !== 'book' || typeof round.nonce !== 'number' || typeof round.commitment !== 'string') {
+      problems.push(`${round.roundId}: раунд не из книги (${String(round.source)})`);
+      continue;
+    }
+    byCommitment.set(round.commitment, [...(byCommitment.get(round.commitment) ?? []), round.nonce]);
+  }
+  for (const [commitment, nonces] of byCommitment) {
+    const sorted = [...nonces].sort((a, b) => a - b);
+    if (sorted.some((nonce, index) => nonce !== index)) problems.push(`обязательство ${commitment.slice(0, 8)}: nonce ${JSON.stringify(sorted)} — не 0…n−1`);
+  }
+  const fairness = snapshot.fairness[0]?.[1] as { readonly commitment: string; readonly nonce: number } | undefined;
+  if (fairness !== undefined) {
+    const used = byCommitment.get(fairness.commitment)?.length ?? 0;
+    if (fairness.nonce !== used) problems.push(`следующий nonce ${String(fairness.nonce)}, раундов под текущим секретом ${String(used)}`);
+  } else if (rounds.length > 0) {
+    problems.push('раунды есть, честности нет');
+  }
   return problems;
 }
 
@@ -203,27 +250,29 @@ class ScheduledStorage implements Storage {
 }
 
 /** Сиды вкладки по кругу; id раундов — с буквой вкладки, чтобы не пересекаться. */
-class CyclingEntropy implements Entropy {
-  readonly #seeds: readonly number[];
+/** Энтропия вкладки: id раундов и байты секретов; сид раунда даёт книга, живого источника в мире нет. */
+class TabEntropy implements Entropy {
   readonly #prefix: string;
-  #next = 0;
   #rounds = 0;
+  readonly #bytes: ScriptedBytes;
 
-  constructor(seeds: readonly number[], prefix: string) {
-    this.#seeds = seeds;
+  constructor(prefix: string) {
     this.#prefix = prefix;
+    this.#bytes = new ScriptedBytes(prefix);
   }
 
   seed(): number {
-    const seed = this.#seeds[this.#next % this.#seeds.length] ?? 1;
-    this.#next += 1;
-    return seed;
+    throw new Error('мир кошелька: сид раунда даёт книга');
   }
 
   roundId(): string {
     this.#rounds += 1;
     return `${this.#prefix}${String(this.#rounds)}`;
   }
+  bytes(length: number): Uint8Array {
+    return this.#bytes.next(length);
+  }
+
 }
 
 /** Общий мир прогона: хранилище, журнал записей и оповещений, наблюдения вкладок, нарушения. */
@@ -237,7 +286,7 @@ class World implements Broadcast {
   readonly roundActive: { readonly key: string; readonly roundId: string }[] = [];
   /** Сколько раз сервер ответил ok на play с этим ключом — больше одного значит повтор нашёл свой раунд. */
   readonly playOks = new Map<string, number>();
-  readonly stats = { commits: 0, conflicts: 0, internal: 0, timeouts: 0, duplicates: 0, resets: 0, funds: 0, takeovers: 0, restored: 0 };
+  readonly stats = { commits: 0, conflicts: 0, internal: 0, timeouts: 0, duplicates: 0, resets: 0, funds: 0, takeovers: 0, restored: 0, rotations: 0 };
   #revision = 0;
 
   committed(outcome: CommitOutcome, snapshot: StorageSnapshot): void {
@@ -249,7 +298,7 @@ class World implements Broadcast {
     const revision = (snapshot.wallet[0]?.[1] as WalletLike | undefined)?.revision;
     if (revision !== this.#revision + 1) this.violations.push(`ревизия ${String(revision)} после ${String(this.#revision)}`);
     this.#revision = revision ?? this.#revision;
-    this.violations.push(...audit(snapshot).map((problem) => `после записи ${String(this.stats.commits)}: ${problem}`));
+    this.violations.push(...audit(snapshot, true).map((problem) => `после записи ${String(this.stats.commits)}: ${problem}`));
   }
 
   walletChanged(message: WalletChanged): void {
@@ -352,6 +401,12 @@ class Tab {
           else if (answer?.kind === 'error' && answer.error.code !== 'ROUND_ACTIVE') this.#violation(`resetBalance → ${answer.error.code}`);
           break;
         }
+        case 'rotate': {
+          const answer = await this.#call({ type: 'rotateSeed' });
+          if (answer?.kind === 'result') this.#world.stats.rotations += 1;
+          else if (answer?.kind === 'error' && answer.error.code !== 'ROUND_ACTIVE') this.#violation(`rotateSeed → ${answer.error.code}`);
+          break;
+        }
         case 'restore': {
           const answer = await this.#call({ type: 'authenticate' });
           if (answer?.kind === 'error') this.#violation(`authenticate → ${answer.error.code}`);
@@ -430,7 +485,7 @@ class Tab {
 /** Итоговые сверки: подтверждённые ответы против записей, ROUND_ACTIVE, оповещения. */
 function finalChecks(world: World, lockHolds: boolean): string[] {
   const snapshot = world.inner.snapshot();
-  const problems = audit(snapshot);
+  const problems = audit(snapshot, true);
   const rounds = new Map(snapshot.rounds.map(([id, value]) => [id, value as RoundLike] as const));
   for (const { key, bet, result } of world.confirmedPlays) {
     const round = rounds.get(result.round.roundId);
@@ -472,6 +527,7 @@ export interface Totals {
   takeovers: number;
   restored: number;
   resets: number;
+  rotations: number;
   funds: number;
   timeouts: number;
   duplicates: number;
@@ -488,8 +544,8 @@ export function walletProperty(lockHolds: boolean, totals: Totals): fc.IAsyncPro
     const lock: Lock = lockHolds ? new MemoryLock() : BROKEN_LOCK;
     const tab = (name: string, plan: TabPlan): Tab => {
       const server = new RgsServer(
-        { storage, lock, clock: new FixedClock(T0), entropy: new CyclingEntropy(plan.seeds, name), broadcast: world },
-        { config: DEFAULT_CONFIG },
+        { storage, lock, clock: new FixedClock(T0), entropy: new TabEntropy(name), broadcast: world, crypto: new NodeCrypto() },
+        { config: DEFAULT_CONFIG, rounds: { kind: 'book', loader: new ScriptedBookLoader(WORLD_BOOK) } },
       );
       return new Tab(name, new Wire(s, server, world, name), world, plan.faults);
     };
@@ -501,7 +557,7 @@ export function walletProperty(lockHolds: boolean, totals: Totals): fc.IAsyncPro
 
     const problems = [...world.violations, ...finalChecks(world, lockHolds)];
     totals.replays += [...world.playOks.values()].filter((count) => count > 1).length;
-    for (const name of ['takeovers', 'restored', 'resets', 'funds', 'timeouts', 'duplicates', 'conflicts', 'internal', 'commits'] as const) {
+    for (const name of ['takeovers', 'restored', 'resets', 'rotations', 'funds', 'timeouts', 'duplicates', 'conflicts', 'internal', 'commits'] as const) {
       totals[name] += world.stats[name];
     }
     if (problems.length > 0) throw new Error(problems.slice(0, 10).join('\n'));
@@ -513,6 +569,7 @@ export const zeroTotals = (): Totals => ({
   takeovers: 0,
   restored: 0,
   resets: 0,
+  rotations: 0,
   funds: 0,
   timeouts: 0,
   duplicates: 0,

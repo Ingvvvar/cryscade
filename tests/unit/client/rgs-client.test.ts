@@ -51,7 +51,7 @@ const SMALL = fixtureRound('small-win');
 const WALLET = { balanceMinor: 99_900, revision: 1, notice: null };
 const ENDED = { balanceMinor: 99_995, wallet: { balanceMinor: 99_995, revision: 2, notice: null } };
 const PLAYED = {
-  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events },
+  round: { roundId: 'r1', betMinor: 100, payX100: 95, winMinor: 95, events: SMALL.events, source: 'live', bookIndex: null, nonce: null },
   balanceMinor: 99_900,
   wallet: WALLET,
 };
