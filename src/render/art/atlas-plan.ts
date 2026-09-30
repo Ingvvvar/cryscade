@@ -13,8 +13,10 @@ export const ATLAS_PADDING = 2;
 export const GLOW_MARGIN = 14;
 /** Исходник рамки для NineSliceSprite: угол и край. */
 export const FRAME_SLICE = 64;
-/** Плашка числа множителя — NineSliceSprite по ширине числа: концы-полукруги по CHIP.cap. */
-export const CHIP = { width: 40, height: 20, cap: 10 } as const;
+/** Плашка числа множителя — NineSliceSprite по ширине числа: концы-полукруги по CHIP.cap. Под кегль числа 22 (§9). */
+export const CHIP = { width: 56, height: 28, cap: 14 } as const;
+/** Замок фриспинов в плашке: рисунок 12 × 14.5 ед. в этом масштабе — под кегль числа 22. */
+export const LOCK_SCALE = 1.25;
 /** Панель плашек фичи — NineSliceSprite: угол и край. */
 export const PANEL_SLICE = 96;
 export const PANEL_BORDER = 32;
@@ -95,7 +97,7 @@ export function atlasEntries(): AtlasEntry[] {
     { key: 'rim', width: CELL, height: CELL },
     { key: 'rim-iridescent', width: CELL, height: CELL },
     { key: 'chip', width: CHIP.width, height: CHIP.height },
-    { key: 'lock', width: 14, height: 16 },
+    { key: 'lock', width: 18, height: 20 },
     { key: 'panel', width: PANEL_SLICE, height: PANEL_SLICE },
   ];
 }

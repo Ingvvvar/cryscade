@@ -2,7 +2,7 @@
 // а сам зонд подключается динамическим импортом под условием сборки и в прод-бандл не попадает (§15, фаза 3).
 
 import type { Application, Container } from 'pixi.js';
-import type { Layout, Rect } from '../layout.ts';
+import type { ChipRect, Layout } from '../layout.ts';
 import type { RendererInfo } from '../renderer.ts';
 import type { CrystalAtlas } from './atlas.ts';
 
@@ -23,7 +23,7 @@ export interface InspectableScene {
   /** Символы, которых нет в шрифтах: null — надписи и числа самой сцены, иначе — эти строки шрифтом надписей. */
   missingGlyphs(texts: readonly string[] | null): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели: проверка читаемости меряет подложку мимо них. */
-  chipRects(): Rect[];
+  chipRects(): ChipRect[];
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
   /** Закрепить время декора (фон, блик рамки); null — снять. */

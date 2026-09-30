@@ -25,11 +25,21 @@ export function seedShown(seed: number, betMinor = 100): ShownRound {
 /**
  * Кадр точек: сетка grid и уровни точек levels (§4.7) на всех клетках. Не раунд движка — показ, который кончается ровно
  * этим полем: fill, один шаг каскада без выплаты, где spots ставит уровни, досыпка той же клетки, end без выигрыша.
+ * freeSpins — тот же кадр во фриспинах (точки «заперты», замок в плашке): перед ним спин с ядрами и фича на один спин.
  */
-export function spotRound(grid: readonly number[], levels: readonly number[]): ShownRound {
+export function spotRound(grid: readonly number[], levels: readonly number[], freeSpins = false): ShownRound {
   if (grid.length !== CELL_COUNT || levels.length !== CELL_COUNT) throw new RangeError('сетка и уровни — по 49 клеток');
   const cells = levels.flatMap((level, cell) => (level > 0 ? [cell] : []));
+  const feature: RoundEvent[] = freeSpins
+    ? [
+        { t: 'fill', grid: [...grid] },
+        { t: 'scatters', cells: [1, 2, 3] },
+        { t: 'fsStart', spins: 1 },
+        { t: 'fsSpin', index: 1, left: 0 },
+      ]
+    : [];
   const events: RoundEvent[] = [
+    ...feature,
     { t: 'fill', grid: [...grid] },
     { t: 'win', clusters: [{ symbol: grid[0] ?? 0, cells: [0], payX100: 0, mult: 1 }] },
     { t: 'explode', cells: [0] },

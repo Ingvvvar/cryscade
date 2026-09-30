@@ -11,6 +11,12 @@ export interface Rect {
   readonly height: number;
 }
 
+/** Плашка числа множителя на экране: сама плашка и её содержимое — замок и число (для зонда). */
+export interface ChipRect {
+  readonly plaque: Rect;
+  readonly content: Rect;
+}
+
 export interface Insets {
   readonly top: number;
   readonly right: number;

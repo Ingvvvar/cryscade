@@ -4,7 +4,7 @@
 
 import { RenderLayer, type Container } from 'pixi.js';
 import type { SceneState, Schedule } from '../../core/presentation/index.ts';
-import type { Design, Rect } from '../layout.ts';
+import type { ChipRect, Design } from '../layout.ts';
 import type { NumberCodes } from '../number-layout.ts';
 import type { SceneTexts } from '../renderer.ts';
 import type { CrystalAtlas } from './atlas.ts';
@@ -101,7 +101,7 @@ export class RoundView {
   }
 
   /** Видимые плашки чисел множителей, CSS-пиксели канваса. */
-  chipRects(): Rect[] {
+  chipRects(): ChipRect[] {
     return this.#chips.rects();
   }
 

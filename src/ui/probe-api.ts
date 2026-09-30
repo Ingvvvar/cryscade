@@ -2,7 +2,7 @@
 // Сам зонд — ui/probe.ts, только dev и e2e-сборка.
 
 import type { ControllerSnapshot, LabSettings, ShownRound } from '../client/index.ts';
-import type { Layout, Rect } from '../render/layout.ts';
+import type { ChipRect, Layout, Rect } from '../render/layout.ts';
 import type { RendererInfo } from '../render/renderer.ts';
 import type { ForcedName } from './forced-rounds.ts';
 
@@ -100,7 +100,7 @@ export interface CryscadeProbe {
   /** Символы, которых нет в шрифтах: без аргумента — надписи и числа самой сцены, иначе — эти строки шрифтом надписей. */
   missingGlyphs(texts?: string[]): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели. */
-  chipRects(): Rect[];
+  chipRects(): ChipRect[];
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
   /** Снимок контроллера игры; null — игра ещё не связана. */

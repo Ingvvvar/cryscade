@@ -10,6 +10,7 @@ import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer }
 import { SYMBOL_COUNT, type SymbolId } from '../../core/model/symbols.ts';
 import {
   CHIP,
+  LOCK_SCALE,
   PANEL_BORDER,
   atlasEntries,
   glowKey,
@@ -28,7 +29,7 @@ import { DISPERSION, PALETTE } from '../art/palette.ts';
 import { CELL, FRAME_BORDER } from '../layout.ts';
 
 /** Скругление подложки клетки и её отступ внутри клетки, единицы дизайна. */
-const BACKING_INSET = 3;
+export const BACKING_INSET = 3;
 const BACKING_RADIUS = 10;
 
 function drawBands(g: Graphics, bands: readonly Band[]): void {
@@ -296,7 +297,9 @@ export class CrystalAtlas {
     drawSpotRim(at('rim', bake));
     drawSpotRimIridescent(at('rim-iridescent', bake));
     drawChip(at('chip', bake));
-    drawLock(at('lock', bake));
+    const lock = at('lock', bake);
+    lock.scale.set(LOCK_SCALE);
+    drawLock(lock);
     drawPanel(at('panel', bake), this.texture('panel').frame.width);
     renderer.render({ container: bake, target: this.#texture, clear: true });
     this.#texture.source.updateMipmaps();

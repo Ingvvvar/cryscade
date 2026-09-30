@@ -4,7 +4,7 @@
 
 import { Sprite, Texture } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
-import { cellRect, toScreen, type Layout, type Rect } from '../layout.ts';
+import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../layout.ts';
 import type { RendererInfo } from '../renderer.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
 
@@ -80,7 +80,7 @@ export class SceneProbe implements SceneInspector {
     return this.#scene?.missingGlyphs(texts) ?? [];
   }
 
-  chipRects(): Rect[] {
+  chipRects(): ChipRect[] {
     return this.#scene?.chipRects() ?? [];
   }
 

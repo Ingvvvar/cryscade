@@ -160,7 +160,7 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
         return { cells: probe?.cells() ?? [], chips: probe?.chipRects() ?? [] };
       });
       expect(chips, 'плашка у каждой клетки с множителем').toHaveLength(49);
-      const exclude = chips.map((rect) => device(rect, dpr));
+      const exclude = chips.map((chip) => device(chip.plaque, dpr));
       const shot = await snapshot(page);
       writeFileSync(`${mkdir()}multipliers-${frame.name === 'Ядро' ? 'core' : 'symbols'}-${renderer}.png`, shot.png);
       // Контроль инструмента на этом кадре: символ цвета подложки не читается, белый — контрастнее.
@@ -194,6 +194,69 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     await context.close();
   });
 }
+
+// Плашки множителей (§9): кегль числа 22 ед., плашка — в пределах подложки своей клетки (отступ подложки 3 ед.), число и
+// замок — по ширине в пределах плашки; и обычная, и запертая во фриспинах. Ширина обычной — независимым счётом: сумма
+// ширин глифов Unbounded 700 из canvas страницы (так их меряет BitmapFont) × 22 / 64 плюс поля 2 × 7, не меньше 56.
+test('webgl: плашки множителей — кегль 22, в пределах подложки клетки, обычные и запертые', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  const page = await context.newPage();
+  const info = await openStill(page, '?renderer=webgl');
+  expect(info.name).toBe('webgl');
+  const layout = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.layout() ?? null);
+  if (layout === null) throw new Error('нет раскладки');
+  const unit = layout.scale;
+  const labels = LEVELS.map((level) => `×${String(2 ** (level - 1))}`);
+  const advance = await page.evaluate((texts) => {
+    const context2d = document.createElement('canvas').getContext('2d');
+    if (context2d === null) throw new Error('нет canvas 2d');
+    context2d.font = '700 64px "Unbounded Variable"';
+    return texts.map((text) => Array.from(text).reduce((sum, char) => sum + context2d.measureText(char).width, 0));
+  }, labels);
+  const grid = Array.from({ length: 49 }, (_, cell) => cell % 7);
+  for (const locked of [false, true]) {
+    await page.evaluate((shown) => {
+      (window as ProbeWindow).__cryscadeProbe?.still(shown, Number.MAX_SAFE_INTEGER);
+    }, spotRound(grid, LEVELS, locked));
+    await page.clock.runFor(100);
+    const { cells, chips } = await page.evaluate(() => {
+      const probe = (window as ProbeWindow).__cryscadeProbe;
+      return { cells: probe?.cells() ?? [], chips: probe?.chipRects() ?? [] };
+    });
+    expect(chips, 'плашка у каждой клетки').toHaveLength(49);
+    const box = (r: Rect): string => `${r.x.toFixed(1)}…${(r.x + r.width).toFixed(1)} × ${r.y.toFixed(1)}…${(r.y + r.height).toFixed(1)}`;
+    const slack = 0.5;
+    const outside: string[] = [];
+    const spills: string[] = [];
+    const widths: string[] = [];
+    cells.forEach((cell, index) => {
+      const chip = chips[index];
+      if (chip === undefined) throw new Error(`нет плашки клетки ${String(index)}`);
+      const { plaque, content } = chip;
+      const name = `клетка ${String(index)} ${labels[index] ?? ''}${locked ? ' с замком' : ''}`;
+      const inset = 3 * unit;
+      if (
+        plaque.x < cell.x + inset - slack ||
+        plaque.x + plaque.width > cell.x + cell.width - inset + slack ||
+        plaque.y < cell.y + inset - slack ||
+        plaque.y + plaque.height > cell.y + cell.height - inset + slack
+      ) {
+        outside.push(`${name}: плашка ${box(plaque)}, клетка ${box(cell)}`);
+      }
+      if (content.x < plaque.x - slack || content.x + content.width > plaque.x + plaque.width + slack) {
+        spills.push(`${name}: число и замок ${box(content)}, плашка ${box(plaque)}`);
+      }
+      const expected = Math.max(56, ((advance[index] ?? 0) * 22) / 64 + 14) * unit;
+      if (!locked && Math.abs(plaque.width - expected) > 0.5) {
+        widths.push(`${name}: ${plaque.width.toFixed(2)} при ожидании ${expected.toFixed(2)}`);
+      }
+    });
+    expect(outside, 'плашка вышла за подложку клетки').toEqual([]);
+    expect(spills, 'число и замок вышли за плашку').toEqual([]);
+    expect(widths, 'ширина плашки — по кеглю 22').toEqual([]);
+  }
+  await context.close();
+});
 
 test('глифы: в шрифтах надписей и чисел нет недостающих; кириллица Unbounded загружена', async ({ page }) => {
   await page.goto('./?renderer=webgl');
