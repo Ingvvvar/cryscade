@@ -1,10 +1,9 @@
-// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна и игры. Рендерер, дошедший до
-// готовности, получает текущий вьюпорт, reduced motion, сетку и число выигрыша; до готовности всё копится здесь.
+// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна и источник кадра. Рендерер, дошедший
+// до готовности, получает текущий вьюпорт, reduced motion и источник кадра — часы показа, из которых он сам тянет кадры.
 // Раскладку отдаёт React-панели: она ставит кнопки по тем же зонам, что Pixi — сетку.
 
-import type { SymbolId } from '../core/model/symbols.ts';
 import { computeLayout, type Layout, type Viewport } from '../render/layout.ts';
-import type { GridSink, Renderer, ViewportSink, WinSink } from '../render/renderer.ts';
+import type { Renderer, SceneSource, SourceSink, ViewportSink } from '../render/renderer.ts';
 import { SceneMount } from './scene-mount.ts';
 
 /** Счётчики монтирований для тестового зонда. */
@@ -23,14 +22,12 @@ export interface SceneSessionOptions {
   readonly observer: MountObserver | null;
 }
 
-export class SceneSession implements ViewportSink, GridSink, WinSink {
+export class SceneSession implements ViewportSink, SourceSink {
   readonly #options: SceneSessionOptions;
   readonly #mount: SceneMount<Renderer>;
   #viewport: { readonly viewport: Viewport; readonly pixelRatio: number } | null = null;
   #reducedMotion = false;
-  /** Сетку присылает authenticate: до его ответа сетки нет. */
-  #grid: readonly SymbolId[] | null = null;
-  #win: string | null = null;
+  #source: SceneSource | null = null;
 
   constructor(options: SceneSessionOptions) {
     this.#options = options;
@@ -72,20 +69,14 @@ export class SceneSession implements ViewportSink, GridSink, WinSink {
     this.#mount.renderer?.setReducedMotion(on);
   }
 
-  showGrid(grid: readonly SymbolId[]): void {
-    this.#grid = grid;
-    this.#mount.renderer?.showGrid(grid);
-  }
-
-  showWin(text: string): void {
-    this.#win = text;
-    this.#mount.renderer?.showWin(text);
+  setSource(source: SceneSource | null): void {
+    this.#source = source;
+    this.#mount.renderer?.setSource(source);
   }
 
   #ready(renderer: Renderer): void {
     if (this.#viewport !== null) renderer.resize(this.#viewport.viewport, this.#viewport.pixelRatio);
     renderer.setReducedMotion(this.#reducedMotion);
-    if (this.#grid !== null) renderer.showGrid(this.#grid);
-    if (this.#win !== null) renderer.showWin(this.#win);
+    renderer.setSource(this.#source);
   }
 }

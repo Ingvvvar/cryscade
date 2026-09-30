@@ -10,6 +10,8 @@ import {
   GameController,
   MemoryRoundLock,
   NetworkLabTransport,
+  PRESETS,
+  Presenter,
   RgsClient,
   TimeoutSleep,
   UuidKeys,
@@ -23,6 +25,7 @@ import { App } from './App.tsx';
 import { MoneyFormat } from './money-format.ts';
 import type { PageProbe } from './probe.ts';
 import { rendererChoice } from './renderer-choice.ts';
+import { SCENE_TEXT } from './texts.ts';
 
 /** Тестовый зонд — только dev и e2e-сборка: в проде условие ложно, ветка и её динамический импорт выпадают. */
 async function loadProbe(): Promise<PageProbe | null> {
@@ -48,6 +51,9 @@ async function mount(): Promise<void> {
   const transport = new WorkerTransport(() => new Worker(new URL('../server/worker.ts', import.meta.url), { type: 'module' }));
   const sleep = new TimeoutSleep();
   const lab = new NetworkLabTransport(probe?.record(transport) ?? transport, sleep, { random: Math.random, reload });
+  // Параметры показа читаются при старте раунда (§8.2): переключённые посреди раунда действуют со следующего.
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const presenter = new Presenter({ options: () => ({ speed: 'normal', preset: PRESETS.standard, reducedMotion: motion.matches }) });
   const controller = new GameController({
     rgs: new RgsClient(lab, sleep),
     roundLock: new WebRoundLock(navigator.locks),
@@ -55,16 +61,24 @@ async function mount(): Promise<void> {
     channel: new BroadcastTabChannel(new BroadcastChannel(TAB_CHANNEL)),
     notices: transport,
     keys: new UuidKeys(() => crypto.randomUUID()),
+    presentation: presenter,
   });
   probe?.bindGame(controller, lab);
+  probe?.bindPresenter(presenter);
   const money = new MoneyFormat('uk-UA');
   const create = (): Renderer => {
     probe?.noteCreated();
-    return new PixiRenderer({ preference: choice.preference, inspector: probe?.scene ?? null, warmUp: probe?.warmUp ?? true });
+    return new PixiRenderer({
+      preference: choice.preference,
+      inspector: probe?.scene ?? null,
+      warmUp: probe?.warmUp ?? true,
+      texts: SCENE_TEXT,
+      numbers: money.style,
+    });
   };
   createRoot(root).render(
     <StrictMode>
-      <App create={create} choice={choice} observer={probe} game={controller} money={money} reload={reload} />
+      <App create={create} choice={choice} observer={probe} game={controller} source={presenter} money={money} reload={reload} />
     </StrictMode>,
   );
   controller.start();

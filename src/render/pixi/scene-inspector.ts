@@ -2,7 +2,7 @@
 // а сам зонд подключается динамическим импортом под условием сборки и в прод-бандл не попадает (§15, фаза 3).
 
 import type { Application, Container } from 'pixi.js';
-import type { Layout } from '../layout.ts';
+import type { Layout, Rect } from '../layout.ts';
 import type { RendererInfo } from '../renderer.ts';
 import type { CrystalAtlas } from './atlas.ts';
 
@@ -16,8 +16,14 @@ export interface InspectableScene {
   /** document.fonts видел Unbounded, когда ставился BitmapFont. */
   readonly fontReady: boolean;
   layout(): Layout | null;
-  /** Сетка упала и стоит. */
+  /** Показ дошёл до конца, сетка на поле и стоит. */
   settled(): boolean;
+  /** Кадр источника на deltaMs без хода декора — для кадра при остановленном тикере. */
+  step(deltaMs: number): void;
+  /** Символы, которых нет в шрифтах: null — надписи и числа самой сцены, иначе — эти строки шрифтом надписей. */
+  missingGlyphs(texts: readonly string[] | null): string[];
+  /** Плашки чисел множителей на экране, CSS-пиксели: проверка читаемости меряет подложку мимо них. */
+  chipRects(): Rect[];
   /** Закрепить время декора (фон, блик рамки); null — снять. */
   pinAmbient(seconds: number | null): void;
   /** Только фон: для паритета GLSL и WGSL. */

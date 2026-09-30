@@ -1,7 +1,7 @@
 // Фасад рендера для ui/ (§3): интерфейсы маленькие, под потребителя. Через них идут простые данные.
 // Реализация — PixiRenderer в render/pixi/; ui/ знает только эти интерфейсы, кроме корня композиции.
 
-import type { SymbolId } from '../core/model/symbols.ts';
+import type { SceneState, Schedule } from '../core/presentation/index.ts';
 import type { Viewport } from './layout.ts';
 
 export type RendererName = 'webgpu' | 'webgl';
@@ -26,14 +26,38 @@ export interface ViewportSink {
   setReducedMotion(on: boolean): void;
 }
 
-/** Сетка раунда: 49 символов по клеткам, cell = row * 7 + col. */
-export interface GridSink {
-  showGrid(grid: readonly SymbolId[]): void;
+/** Надписи сцены — строками от ui (§9): в render/ текста нет. Набор глифов шрифта надписей — из них. */
+export interface SceneTexts {
+  /** Счётчик фриспинов и плашка их начала. */
+  readonly freeSpins: string;
+  /** Плашка ретриггера. */
+  readonly moreFreeSpins: string;
+  /** Подсказка featureIntro: показ ждёт тапа или пробела. */
+  readonly tapToContinue: string;
+  /** Плашка капа. */
+  readonly maxWin: string;
+  /** Уровни большого выигрыша 1…4. */
+  readonly bigWin: readonly [string, string, string, string];
 }
 
-/** Число выигрыша — готовой строкой из ui: в render/ текста нет, формат и язык — забота ui. */
-export interface WinSink {
-  showWin(text: string): void;
+/** Все строки надписей — для набора глифов и проверки, что ни одного не недостаёт. */
+export function sceneTextList(texts: SceneTexts): string[] {
+  return [texts.freeSpins, texts.moreFreeSpins, texts.tapToContinue, texts.maxWin, ...texts.bigWin];
 }
 
-export interface Renderer extends RendererLifecycle, ViewportSink, GridSink, WinSink {}
+/**
+ * Источник кадра (§3): часы показа и состояние сцены. Тикер рендера двигает часы и ставит кадр на экран — рендер ничего
+ * не решает. Расписание — чтобы раз на раунд построить контуры по его геометрии.
+ */
+export interface SceneSource {
+  tick(deltaMs: number): SceneState;
+  readonly schedule: Schedule | null;
+  /** Показ дошёл до конца расписания. */
+  readonly finished: boolean;
+}
+
+export interface SourceSink {
+  setSource(source: SceneSource | null): void;
+}
+
+export interface Renderer extends RendererLifecycle, ViewportSink, SourceSink {}

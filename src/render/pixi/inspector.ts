@@ -70,8 +70,18 @@ export class SceneProbe implements SceneInspector {
     return this.#scene?.settled() ?? false;
   }
 
+  /** Кадр при остановленном тикере: источник ставит свой кадр без хода часов, потом одна отрисовка. */
   renderOnce(): void {
+    this.#scene?.step(0);
     this.#scene?.app.render();
+  }
+
+  missingGlyphs(texts: readonly string[] | null): string[] {
+    return this.#scene?.missingGlyphs(texts) ?? [];
+  }
+
+  chipRects(): Rect[] {
+    return this.#scene?.chipRects() ?? [];
   }
 
   pinAmbient(seconds: number | null): void {

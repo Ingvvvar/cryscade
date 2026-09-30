@@ -58,5 +58,8 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     expect(atlas - idle, 'спрайты из атласа батчатся со сценой').toBeLessThanOrEqual(1);
     expect(again, 'контроль убран — счёт вернулся').toBe(idle);
     if (renderer === 'webgl') expect(idle, 'бюджет §13: покой ≤ 15').toBeLessThanOrEqual(15);
+    // Фаза 5 добавила на сцену показ раунда (подсветки, осколки, плашки, счётчики) — покой от этого не дорожает:
+    // 4 draw-call, как в принятом кадре фазы 3 (фон, рамка, блик, всё остальное одним батчем).
+    expect(idle, 'покой не дороже кадра фазы 3').toBeLessThanOrEqual(4);
   });
 }

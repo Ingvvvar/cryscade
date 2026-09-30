@@ -1,9 +1,9 @@
 // Тестовый зонд страницы — только dev и e2e-сборка (ui/main.tsx грузит его динамически под условием сборки).
 // В прод-бандле его нет: tests/e2e/bundle.spec.ts ищет маркеры в dist/ и, положительным контролем, в dist-e2e/.
 
-import type { ControllerSnapshot, LabSettings, Transport } from '../client/index.ts';
+import { PRESETS, type ControllerSnapshot, type LabSettings, type Presenter, type Transport } from '../client/index.ts';
 import { SceneProbe } from '../render/pixi/inspector.ts';
-import type { CryscadeProbe, MountCounts, ProbeLab, SentBody } from './probe-api.ts';
+import type { CryscadeProbe, MountCounts, ProbeLab, ScheduleSummary, SentBody } from './probe-api.ts';
 import type { MountObserver } from './scene-session.ts';
 
 /** Что зонду нужно от контроллера: снимок и подписка. */
@@ -47,6 +47,7 @@ export class PageProbe implements MountObserver {
   #remount: (() => void) | null = null;
   #game: GameView | null = null;
   #lab: ProbeLab | null = null;
+  #presenter: Presenter | null = null;
   readonly #shown: string[] = [];
   readonly #sent: SentBody[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
@@ -76,6 +77,11 @@ export class PageProbe implements MountObserver {
       const roundId = shownRoundId(game.getSnapshot().state);
       if (roundId !== null && !this.#shown.includes(roundId)) this.#shown.push(roundId);
     });
+  }
+
+  /** Часы показа: зонд ставит показ на момент кадра. */
+  bindPresenter(presenter: Presenter): void {
+    this.#presenter = presenter;
   }
 
   /** Транспорт до воркера с журналом: что ушло после лаборатории сети, то дошло до сервера. */
@@ -133,6 +139,17 @@ export class PageProbe implements MountObserver {
         if (this.#remount === null) throw new Error('сцена не смонтирована');
         this.#remount();
       },
+      still: (round, tMs, options = {}) => {
+        if (this.#presenter === null) throw new Error('показ не связан');
+        this.#presenter.still(round, tMs, {
+          speed: options.speed ?? 'normal',
+          preset: options.strict === true ? PRESETS.strict : PRESETS.standard,
+          reducedMotion: options.reducedMotion ?? false,
+        });
+      },
+      schedule: () => this.#schedule(),
+      missingGlyphs: (texts) => scene.missingGlyphs(texts ?? null),
+      chipRects: () => scene.chipRects(),
       game: () => this.#game?.getSnapshot() ?? null,
       shownRounds: () => [...this.#shown],
       sent: () => [...this.#sent],
@@ -153,6 +170,17 @@ export class PageProbe implements MountObserver {
           this.#labOrThrow().releaseHeld();
         },
       },
+    };
+  }
+
+  #schedule(): ScheduleSummary | null {
+    const schedule = this.#presenter?.schedule ?? null;
+    if (schedule === null) return null;
+    return {
+      durationMs: schedule.durationMs,
+      groups: schedule.groups.map(({ kind, startMs, endMs }) => ({ kind, startMs, endMs })),
+      segments: schedule.segments.map(({ kind, group, startMs, endMs }) => ({ kind, group, startMs, endMs })),
+      bigWinLevel: schedule.bigWinLevel,
     };
   }
 

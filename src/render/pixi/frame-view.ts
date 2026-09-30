@@ -1,18 +1,23 @@
 // Рамка сетки (§9): огранённый край — NineSliceSprite из атласа, углы не тянутся; медленный блик скользит по
 // верхней грани от часов декора. Блик аддитивный: подсветки — аддитивные спрайты, не фильтры (§10).
+// Фриспины — рамка ярче (§9): тёплая копия края поверх, аддитивно; вне фриспинов её нет, рамка кадра фазы 3 та же.
 
 import { Container, NineSliceSprite, Sprite } from 'pixi.js';
+import { PALETTE } from '../art/palette.ts';
 import { FRAME_BORDER, type Design } from '../layout.ts';
 import type { CrystalAtlas } from './atlas.ts';
 
 /** Период прохода блика, секунды; пауза в конце периода — блик за краем. */
 const GLINT_PERIOD_S = 7;
 const GLINT_TRAVEL = 0.7;
+/** Яркость тёплой копии края в полных фриспинах. */
+const WARM_ALPHA = 0.45;
 
 export class FrameView {
   readonly view = new Container({ label: 'frame' });
   readonly #edge: NineSliceSprite;
   readonly #glint: Sprite;
+  readonly #warm: NineSliceSprite;
   #left = 0;
   #top = 0;
   #width = 1;
@@ -26,7 +31,17 @@ export class FrameView {
       bottomHeight: FRAME_BORDER,
     });
     this.#glint = new Sprite({ texture: atlas.texture('glint-streak'), anchor: 0.5, blendMode: 'add', alpha: 0 });
-    this.view.addChild(this.#edge, this.#glint);
+    this.#warm = new NineSliceSprite({
+      texture: atlas.texture('frame-slice'),
+      leftWidth: FRAME_BORDER,
+      topHeight: FRAME_BORDER,
+      rightWidth: FRAME_BORDER,
+      bottomHeight: FRAME_BORDER,
+      blendMode: 'add',
+      tint: PALETTE.warm,
+      visible: false,
+    });
+    this.view.addChild(this.#edge, this.#glint, this.#warm);
   }
 
   setDesign(design: Design): void {
@@ -34,6 +49,9 @@ export class FrameView {
     this.#edge.position.set(frame.x, frame.y);
     this.#edge.width = frame.width;
     this.#edge.height = frame.height;
+    this.#warm.position.set(frame.x, frame.y);
+    this.#warm.width = frame.width;
+    this.#warm.height = frame.height;
     this.#left = frame.x;
     this.#top = frame.y;
     this.#width = frame.width;
@@ -48,6 +66,12 @@ export class FrameView {
     this.#glint.x = this.#left + FRAME_BORDER + phase * (this.#width - 2 * FRAME_BORDER);
     this.#glint.y = this.#top + FRAME_BORDER * 0.3;
     this.#glint.alpha = Math.sin(Math.PI * phase) * 0.85;
+  }
+
+  /** Тепло фриспинов 0…1: насколько ярче рамка. */
+  setWarmth(warmth: number): void {
+    this.#warm.visible = warmth > 0;
+    this.#warm.alpha = WARM_ALPHA * warmth;
   }
 
   destroy(): void {

@@ -2,6 +2,7 @@
 
 import type { ClientNotice, ErrorKind } from '../client/index.ts';
 import type { ErrorCode } from '../protocol/index.ts';
+import type { SceneTexts } from '../render/renderer.ts';
 
 export const NOTICE_TEXT: Readonly<Record<ClientNotice, string>> = {
   volatile: 'Сховище браузера недоступне: гра працює, але баланс і історія не збережуться після перезавантаження',
@@ -42,3 +43,12 @@ export const TEXT = {
   waiting: 'Раунд іде в іншій вкладці',
   playHere: 'Грати тут',
 } as const;
+
+/** Надписи сцены Pixi (§9): рендер получает их строками — в render/ текста нет. */
+export const SCENE_TEXT: SceneTexts = {
+  freeSpins: 'Фріспіни',
+  moreFreeSpins: 'Ще фріспіни',
+  tapToContinue: 'Натисніть, щоб продовжити',
+  maxWin: 'Максимальний виграш',
+  bigWin: ['Великий виграш', 'Величезний виграш', 'Епічний виграш', 'Максимальний виграш'],
+};

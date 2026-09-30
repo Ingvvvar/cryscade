@@ -3,6 +3,8 @@
 // Тело символа — силуэт, сжатый на 3 единицы; подложка — скруглённый прямоугольник подложки без силуэта,
 // расширенного на 4 единицы (обводка и края). Контраст — медиана тела против p95 подложки: отсветы и кромка
 // подложки играют против символа. Неразобранная клетка — провал, а не пропуск.
+// Фаза 5: плашка числа множителя — не подложка и не символ (решение владельца: цвет уровня — в кромке и числе, подложка
+// тёмная). Её рамку от зонда вычитают из обеих областей, расширив на 2 единицы — края сглаживания.
 
 import type { SymbolId } from '../../../src/core/model/symbols.ts';
 import { SYMBOL_RADIUS } from '../../../src/render/art/crystal.ts';
@@ -19,6 +21,7 @@ const RING_DILATE = 4;
 const BACKING_INSET = 5;
 const BACKING_RADIUS = 8;
 export const MIN_PIXELS = 200;
+const EXCLUDE_DILATE = 2;
 
 export interface CellReading {
   readonly cell: number;
@@ -53,8 +56,12 @@ function insideRoundRect(x: number, y: number, left: number, top: number, right:
   return Math.hypot(x - cx, y - cy) <= radius;
 }
 
-/** Области клетки: тело символа и кольцо подложки; для каждого пикселя — индекс в картинке. */
-export function cellRegions(image: Image, rect: Rect, symbol: SymbolId, unit: number): { body: number[]; ring: number[] } {
+function insideAny(rects: readonly Rect[], x: number, y: number, margin: number): boolean {
+  return rects.some((r) => x >= r.x - margin && x <= r.x + r.width + margin && y >= r.y - margin && y <= r.y + r.height + margin);
+}
+
+/** Области клетки: тело символа и кольцо подложки без рамок exclude; для каждого пикселя — индекс в картинке. */
+export function cellRegions(image: Image, rect: Rect, symbol: SymbolId, unit: number, exclude: readonly Rect[] = []): { body: number[]; ring: number[] } {
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
   const polygon = SILHOUETTES[symbol].map((p) => ({ x: cx + p.x * SYMBOL_RADIUS * unit, y: cy + p.y * SYMBOL_RADIUS * unit }));
@@ -66,6 +73,7 @@ export function cellRegions(image: Image, rect: Rect, symbol: SymbolId, unit: nu
       if (px < 0 || py < 0 || px >= image.width || py >= image.height) continue;
       const x = px + 0.5;
       const y = py + 0.5;
+      if (insideAny(exclude, x, y, EXCLUDE_DILATE * unit)) continue;
       const inside = insidePolygon(polygon, x, y);
       const distance = edgeDistance(polygon, x, y);
       const index = (py * image.width + px) * 4;
@@ -91,8 +99,8 @@ function quantile(values: number[], q: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? Number.NaN;
 }
 
-export function readCell(image: Image, cell: number, rect: Rect, symbol: SymbolId, unit: number): CellReading {
-  const { body, ring } = cellRegions(image, rect, symbol, unit);
+export function readCell(image: Image, cell: number, rect: Rect, symbol: SymbolId, unit: number, exclude: readonly Rect[] = []): CellReading {
+  const { body, ring } = cellRegions(image, rect, symbol, unit, exclude);
   const bodyL = quantile(
     body.map((i) => lum(image, i)),
     0.5,
@@ -105,15 +113,15 @@ export function readCell(image: Image, cell: number, rect: Rect, symbol: SymbolI
 }
 
 /** Копия кадра, где тело символа клетки закрашено цветом rgb — положительный контроль инструмента. */
-export function repaintBody(image: Image, rect: Rect, symbol: SymbolId, unit: number, rgb: readonly [number, number, number]): Image {
+export function repaintBody(image: Image, rect: Rect, symbol: SymbolId, unit: number, rgb: readonly [number, number, number], exclude: readonly Rect[] = []): Image {
   const rgba = new Uint8Array(image.rgba);
-  for (const index of cellRegions(image, rect, symbol, unit).body) rgba.set(rgb, index);
+  for (const index of cellRegions(image, rect, symbol, unit, exclude).body) rgba.set(rgb, index);
   return { width: image.width, height: image.height, rgba };
 }
 
 /** Цвет пикселя подложки с медианной яркостью — «символ цвета подложки». */
-export function backingColour(image: Image, rect: Rect, symbol: SymbolId, unit: number): [number, number, number] {
-  const { ring } = cellRegions(image, rect, symbol, unit);
+export function backingColour(image: Image, rect: Rect, symbol: SymbolId, unit: number, exclude: readonly Rect[] = []): [number, number, number] {
+  const { ring } = cellRegions(image, rect, symbol, unit, exclude);
   const sorted = [...ring].sort((a, b) => lum(image, a) - lum(image, b));
   const index = sorted[Math.floor(sorted.length / 2)] ?? 0;
   return [image.rgba[index] ?? 0, image.rgba[index + 1] ?? 0, image.rgba[index + 2] ?? 0];

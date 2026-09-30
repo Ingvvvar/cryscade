@@ -8,7 +8,18 @@
 
 import { Container, Graphics, Rectangle, RenderTexture, Texture, type Renderer } from 'pixi.js';
 import { SYMBOL_COUNT, type SymbolId } from '../../core/model/symbols.ts';
-import { atlasEntries, glowKey, planAtlas, shardKey, symbolKey, type AtlasKey, type AtlasPlan, type ShardIndex } from '../art/atlas-plan.ts';
+import {
+  CHIP,
+  PANEL_BORDER,
+  atlasEntries,
+  glowKey,
+  planAtlas,
+  shardKey,
+  symbolKey,
+  type AtlasKey,
+  type AtlasPlan,
+  type ShardIndex,
+} from '../art/atlas-plan.ts';
 import { mix } from '../art/color.ts';
 import { OUTLINE, SHARDS_PER_SYMBOL, symbolArt, type Band, type CoreArt, type CrystalArt, type Segment, type SymbolArt } from '../art/crystal.ts';
 import { type Point } from '../art/geometry.ts';
@@ -124,6 +135,62 @@ function drawMark(g: Graphics): void {
 }
 
 /**
+ * Кромка множителя (фаза 5): белое кольцо вокруг подложки под tint уровня. Подложка остаётся тёмной (решение владельца:
+ * светлые подложки не держат 3:1) — цвет уровня уходит в кромку и число. Кромка лежит в зазоре между подложками.
+ */
+function drawSpotRim(g: Graphics): void {
+  const half = CELL / 2 - BACKING_INSET;
+  // Кольцо — от края подложки (отступ 3) до 0.5 от края клетки, тонкий ореол — до самого края: кадр не шире клетки.
+  g.roundRect(-half - 1.25, -half - 1.25, 2 * half + 2.5, 2 * half + 2.5, BACKING_RADIUS + 1.25).stroke({ width: 2.5, color: 0xffffff, alpha: 1 });
+  g.roundRect(-half - 2.6, -half - 2.6, 2 * half + 5.2, 2 * half + 5.2, BACKING_RADIUS + 2.6).stroke({ width: 0.8, color: 0xffffff, alpha: 0.4 });
+}
+
+/** ×128 — белая кромка с переливом: стороны окрашены оттенками дисперсии, углы — белые. */
+function drawSpotRimIridescent(g: Graphics): void {
+  drawSpotRim(g);
+  const edge = CELL / 2 - BACKING_INSET + 1.25;
+  const span = edge - BACKING_RADIUS - 2;
+  const sides: readonly (readonly [number, number, number, number])[] = [
+    [-span, -edge, span, -edge],
+    [edge, -span, edge, span],
+    [span, edge, -span, edge],
+    [-edge, span, -edge, -span],
+  ];
+  sides.forEach(([x0, y0, x1, y1], i) => {
+    g.moveTo(x0, y0)
+      .lineTo(x1, y1)
+      .stroke({ width: 2.5, color: DISPERSION[i % DISPERSION.length] ?? 0xffffff, alpha: 0.9, cap: 'round' });
+  });
+}
+
+/** Плашка числа множителя: тёмная пилюля с тонкой светлой кромкой; число поверх — цвета уровня. */
+function drawChip(g: Graphics): void {
+  const { width, height } = CHIP;
+  g.roundRect(-width / 2, -height / 2, width, height, height / 2).fill({ color: PALETTE.cave0, alpha: 0.92 });
+  g.roundRect(-width / 2 + 0.75, -height / 2 + 0.75, width - 1.5, height - 1.5, height / 2 - 0.75).stroke({ width: 1, color: 0xffffff, alpha: 0.22 });
+}
+
+/** Замок фриспинов: дужка и корпус, белый под tint. */
+function drawLock(g: Graphics): void {
+  g.moveTo(-3.5, -1)
+    .lineTo(-3.5, -3.5)
+    .arc(0, -3.5, 3.5, Math.PI, 0)
+    .lineTo(3.5, -1)
+    .stroke({ width: 1.8, color: 0xffffff, alpha: 1, cap: 'round' });
+  g.roundRect(-6, -1.5, 12, 9, 2).fill({ color: 0xffffff, alpha: 1 });
+  g.circle(0, 2.5, 1.3).fill({ color: PALETTE.cave0, alpha: 0.9 });
+}
+
+/** Панель плашек фичи: тёмное стекло, бирюзовая внутренняя кромка, светлая внешняя. */
+function drawPanel(g: Graphics, size: number): void {
+  const half = size / 2 - 1;
+  const radius = PANEL_BORDER - 8;
+  g.roundRect(-half, -half, 2 * half, 2 * half, radius).fill({ color: PALETTE.cave1, alpha: 0.94 });
+  g.roundRect(-half + 3, -half + 3, 2 * half - 6, 2 * half - 6, radius - 3).stroke({ width: 1.5, color: PALETTE.glow, alpha: 0.55 });
+  g.roundRect(-half + 0.75, -half + 0.75, 2 * half - 1.5, 2 * half - 1.5, radius).stroke({ width: 1.5, color: PALETTE.frame, alpha: 0.45 });
+}
+
+/**
  * Исходник рамки для NineSliceSprite: квадрат FRAME_SLICE, край FRAME_BORDER, середина прозрачна.
  * Каждая сторона — две полосы-грани: внешняя смотрит наружу, внутренняя — к сетке; свет — та же модель, что у
  * кристаллов (ключевой сверху слева, бирюзовый контровой снизу).
@@ -226,6 +293,11 @@ export class CrystalAtlas {
     drawSoft(at('glint-streak', bake), 62, 6, 10, 0.1);
     drawStar(at('star', bake), 0, 0, 11);
     drawSoft(at('dot', bake), 7, 7, 7, 0.14);
+    drawSpotRim(at('rim', bake));
+    drawSpotRimIridescent(at('rim-iridescent', bake));
+    drawChip(at('chip', bake));
+    drawLock(at('lock', bake));
+    drawPanel(at('panel', bake), this.texture('panel').frame.width);
     renderer.render({ container: bake, target: this.#texture, clear: true });
     this.#texture.source.updateMipmaps();
     bake.destroy({ children: true });

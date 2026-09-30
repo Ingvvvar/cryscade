@@ -13,6 +13,11 @@ export const ATLAS_PADDING = 2;
 export const GLOW_MARGIN = 14;
 /** Исходник рамки для NineSliceSprite: угол и край. */
 export const FRAME_SLICE = 64;
+/** Плашка числа множителя — NineSliceSprite по ширине числа: концы-полукруги по CHIP.cap. */
+export const CHIP = { width: 40, height: 20, cap: 10 } as const;
+/** Панель плашек фичи — NineSliceSprite: угол и край. */
+export const PANEL_SLICE = 96;
+export const PANEL_BORDER = 32;
 
 export type ShardIndex = 0 | 1 | 2;
 
@@ -27,7 +32,12 @@ export type AtlasKey =
   | 'frame-slice'
   | 'glint-streak'
   | 'star'
-  | 'dot';
+  | 'dot'
+  | 'rim'
+  | 'rim-iridescent'
+  | 'chip'
+  | 'lock'
+  | 'panel';
 
 export function symbolKey(symbol: SymbolId): AtlasKey {
   return `symbol-${String(symbol)}` as `symbol-${SymbolId}`;
@@ -81,6 +91,12 @@ export function atlasEntries(): AtlasEntry[] {
     { key: 'glint-streak', width: 128, height: 16 },
     { key: 'star', width: 24, height: 24 },
     { key: 'dot', width: 16, height: 16 },
+    // Фаза 5: кромка множителя (цвет уровня — tint), плашка числа, замок фриспинов, панель плашек фичи.
+    { key: 'rim', width: CELL, height: CELL },
+    { key: 'rim-iridescent', width: CELL, height: CELL },
+    { key: 'chip', width: CHIP.width, height: CHIP.height },
+    { key: 'lock', width: 14, height: 16 },
+    { key: 'panel', width: PANEL_SLICE, height: PANEL_SLICE },
   ];
 }
 

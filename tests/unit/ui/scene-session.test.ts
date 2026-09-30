@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { SymbolId } from '../../../src/core/model/symbols.ts';
+import { SceneState } from '../../../src/core/presentation/index.ts';
 import type { Layout, Viewport } from '../../../src/render/layout.ts';
-import type { Renderer, RendererInfo } from '../../../src/render/renderer.ts';
+import type { Renderer, RendererInfo, SceneSource } from '../../../src/render/renderer.ts';
 import { SceneSession, type MountObserver } from '../../../src/ui/scene-session.ts';
 
 const HOST = {} as HTMLElement;
-const GRID: SymbolId[] = Array.from({ length: 49 }, (_, i) => (i % 8) as SymbolId);
+const SOURCE: SceneSource = { tick: () => new SceneState(), schedule: null, finished: false };
 const PORTRAIT: Viewport = { width: 390, height: 844, insets: { top: 47, right: 0, bottom: 34, left: 0 } };
 const LANDSCAPE: Viewport = { width: 1280, height: 720, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
 
@@ -37,12 +37,8 @@ class FakeRenderer implements Renderer {
     this.calls.push(`motion ${String(on)}`);
   }
 
-  showGrid(grid: readonly SymbolId[]): void {
-    this.calls.push(`grid ${String(grid.length)}`);
-  }
-
-  showWin(text: string): void {
-    this.calls.push(`win ${text}`);
+  setSource(source: SceneSource | null): void {
+    this.calls.push(`source ${source === null ? 'нет' : 'есть'}`);
   }
 }
 
@@ -82,29 +78,27 @@ function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: L
 }
 
 describe('SceneSession', () => {
-  it('состояние окна и игры до готовности копится и уходит рендереру по готовности: вьюпорт, reduced motion, сетка, выигрыш', async () => {
+  it('состояние окна и источник кадра до готовности копятся и уходят рендереру по готовности', async () => {
     const { session, renderers } = setup();
     session.attach(HOST);
     session.resize(PORTRAIT, 3);
     session.setReducedMotion(true);
-    session.showGrid(GRID);
-    session.showWin('0,35');
+    session.setSource(SOURCE);
     await flush();
     renderers[0]?.finishInit();
     await flush();
-    expect(renderers[0]?.calls).toStrictEqual(['resize 390@3', 'motion true', 'grid 49', 'win 0,35']);
+    expect(renderers[0]?.calls).toStrictEqual(['resize 390@3', 'motion true', 'source есть']);
   });
 
-  it('до ответа authenticate сетки нет — рендерер её не получает; потом сетка и выигрыш идут сразу', async () => {
+  it('источник после готовности идёт рендереру сразу; без источника рендерер получает null', async () => {
     const { session, renderers } = setup();
     session.attach(HOST);
     await flush();
     renderers[0]?.finishInit();
     await flush();
-    expect(renderers[0]?.calls).toStrictEqual(['motion false']);
-    session.showGrid(GRID);
-    session.showWin('1,05');
-    expect(renderers[0]?.calls).toStrictEqual(['motion false', 'grid 49', 'win 1,05']);
+    expect(renderers[0]?.calls).toStrictEqual(['motion false', 'source нет']);
+    session.setSource(SOURCE);
+    expect(renderers[0]?.calls).toStrictEqual(['motion false', 'source нет', 'source есть']);
   });
 
   it('после готовности изменения окна идут рендереру сразу', async () => {
@@ -130,12 +124,12 @@ describe('SceneSession', () => {
     session.detach();
     session.attach(HOST);
     session.resize(PORTRAIT, 2);
-    session.showGrid(GRID);
+    session.setSource(SOURCE);
     await flush();
     expect(renderers).toHaveLength(1);
     renderers[0]?.finishInit();
     await session.settled;
     expect(observer.log).toStrictEqual(['attach', 'detach', 'attach']);
-    expect(renderers[0]?.calls).toStrictEqual(['resize 390@2', 'motion false', 'grid 49']);
+    expect(renderers[0]?.calls).toStrictEqual(['resize 390@2', 'motion false', 'source есть']);
   });
 });

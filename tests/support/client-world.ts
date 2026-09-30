@@ -6,10 +6,12 @@ import {
   TimeoutSleep,
   type ControllerSnapshot,
   type KeySource,
+  type Presentation,
   type RoundLock,
   type TabChannel,
   type Transport,
 } from '../../src/client/index.ts';
+import type { ShownRound } from '../../src/core/fsm/index.ts';
 import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { isRecord, type RequestBody, type WalletChanged } from '../../src/protocol/index.ts';
 import { MemoryLock, MemoryStorage, RgsServer, type Entropy, type Storage } from '../../src/server/index.ts';
@@ -153,6 +155,19 @@ export interface TabOptions {
   readonly silent?: boolean;
 }
 
+/** Показ вкладки: что контроллер отдал сцене — сетку покоя (rest) и раунды (play), по порядку. */
+export class RecordingPresentation implements Presentation {
+  readonly log: ({ readonly rest: readonly number[] } | { readonly play: string })[] = [];
+
+  play(round: ShownRound): void {
+    this.log.push({ play: round.roundId });
+  }
+
+  rest(grid: readonly number[]): void {
+    this.log.push({ rest: [...grid] });
+  }
+}
+
 export class Tab {
   /** Префикс ключей и id раундов вкладки. */
   readonly name: string;
@@ -160,6 +175,7 @@ export class Tab {
   readonly lab: NetworkLabTransport;
   readonly client: RgsClient;
   readonly controller: GameController;
+  readonly presentation = new RecordingPresentation();
   /** Каждый опубликованный снимок — чтобы видеть не только итог, но и путь к нему. */
   readonly snapshots: ControllerSnapshot[] = [];
   reloads = 0;
@@ -197,6 +213,7 @@ export class Tab {
       channel: world.bus.channel(),
       notices: this.port,
       keys: new SequentialKeys(name),
+      presentation: this.presentation,
     });
     this.controller.subscribe(() => {
       this.snapshots.push(this.controller.getSnapshot());

@@ -10,14 +10,15 @@ describe('план атласа', () => {
   const entries = atlasEntries();
   const plan = planAtlas(entries);
 
-  it('состав: 8 символов, 8 свечений, 24 осколка, 4 подложки, рамка, блик, звезда, точка', () => {
+  it('состав: 8 символов, 8 свечений, 24 осколка, 4 подложки, рамка, блик, звезда, точка; фаза 5 — кромки, плашка, замок, панель', () => {
     const keys = entries.map((entry) => entry.key);
-    expect(keys).toHaveLength(48);
-    expect(new Set(keys).size).toBe(48);
+    expect(keys).toHaveLength(53);
+    expect(new Set(keys).size).toBe(53);
     expect(keys.filter((key) => key.startsWith('symbol-'))).toHaveLength(8);
     expect(keys.filter((key) => key.startsWith('glow-'))).toHaveLength(8);
     expect(keys.filter((key) => key.startsWith('shard-'))).toHaveLength(24);
     expect(keys).toEqual(expect.arrayContaining(['backing', 'backing-lit', 'backing-iridescent', 'mark', 'frame-slice', 'glint-streak', 'star', 'dot']));
+    expect(keys).toEqual(expect.arrayContaining(['rim', 'rim-iridescent', 'chip', 'lock', 'panel']));
   });
 
   it('каждый ключ — ровно один кадр размером с запись × разрешение', () => {
@@ -51,7 +52,7 @@ describe('план атласа', () => {
         checked += 1;
       });
     });
-    expect(checked).toBe((48 * 47) / 2);
+    expect(checked).toBe((53 * 52) / 2);
   });
 
   it('детерминирован: повторный план совпадает', () => {

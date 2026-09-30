@@ -1,112 +1,148 @@
-// Сетка 7×7 в единицах дизайна: подложки клеток и символы. Символы берутся из пула; первая сетка падает
-// колонками по core/presentation/fall.ts. Край сетки — без маски (маска в Pixi 8.21 — трафарет и лишние
-// draw-call): символ над сеткой невидим и проявляется, пересекая её верхний край.
-// До фазы 5 часы падения живут здесь; потом их забирает sampleScene.
+// Сетка 7×7 в единицах дизайна: подложки, кромки точек и символы — по спрайту на клетку, как устроен SceneState.
+// Своих часов нет: кадр приходит из sampleScene (apply), сетка его только ставит. Край сетки — без маски (маска в
+// Pixi 8.21 — трафарет и лишние draw-call): символ над сеткой и под ней невидим и проявляется, пересекая край.
+// Выигравшие символы поднимаются в слой над подсветками (RenderLayer §10): трансформации остаются у сетки.
 
-import { Container, Sprite } from 'pixi.js';
-import { CELL_COUNT, GRID_SIDE } from '../../core/model/grid.ts';
-import type { SymbolId } from '../../core/model/symbols.ts';
-import { FALL, columnStartMs, fallHeight, gridSettleMs, type FallProfile } from '../../core/presentation/fall.ts';
+import { Container, Sprite, type RenderLayer, type Texture } from 'pixi.js';
+import { CELL_COUNT } from '../../core/model/grid.ts';
+import { SYMBOL_COUNT, type SymbolId } from '../../core/model/symbols.ts';
+import { EMPTY_CELL, type SceneState } from '../../core/presentation/index.ts';
 import { symbolKey } from '../art/atlas-plan.ts';
+import { MULTIPLIER_COLORS, PALETTE } from '../art/palette.ts';
 import { CELL, cellRect, type Design } from '../layout.ts';
-import { Pool } from '../pool.ts';
 import type { CrystalAtlas } from './atlas.ts';
 
-/** Сетка на экране плюс падающая: каскады фазы 5 держат обе. */
-const SYMBOL_POOL = 2 * CELL_COUNT;
-/** Колонка стартует целиком над сеткой. */
-const FALL_DISTANCE = GRID_SIDE * CELL;
+/** Уровень точки §4.7: 1 — отметка, 2…8 — ×2…×128. */
+const MARK_LEVEL = 1;
+const TOP_LEVEL = 8;
+/** Всплеск кромки, когда уровень точки сменился: доля размера на пике. */
+const SPOT_POP = 0.12;
 
 export class GridView {
   readonly view = new Container({ label: 'grid' });
-  readonly #atlas: CrystalAtlas;
   readonly #backings = new Container({ label: 'backings' });
+  readonly #rimLayer = new Container({ label: 'spot-rims' });
   readonly #symbolLayer = new Container({ label: 'symbols' });
-  readonly #pool: Pool<Sprite>;
-  readonly #shown: Sprite[] = [];
+  readonly #symbols: Sprite[] = [];
+  readonly #rims: Sprite[] = [];
+  readonly #textures: Texture[] = [];
+  readonly #mark: Texture;
+  readonly #rim: Texture;
+  readonly #rimTop: Texture;
+  readonly #centerX = new Float64Array(CELL_COUNT);
   readonly #restY = new Float64Array(CELL_COUNT);
-  #gridTop = 0;
-  #profile: FallProfile = FALL.normal;
-  #timeMs = 0;
+  /** 1 — символ клетки поднят в слой выигравших. */
+  readonly #lifted = new Uint8Array(CELL_COUNT);
+  readonly #winners: RenderLayer;
+  #fadeTop = 0;
+  #fadeBottom = 0;
+  #shown = false;
 
-  constructor(atlas: CrystalAtlas) {
-    this.#atlas = atlas;
+  constructor(atlas: CrystalAtlas, winners: RenderLayer) {
+    this.#winners = winners;
+    for (let symbol = 0; symbol < SYMBOL_COUNT; symbol++) this.#textures.push(atlas.texture(symbolKey(symbol as SymbolId)));
+    this.#mark = atlas.texture('mark');
+    this.#rim = atlas.texture('rim');
+    this.#rimTop = atlas.texture('rim-iridescent');
     const backing = atlas.texture('backing');
-    for (let cell = 0; cell < CELL_COUNT; cell++) this.#backings.addChild(new Sprite({ texture: backing, anchor: 0.5 }));
-    this.#pool = new Pool<Sprite>(
-      SYMBOL_POOL,
-      () => {
-        const sprite = new Sprite({ anchor: 0.5, visible: false });
-        this.#symbolLayer.addChild(sprite);
-        return sprite;
-      },
-      (sprite) => {
-        sprite.visible = false;
-      },
-    );
-    this.view.addChild(this.#backings, this.#symbolLayer);
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      this.#backings.addChild(new Sprite({ texture: backing, anchor: 0.5 }));
+      const rim = new Sprite({ texture: this.#rim, anchor: 0.5, visible: false });
+      this.#rims.push(rim);
+      this.#rimLayer.addChild(rim);
+      const symbol = new Sprite({ anchor: 0.5, visible: false });
+      this.#symbols.push(symbol);
+      this.#symbolLayer.addChild(symbol);
+    }
+    this.view.addChild(this.#backings, this.#rimLayer, this.#symbolLayer);
   }
 
   /** Клетки встают по зонам раскладки. */
   setDesign(design: Design): void {
-    this.#gridTop = design.zones.grid.y;
+    const { grid } = design.zones;
+    this.#fadeTop = grid.y - CELL / 2;
+    this.#fadeBottom = grid.y + grid.height + CELL / 2;
     for (let cell = 0; cell < CELL_COUNT; cell++) {
       const rect = cellRect(design, cell);
       const x = rect.x + rect.width / 2;
       const y = rect.y + rect.height / 2;
-      this.#backings.children[cell]?.position.set(x, y);
+      this.#centerX[cell] = x;
       this.#restY[cell] = y;
-      this.#shown[cell]?.position.set(x, y);
+      this.#backings.children[cell]?.position.set(x, y);
+      this.#rims[cell]?.position.set(x, y);
+      this.#symbols[cell]?.position.set(x, y);
     }
-    this.#place();
   }
 
-  /** Новая сетка: символы из пула, падение с начала. */
-  show(grid: readonly SymbolId[]): void {
-    if (grid.length !== CELL_COUNT) throw new RangeError(`сетка — ${String(CELL_COUNT)} символов, получено ${String(grid.length)}`);
-    for (const sprite of this.#shown) this.#pool.release(sprite);
-    this.#shown.length = 0;
-    grid.forEach((symbol, cell) => {
-      const sprite = this.#pool.acquire();
-      sprite.texture = this.#atlas.texture(symbolKey(symbol));
-      sprite.visible = true;
-      sprite.x = this.#backings.children[cell]?.x ?? 0;
-      this.#shown.push(sprite);
-    });
-    this.#timeMs = 0;
-    this.#place();
+  /** Центр клетки по x и точка покоя по y, единицы дизайна. */
+  centerX(cell: number): number {
+    return this.#centerX[cell] ?? 0;
   }
 
-  setReducedMotion(on: boolean): void {
-    this.#profile = on ? FALL.reduced : FALL.normal;
+  restY(cell: number): number {
+    return this.#restY[cell] ?? 0;
   }
 
-  /** Шаг часов падения; после покоя — ничего не делает. */
-  update(deltaMs: number): void {
-    if (this.settled) return;
-    this.#timeMs += deltaMs;
-    this.#place();
+  /** Кадр: символы на высоте над покоем, альфа с краем сетки, масштаб; кромки точек по уровню. */
+  apply(scene: SceneState): void {
+    let shown = false;
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      const sprite = this.#symbols[cell];
+      if (sprite === undefined) continue;
+      const symbol = scene.symbol[cell] ?? EMPTY_CELL;
+      const lifted = symbol !== EMPTY_CELL && ((scene.highlight[cell] ?? 0) > 0 || (scene.explode[cell] ?? -1) >= 0);
+      this.#lift(cell, sprite, lifted);
+      if (symbol === EMPTY_CELL) {
+        sprite.visible = false;
+      } else {
+        shown = true;
+        const texture = this.#textures[symbol];
+        if (texture !== undefined && sprite.texture !== texture) sprite.texture = texture;
+        const y = (this.#restY[cell] ?? 0) - (scene.offsetY[cell] ?? 0) * CELL;
+        sprite.y = y;
+        const top = Math.min(1, Math.max(0, (y - this.#fadeTop) / CELL));
+        const bottom = Math.min(1, Math.max(0, (this.#fadeBottom - y) / CELL));
+        sprite.alpha = (scene.alpha[cell] ?? 1) * top * bottom;
+        sprite.scale.set(scene.scale[cell] ?? 1);
+        sprite.visible = sprite.alpha > 0;
+      }
+      this.#spot(cell, scene.spotLevel[cell] ?? 0, scene.spotPop[cell] ?? -1);
+    }
+    this.#shown = shown;
   }
 
-  /** Сетка показана и упала. До первой сетки покоя нет: её присылает authenticate. */
-  get settled(): boolean {
-    return this.#shown.length > 0 && this.#timeMs >= gridSettleMs(this.#profile);
+  /** На поле есть символы: первая сетка пришла. До неё покоя нет — её присылает authenticate. */
+  get shown(): boolean {
+    return this.#shown;
   }
 
   destroy(): void {
+    for (let cell = 0; cell < CELL_COUNT; cell++) {
+      const sprite = this.#symbols[cell];
+      if (sprite !== undefined) this.#lift(cell, sprite, false);
+    }
     this.view.destroy({ children: true });
   }
 
-  #place(): void {
-    const fadeTop = this.#gridTop - CELL / 2;
-    for (let cell = 0; cell < this.#shown.length; cell++) {
-      const sprite = this.#shown[cell];
-      if (sprite === undefined) continue;
-      const column = cell % GRID_SIDE;
-      const height = fallHeight(this.#profile, FALL_DISTANCE, this.#timeMs - columnStartMs(this.#profile, column));
-      const y = (this.#restY[cell] ?? 0) - height;
-      sprite.y = y;
-      sprite.alpha = Math.min(1, Math.max(0, (y - fadeTop) / CELL));
+  #lift(cell: number, sprite: Sprite, lifted: boolean): void {
+    const was = this.#lifted[cell] === 1;
+    if (was === lifted) return;
+    this.#lifted[cell] = lifted ? 1 : 0;
+    if (lifted) this.#winners.attach(sprite);
+    else this.#winners.detach(sprite);
+  }
+
+  #spot(cell: number, level: number, pop: number): void {
+    const rim = this.#rims[cell];
+    if (rim === undefined) return;
+    if (level < MARK_LEVEL) {
+      rim.visible = false;
+      return;
     }
+    rim.visible = true;
+    const texture = level === MARK_LEVEL ? this.#mark : level === TOP_LEVEL ? this.#rimTop : this.#rim;
+    if (rim.texture !== texture) rim.texture = texture;
+    rim.tint = level === MARK_LEVEL || level === TOP_LEVEL ? 0xffffff : (MULTIPLIER_COLORS[level - 2] ?? PALETTE.text);
+    rim.scale.set(pop >= 0 ? 1 + SPOT_POP * Math.sin(Math.PI * pop) : 1);
   }
 }

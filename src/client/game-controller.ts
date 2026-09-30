@@ -11,6 +11,7 @@ import {
   type WalletChanged,
 } from '../protocol/index.ts';
 import type { KeySource, RoundLease, RoundLock, TabChannel } from './ports.ts';
+import type { Presentation } from './presenter.ts';
 import type { CallOutcome, Rgs } from './rgs-client.ts';
 import { WalletBook, type WalletUpdate } from './wallet-book.ts';
 
@@ -24,6 +25,8 @@ export interface GameControllerPorts {
   /** Сообщения своего воркера без запроса: storageClosed — базу обновила другая вкладка. */
   readonly notices: TabChannel;
   readonly keys: KeySource;
+  /** Показ на сцене (§8.2): сетка покоя и раунды. */
+  readonly presentation: Presentation;
 }
 
 /** Полоса над игрой: хранилище в памяти, починка, база обновлена другой вкладкой. */
@@ -49,6 +52,10 @@ const DEFAULT_BET_MINOR = 100;
 function pickBet(levels: readonly number[], current: number | null): number | null {
   if (current !== null && levels.includes(current)) return current;
   return levels.includes(DEFAULT_BET_MINOR) ? DEFAULT_BET_MINOR : (levels[0] ?? null);
+}
+
+function sameGrid(a: readonly number[] | null, b: readonly number[]): boolean {
+  return a !== null && a.length === b.length && a.every((symbol, cell) => symbol === b[cell]);
 }
 
 function sameSnapshot(a: ControllerSnapshot, b: ControllerSnapshot): boolean {
@@ -78,6 +85,7 @@ export class GameController {
   readonly #roundLock: RoundLock;
   readonly #localLock: RoundLock;
   readonly #keys: KeySource;
+  readonly #presentation: Presentation;
   readonly #wallet = new WalletBook();
   readonly #listeners = new Set<() => void>();
   readonly #inbox: ClientEvent[] = [];
@@ -110,6 +118,7 @@ export class GameController {
     this.#roundLock = ports.roundLock;
     this.#localLock = ports.localLock;
     this.#keys = ports.keys;
+    this.#presentation = ports.presentation;
     this.#snapshot = this.#compose();
     this.#unlisten = ports.channel.listen((message) => {
       this.#fromTab(message);
@@ -269,6 +278,9 @@ export class GameController {
     if (result.notice === 'volatile') this.#volatile = true;
     this.#config = result.config;
     this.#betMinor = pickBet(result.config.betLevelsMinor, this.#betMinor);
+    // Сетка покоя — сцене, если на поле другая: сверка под замком и повтор authenticate ту же сетку заново не роняют.
+    // Показ раунда начинается только после сверки под замком (restoring), поэтому сверка его и не обрывает.
+    if (!sameGrid(this.#grid, result.idleGrid)) this.#presentation.rest(result.idleGrid);
     this.#grid = result.idleGrid;
     this.#applyWallet(result.wallet);
     const early = this.#early;
@@ -291,10 +303,14 @@ export class GameController {
     if (!this.#draining) this.#publish();
   }
 
-  /** Фаза 4: показ мгновенный — итоговая сетка раунда и сразу endRound (§15). Расписание и падение — фаза 5. */
+  /**
+   * Показ раунда на сцене (§8.2). Фаза 5, подход Б: сцена показывает раунд по расписанию, а машина состояний ещё не ждёт
+   * его конца — endRound уходит сразу, как в фазе 4. Связь с концом показа, пропуск и featureIntro — подход В.
+   */
   #present(round: ShownRound): void {
     this.#grid = finalGrid(round.events);
     this.#winMinor = round.winMinor;
+    this.#presentation.play(round);
     this.#dispatch({ type: 'presented' });
   }
 

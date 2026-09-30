@@ -225,6 +225,7 @@ class HandLock implements RoundLock {
 }
 
 const QUIET = { listen: () => () => undefined };
+const NO_SHOW = { play: () => undefined, rest: () => undefined };
 const AUTH_RESULT = {
   balanceMinor: 100_000,
   config: { betLevelsMinor: [100], capX100: 500_000 },
@@ -240,7 +241,7 @@ const PLAY_RESULT = {
 };
 
 function manualController(rgs: Rgs, roundLock: RoundLock): GameController {
-  return new GameController({ rgs, roundLock, localLock: new MemoryRoundLock(), channel: QUIET, notices: QUIET, keys: { next: () => 'k1' } });
+  return new GameController({ rgs, roundLock, localLock: new MemoryRoundLock(), channel: QUIET, notices: QUIET, keys: { next: () => 'k1' }, presentation: NO_SHOW });
 }
 
 beforeEach(() => {
@@ -545,10 +546,79 @@ describe('повторы и экран ошибки', () => {
       channel: { listen: () => () => undefined },
       notices: { listen: () => () => undefined },
       keys: { next: () => 'k' },
+      presentation: NO_SHOW,
     });
     controller.start();
     await settle();
     expect(controller.getSnapshot().state).toStrictEqual({ name: 'error', kind: 'unreachable', retry: { call: 'authenticate' }, holdsLock: false });
+  });
+});
+
+describe('показ на сцене', () => {
+  it('сетка покоя — при authenticate, каждый раунд — при старте показа, по порядку', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    expect(a.presentation.log).toStrictEqual([]);
+    await settle();
+    expect(a.presentation.log).toStrictEqual([{ rest: DEMO_GRID }]);
+    a.controller.spin();
+    await settle();
+    a.controller.spin();
+    await settle();
+    expect(a.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }, { play: 'ar2' }]);
+  });
+
+  it('восстановление: сетка до раунда, потом его показ; сверка под замком ту же сетку заново не роняет', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.lab.reloadMidNextRound();
+    a.controller.spin();
+    await settle();
+    a.close();
+    const reloaded = world.open('a2');
+    await settle();
+    expect(reloaded.port.received.filter((body) => body.type === 'authenticate')).toHaveLength(2);
+    expect(reloaded.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }]);
+  });
+
+  it('ROUND_ACTIVE на спин: та же сетка покоя заново не роняется — сразу показ чужого раунда', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.controller.spin();
+    await settle();
+    const b = world.open('b');
+    await settle();
+    b.lab.reloadMidNextRound();
+    b.controller.spin();
+    await settle();
+    b.close();
+    a.controller.spin();
+    await settle();
+    expect(a.calls.filter((call) => call === 'authenticate')).toHaveLength(2);
+    expect(a.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { play: 'ar1' }, { play: 'br1' }]);
+  });
+
+  it('ждёт вкладку: на поле — сетка до чужого раунда; раунд доигран — его итоговая сетка', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.lab.reloadMidNextRound();
+    a.controller.spin();
+    await settle();
+    a.close();
+    const b = world.open('b');
+    b.lab.holdNextEndRound();
+    await settle();
+    const c = world.open('c');
+    await settle();
+    expect(c.state).toStrictEqual(WAITING);
+    expect(c.presentation.log).toStrictEqual([{ rest: DEMO_GRID }]);
+    b.lab.releaseHeld();
+    await settle();
+    expect(c.state).toStrictEqual(IDLE);
+    expect(c.presentation.log).toStrictEqual([{ rest: DEMO_GRID }, { rest: SMALL_GRID }]);
   });
 });
 
