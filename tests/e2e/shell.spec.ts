@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import type { ShownRound } from '../../src/client/index.ts';
 import type { SceneLabels } from '../../src/render/renderer.ts';
 import { FORCED_SEEDS } from '../../src/ui/forced-rounds.ts';

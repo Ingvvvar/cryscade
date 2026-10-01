@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { readStorage, reconciled } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 
@@ -6,11 +7,25 @@ import { collectConsole } from '../support/page-probe.ts';
 // Ревьюер на живом адресе ломает сеть диалогом, и деньги сходятся: потерянный ответ — повтор с тем же ключом, одно
 // списание; перезагрузка посреди раунда — раунд доигран; потеря всех запросов — экран ошибки, денег не тронуто.
 
-/** Покой без зонда: «Спін» доступен и не занят. */
+/**
+ * Покой без зонда: «Спін» доступен и не занят. Раунд из книги бывает фичей, и её плашка ждёт тапа — автопропуска в
+ * прод-сборке нет (нашёл прогон фазы 9: после перезагрузки восстановилась фича, «Спін» занят 30 с). Поэтому, пока «Спін»
+ * занят, тест тапает по середине сцены — кликом по координате, как игрок; в покое тап ничего не делает.
+ */
 async function idle(page: Page, timeout = 30_000): Promise<void> {
   const spin = page.getByRole('button', { name: 'Спін' });
-  await expect(spin).toHaveAttribute('aria-busy', 'false', { timeout });
-  await expect(spin).toBeEnabled({ timeout });
+  const size = page.viewportSize();
+  if (size === null) throw new Error('нет размера окна');
+  await expect
+    .poll(
+      async () => {
+        if ((await spin.getAttribute('aria-busy')) === 'false' && (await spin.isEnabled())) return true;
+        await page.mouse.click(size.width / 2, size.height / 2);
+        return false;
+      },
+      { timeout, intervals: [500], message: '«Спін» не освободился' },
+    )
+    .toBe(true);
 }
 
 async function closedRounds(page: Page): Promise<number> {

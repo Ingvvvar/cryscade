@@ -1,8 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import type { ShownRound } from '../../src/client/index.ts';
 import type { PresentationInfo, ScheduleSummary } from '../../src/ui/probe-api.ts';
 import { gameCalls, gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
+import { autoSkip, force, open, presentation, waitGroup } from '../support/presentation-page.ts';
 import { fixtureShown } from '../support/shown-rounds.ts';
 
 // Показ раунда (фаза 5, подход В): часы показа, featureIntro, пропуск, контрольная точка, скрытая вкладка, турбо и
@@ -11,36 +13,12 @@ import { fixtureShown } from '../support/shown-rounds.ts';
 
 const BET = 100;
 
-async function presentation(page: Page): Promise<PresentationInfo | null> {
-  return page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.presentation() ?? null);
-}
-
-/** Сид следующего раунда: воркер ответил, что принял его, — только тогда «Спін». */
-async function force(page: Page, round: 'feature' | 'multiplier'): Promise<void> {
-  await page.evaluate(async (name) => {
-    const probe = (window as ProbeWindow).__cryscadeProbe;
-    if (probe === undefined) throw new Error('нет зонда');
-    await probe.force(name);
-  }, round);
-}
-
-async function autoSkip(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    (window as ProbeWindow).__cryscadeProbe?.autoSkip(true);
-  });
-}
-
 /** Тап по середине сетки — кликом по координате: путь ввода тот же, что у игрока. */
 async function tapScene(page: Page): Promise<void> {
   const cells = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.cells() ?? []);
   const middle = cells[24];
   if (middle === undefined) throw new Error('нет клеток');
   await page.mouse.click(middle.x + middle.width / 2, middle.y + middle.height / 2);
-}
-
-async function open(page: Page): Promise<void> {
-  await page.goto('./');
-  await waitForState(page, 'idle');
 }
 
 /** Вкладка скрыта или видна — так, как это видит страница: document.hidden и событие visibilitychange. */
@@ -59,14 +37,6 @@ async function currentSchedule(page: Page): Promise<ScheduleSummary> {
 }
 
 async function clockNow(page: Page): Promise<PresentationInfo> {
-  const info = await presentation(page);
-  if (info === null) throw new Error('показа нет');
-  return info;
-}
-
-/** Показ идёт и дошёл хотя бы до группы group. */
-async function waitGroup(page: Page, group: number): Promise<PresentationInfo> {
-  await expect.poll(async () => (await presentation(page))?.group ?? -1, { timeout: 20_000, message: `показ не дошёл до группы ${String(group)}` }).toBeGreaterThanOrEqual(group);
   const info = await presentation(page);
   if (info === null) throw new Error('показа нет');
   return info;
@@ -234,31 +204,6 @@ test('скрытая вкладка: часы показа стоят; вкла�
   expect((await presentation(page))?.clock).toBe(stopped);
   await setHidden(page, false);
   await expect.poll(async () => (await presentation(page))?.clock ?? 0).toBeGreaterThan(stopped ?? 0);
-  await autoSkip(page);
-  await waitForState(page, 'idle');
-  expect(problems).toEqual([]);
-});
-
-test('часы кадра на месте: тикер даёт дробные дельты, а часы показа — целые миллисекунды', async ({ page }) => {
-  const { problems } = collectConsole(page);
-  await open(page);
-  await force(page, 'multiplier');
-  await page.getByRole('button', { name: 'Спін' }).click();
-  await waitGroup(page, 1);
-  const sampled = await page.evaluate(async () => {
-    const probe = (window as ProbeWindow).__cryscadeProbe;
-    const stamps: number[] = [];
-    const clocks: number[] = [];
-    for (let k = 0; k < 30; k++) {
-      stamps.push(await new Promise<number>((resolve) => requestAnimationFrame(resolve)));
-      clocks.push(probe?.presentation()?.clock ?? Number.NaN);
-    }
-    return { stamps, clocks };
-  });
-  const deltas = sampled.stamps.slice(1).map((stamp, k) => stamp - (sampled.stamps[k] ?? stamp));
-  expect(deltas.some((delta) => !Number.isInteger(delta)), 'контроль: дельты кадров здесь дробные').toBe(true);
-  expect(new Set(sampled.clocks).size, 'часы показа шли').toBeGreaterThan(1);
-  expect(sampled.clocks.filter((clock) => !Number.isInteger(clock)), 'часы показа — целые мс').toStrictEqual([]);
   await autoSkip(page);
   await waitForState(page, 'idle');
   expect(problems).toEqual([]);

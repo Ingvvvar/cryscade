@@ -1,7 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { decodeBook, type Book } from '../../src/server/book.ts';
 import { BOOK_DIR, findBook } from '../../tools/books/files.ts';
 import { blankOnOrigin, gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';

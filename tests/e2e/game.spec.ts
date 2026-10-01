@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { fixtureFirstGrid } from '../support/fixture-rounds.ts';
 import { gameSnapshot, readStorage, reconciled, waitForState } from '../support/game-page.ts';
 import { collectConsole, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
@@ -45,10 +45,7 @@ test('до сетки покоя сцена не «встала»: сетку п
   expect(problems).toEqual([]);
 });
 
-test('воркер не загрузился — повтор поднимает новый: authenticate проходит со второго воркера', async ({ page }) => {
-  const messages: string[] = [];
-  page.on('console', (message) => messages.push(`${message.type()}: ${message.text()}`));
-  page.on('pageerror', (error) => messages.push(`pageerror: ${error.message}`));
+test('воркер не загрузился — повтор поднимает новый: authenticate проходит со второго воркера', async ({ page, browserName, consoleWatch }) => {
   let workerLoads = 0;
   await page.route('**/assets/worker-*.js', async (route) => {
     workerLoads += 1;
@@ -59,6 +56,10 @@ test('воркер не загрузился — повтор поднимает
   const idle = await waitForState(page, 'idle', 20_000);
   expect(idle.balanceMinor).toBe(100_000);
   expect(workerLoads).toBe(2);
-  // Консоль — ровно отказ загрузки первого скрипта воркера, его пишет сам браузер.
-  expect(messages.every((line) => line.includes('Failed to load resource'))).toBe(true);
+  // Консоль: об оборванном запросе первого скрипта воркера пишет только инструмент — WebKit сообщает, что Playwright
+  // оборвал его через Web Inspector; Chromium молчит. Игра — ничего.
+  const blocked = consoleWatch.problems.filter((line) => /^info: Web Inspector blocked http:\/\/localhost:\d+\/cryscade\/assets\/worker-[\w-]+\.js from loading$/.test(line));
+  expect(blocked, 'сообщение инструмента об оборванном запросе').toHaveLength(browserName === 'webkit' ? 1 : 0);
+  expect(consoleWatch.problems.filter((line) => !blocked.includes(line)), 'от игры — ничего').toStrictEqual([]);
+  consoleWatch.problems.length = 0;
 });

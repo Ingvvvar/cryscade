@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { NON_KEYS, ORDERED_KEYS, buildKey, buildNonKey, describeKey, returnedSpec } from '../support/key-order-table.ts';
 import { blankOnOrigin, gameSnapshot, readStorage, reconciled, waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';

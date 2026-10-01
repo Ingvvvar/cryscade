@@ -1,42 +1,18 @@
-import { expect, test } from '@playwright/test';
-import { collectConsole, mountCounts, sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
+import { expect, test } from '../support/fixtures.ts';
+import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
+import { mountsOnce, remountsLive } from '../support/strict-mode.ts';
 
-// Настоящий StrictMode — dev-сборка React (§10): эффект монтируется дважды, а init рендерера асинхронный.
-// Монтирований 2 — положительный контроль того, что двойной монтаж был; рендерер при этом создан один.
+// Настоящий StrictMode — dev-сборка React (§10): эффект монтируется дважды, а init рендерера асинхронный. Здесь — WebGL
+// (Chromium и WebKit, и в CI без GPU); вариант WebGPU — в GPU-проекте (tests/gpu/strict-mode.spec.ts): WebGPU есть
+// только на настоящем GPU.
 
-for (const renderer of ['webgl', 'webgpu'] as const) {
-  test(`${renderer}: монтирований 2, рендерер один, канвас один, консоль без предупреждений`, async ({ page }) => {
-    const { problems } = collectConsole(page);
-    await page.goto(`./?renderer=${renderer}`);
-    await waitSettled(page);
-    expect(await mountCounts(page)).toStrictEqual({ attaches: 2, detaches: 1, created: 1, inits: 1, destroys: 0 });
-    expect((await sceneInfo(page)).name).toBe(renderer);
-    expect(await page.locator('canvas').count()).toBe(1);
-    expect(problems).toEqual([]);
-  });
-}
+test('webgl: монтирований 2, рендерер один, канвас один, консоль без предупреждений', async ({ page }) => {
+  await mountsOnce(page, 'webgl');
+});
 
-for (const renderer of ['webgl', 'webgpu'] as const) {
-  test(`${renderer}: перемонтирование живой сцены — новый канвас, новый init проходит, консоль чистая`, async ({ page }) => {
-    // Путь, на котором прежняя редакция §10 (канвас у React, removeView: false) вешала WebGL: destroy теряет
-    // контекст, и init на том же канвасе не возвращается. Канвас — поколения рендерера.
-    const { problems } = collectConsole(page);
-    await page.goto(`./?renderer=${renderer}`);
-    await waitSettled(page);
-    await page.locator('canvas').evaluate((canvas) => {
-      canvas.dataset['generation'] = 'first';
-    });
-    await page.evaluate(() => {
-      (window as ProbeWindow).__cryscadeProbe?.remount();
-    });
-    await expect.poll(() => mountCounts(page), { timeout: 10_000 }).toStrictEqual({ attaches: 3, detaches: 2, created: 2, inits: 2, destroys: 1 });
-    await waitSettled(page);
-    expect(await page.locator('canvas').count()).toBe(1);
-    expect(await page.locator('canvas[data-generation="first"]').count()).toBe(0);
-    expect((await sceneInfo(page)).name).toBe(renderer);
-    expect(problems).toEqual([]);
-  });
-}
+test('webgl: перемонтирование живой сцены — новый канвас, новый init проходит, консоль чистая', async ({ page }) => {
+  await remountsLive(page, 'webgl');
+});
 
 test('ресайз портрет → ландшафт: сцена переставлена, канвас тот же', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

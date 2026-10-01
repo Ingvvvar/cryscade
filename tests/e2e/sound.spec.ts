@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { type AudioCounts, type AudioWindow, installAudioCounter } from '../support/audio-counter.ts';
 import { readStorage, waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';

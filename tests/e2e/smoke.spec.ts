@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 
 test('страница открывается: консоль пуста, запросы только к своему origin, шрифты загружены', async ({ page, baseURL }) => {
   const consoleMessages: string[] = [];

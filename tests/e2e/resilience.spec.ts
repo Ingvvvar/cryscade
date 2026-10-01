@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { gameSnapshot, labCall, readStorage, reconciled, sentBodies, shownRounds, waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 

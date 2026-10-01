@@ -1,12 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
-import type { ForcedName } from '../../src/ui/forced-rounds.ts';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { readStorage, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 
 // Клавиатура (§11, решения 7, 9 и 10 фазы 7) — только Chromium: WebKit на macOS по Tab кнопки не обходит (настройка
 // системы «полный доступ с клавиатуры»), это не свойство игры. Видимый фокус — рамка у каждой кнопки, до которой дошёл
-// Tab; строгий пресет — вся игра без мыши; каждый диалог — открыть, фокус внутри, Esc. Рендеры App за раунд без ввода —
-// React Profiler (e2e-сборка — профилирующий react-dom).
+// Tab; строгий пресет — вся игра без мыши; каждый диалог — открыть, фокус внутри, Esc. Рендеры App за раунд — в
+// renders.spec (Tab там не нужен, он идёт и в WebKit).
 
 interface Focused {
   readonly tag: string;
@@ -50,6 +50,11 @@ async function tabTo(page: Page, name: string, limit = 30): Promise<void> {
   throw new Error(`Tab не дошёл до «${name}»`);
 }
 
+/** Следующий раунд — проигрыш (зонд e2e-сборки): случайная фича ждала бы тапа, а клавиатурный тест — не про раунд. */
+async function forceLoss(page: Page): Promise<void> {
+  await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.force('loss'));
+}
+
 async function closedRounds(page: Page): Promise<number> {
   return (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length;
 }
@@ -60,11 +65,13 @@ test('строгий пресет только с клавиатуры: проб
   await page.goto('./?jurisdiction=strict');
   await waitForState(page, 'idle');
   await expect(page.locator('.session-top')).toBeVisible();
+  await forceLoss(page);
   await page.keyboard.press('Space');
   await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(1);
   await waitForState(page, 'idle');
   await page.keyboard.press('+');
   await expect(page.getByTestId('bet')).toHaveText('2,00');
+  await forceLoss(page);
   await page.keyboard.press('Space');
   await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(2);
   await waitForState(page, 'idle');
@@ -103,36 +110,5 @@ test('каждый диалог с клавиатуры: Enter открывае�
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Меню' })).toBeFocused();
   }
-  expect(problems).toEqual([]);
-});
-
-test('рендеры App за раунд без ввода — не больше 10, худший из трёх раундов на обычной скорости; контроль — турбо даёт коммиты', async ({ page }) => {
-  test.setTimeout(120_000);
-  const { problems } = collectConsole(page);
-  await page.goto('./');
-  await waitForState(page, 'idle');
-  const commits = (): Promise<number> => page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.appCommits() ?? -1);
-  // Контроль: ввод — турбо включить и выключить — Profiler видит его коммиты; раунды идут на обычной скорости.
-  const control = await commits();
-  const turbo = page.getByRole('button', { name: 'Турбо' });
-  await turbo.click();
-  await expect(turbo).toHaveAttribute('aria-pressed', 'true');
-  await turbo.click();
-  await expect(turbo).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(commits, { message: 'Profiler видит коммиты от ввода' }).toBeGreaterThanOrEqual(control + 2);
-  const counts: number[] = [];
-  const rounds: readonly ForcedName[] = ['loss', 'cascade', 'multiplier'];
-  for (const [index, round] of rounds.entries()) {
-    await page.evaluate((name) => (window as ProbeWindow).__cryscadeProbe?.force(name), round);
-    const before = await commits();
-    // Ввод — один клик по «Спін»; дальше раунд идёт сам до покоя.
-    await page.getByRole('button', { name: 'Спін' }).click();
-    await expect.poll(() => closedRounds(page), { timeout: 60_000 }).toBe(index + 1);
-    await waitForState(page, 'idle', 30_000);
-    counts.push((await commits()) - before);
-  }
-  console.log(`рендеры App за раунд (проигрыш, каскад, множитель): ${counts.join(', ')}; худший ${String(Math.max(...counts))}`);
-  expect(Math.min(...counts)).toBeGreaterThan(0);
-  expect(Math.max(...counts)).toBeLessThanOrEqual(10);
   expect(problems).toEqual([]);
 });

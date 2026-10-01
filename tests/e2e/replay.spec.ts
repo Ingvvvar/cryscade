@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import type { ControllerSnapshot } from '../../src/client/index.ts';
 import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { decodeBook, type Book } from '../../src/server/book.ts';

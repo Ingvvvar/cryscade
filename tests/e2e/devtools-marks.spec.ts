@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import { waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 

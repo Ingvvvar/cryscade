@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { type Page } from '@playwright/test';
+import { expect, test } from '../support/fixtures.ts';
 import type { ForcedName } from '../../src/ui/forced-rounds.ts';
 import { labCall, readStorage, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
@@ -207,6 +208,8 @@ test('гравець зупинив: «Стоп» — серія стоїть; �
   const { problems } = collectConsole(page);
   await page.goto('./');
   await waitForState(page, 'idle');
+  // Раунд, который идёт, когда игрок жмёт «Стоп», — проигрыш: случайная фича на обычной скорости шла бы дольше ожидания.
+  await force(page, 'loss');
   await startSeries(page, { stopOnFeature: false });
   await expect(bar(page)).toContainText('Автогра: залишилось');
   await page.getByTestId('autoplay-bar').getByRole('button', { name: 'Стоп' }).click();
