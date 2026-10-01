@@ -9,7 +9,14 @@ export {
 } from './game-controller.ts';
 export { MemoryRoundLock } from './memory-round-lock.ts';
 export { CLEAR_NETWORK, NetworkLabTransport, type LabSettings, type NetworkLabOptions } from './network-lab.ts';
-export { Presenter, type CheckpointStore, type Presentation, type PresentationListener, type PresentationSettings } from './presenter.ts';
+export {
+  Presenter,
+  type CheckpointStore,
+  type ClockListener,
+  type Presentation,
+  type PresentationListener,
+  type PresentationSettings,
+} from './presenter.ts';
 export { CHECKPOINT_KEY, SessionCheckpoint, type KeyValueStore } from './session-checkpoint.ts';
 export type { KeySource, RoundLease, RoundLock, Sleep, TabChannel, Transport } from './ports.ts';
 export { ATTEMPT_TIMEOUT_MS, RETRY_DELAYS_MS, RgsClient, type CallOutcome, type Rgs, type RgsClientOptions } from './rgs-client.ts';

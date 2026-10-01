@@ -10,6 +10,7 @@ import type { SettingsView } from '../settings.ts';
 export interface SettingsControl extends ExternalSource<SettingsView> {
   setLanguage(language: Language): void;
   setPreset(preset: PresetName): void;
+  setSound(sound: boolean): void;
 }
 
 /** История и честность (§7) — запросы мимо машины состояний; реализует контроллер игры. */

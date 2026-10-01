@@ -97,6 +97,12 @@ body {
   font-size: calc(var(--u) * 28);
 }
 
+/* Звук выключен (§12): ♪ приглушён и перечёркнут — состояние видно глазами, а не только диктору. */
+.panel .icon[aria-pressed='false'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .label {
   color: var(--muted);
   font-size: calc(var(--u) * 22);

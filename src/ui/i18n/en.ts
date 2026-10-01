@@ -27,6 +27,7 @@ export const EN: Dictionary = {
   text: {
     menu: 'Menu',
     sound: 'Sound',
+    soundOn: 'On',
     win: 'Win',
     balance: 'Balance',
     bet: 'Bet',

@@ -1,4 +1,4 @@
-// Настройки игрока (§11, фаза 7): язык и пресет — в localStorage одной записью. Хранилище бывает недоступно (приватный
+// Настройки игрока (§11, фаза 7; звук — фаза 8): язык, пресет и звук — в localStorage одной записью. Хранилище бывает недоступно (приватный
 // режим, запрет сайта — сам доступ бросает) и испорчено: тогда умолчания, игра идёт, запись молча не удаётся.
 // ?jurisdiction= сильнее настройки: пресет из ссылки настройка не меняет (jurisdictionParam).
 
@@ -9,13 +9,15 @@ import { LANGUAGES, type Language } from './i18n/dictionary.ts';
 export interface SettingsView {
   readonly language: Language;
   readonly preset: PresetName;
+  /** Звук включён (§12): выключен — мьют обеих шин. */
+  readonly sound: boolean;
 }
 
 export const SETTINGS_KEY = 'cryscade:settings';
 
 const PRESET_NAMES: readonly PresetName[] = ['standard', 'strict'];
 
-export const DEFAULT_SETTINGS: SettingsView = { language: 'uk', preset: 'standard' };
+export const DEFAULT_SETTINGS: SettingsView = { language: 'uk', preset: 'standard', sound: true };
 
 function parse(raw: string): SettingsView | null {
   let value: unknown;
@@ -27,7 +29,9 @@ function parse(raw: string): SettingsView | null {
   if (!isRecord(value) || value['v'] !== 1) return null;
   const language = LANGUAGES.find((item) => item === value['language']);
   const preset = PRESET_NAMES.find((item) => item === value['preset']);
-  return language === undefined || preset === undefined ? null : { language, preset };
+  // Запись фазы 7 звука не знает — он включён.
+  const sound = value['sound'] ?? true;
+  return language === undefined || preset === undefined || typeof sound !== 'boolean' ? null : { language, preset, sound };
 }
 
 export class SettingsStore {
@@ -60,6 +64,10 @@ export class SettingsStore {
     this.#write({ ...this.#view, preset });
   }
 
+  setSound(sound: boolean): void {
+    this.#write({ ...this.#view, sound });
+  }
+
   #read(): SettingsView {
     let raw: string | null;
     try {
@@ -71,10 +79,10 @@ export class SettingsStore {
   }
 
   #write(next: SettingsView): void {
-    if (next.language === this.#view.language && next.preset === this.#view.preset) return;
+    if (next.language === this.#view.language && next.preset === this.#view.preset && next.sound === this.#view.sound) return;
     this.#view = next;
     try {
-      this.#store().setItem(SETTINGS_KEY, JSON.stringify({ v: 1, language: next.language, preset: next.preset }));
+      this.#store().setItem(SETTINGS_KEY, JSON.stringify({ v: 1, language: next.language, preset: next.preset, sound: next.sound }));
     } catch {
       // Хранилище недоступно: настройка живёт до перезагрузки.
     }

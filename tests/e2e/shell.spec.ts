@@ -94,7 +94,7 @@ test('настройки: английский — панель, суммы и �
   await page.reload();
   await waitForState(page, 'idle');
   await expect(page.getByRole('button', { name: 'Spin' })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('cryscade:settings'))).toBe('{"v":1,"language":"en","preset":"standard"}');
+  expect(await page.evaluate(() => localStorage.getItem('cryscade:settings'))).toBe('{"v":1,"language":"en","preset":"standard","sound":true}');
   expect(problems).toEqual([]);
 });
 

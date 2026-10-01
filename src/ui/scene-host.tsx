@@ -37,6 +37,8 @@ export interface SceneHostProps {
   readonly now: () => number;
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
   readonly autoplay: AutoplayControl;
+  readonly sound: boolean;
+  readonly onSound: () => void;
 }
 
 /**
@@ -89,7 +91,23 @@ function useRoundAnnouncer(game: Game): RefObject<HTMLParagraphElement | null> {
   return ref;
 }
 
-export function SceneHost({ create, choice, observer, game, source, preferences, reload, onSceneReady, replayExit, session, now, onOpenDialog, autoplay }: SceneHostProps) {
+export function SceneHost({
+  create,
+  choice,
+  observer,
+  game,
+  source,
+  preferences,
+  reload,
+  onSceneReady,
+  replayExit,
+  session,
+  now,
+  onOpenDialog,
+  autoplay,
+  sound,
+  onSound,
+}: SceneHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const insetRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<SceneSession | null>(null);
@@ -161,6 +179,8 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
           now={now}
           onOpenDialog={onOpenDialog}
           autoplay={autoplay}
+          sound={sound}
+          onSound={onSound}
         />
       )}
       <NoticeBar snapshot={snapshot} exitHref={replayExit} autoplay={autoplay} />

@@ -1,8 +1,6 @@
 import '@fontsource-variable/unbounded';
 import '@fontsource-variable/manrope';
 import './styles.css';
-// Звук подключён так, как его подключит сцена (§3): граф импортов проверяется на настоящей проводке.
-import '../audio/index.ts'; // wiring
 import { Profiler, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -33,6 +31,7 @@ import { rendererChoice } from './renderer-choice.ts';
 import { replayExit, replayTarget } from './replay-link.ts';
 import { SCENE_TEXTS } from './scene-texts.ts';
 import { SessionTracker } from './session.ts';
+import { SoundGate } from './sound-gate.ts';
 import { SettingsStore, jurisdictionParam } from './settings.ts';
 import { REDUCED_MOTION_QUERY } from './viewport-watcher.ts';
 
@@ -101,6 +100,26 @@ async function mount(): Promise<void> {
   controller.onRoundSettled((round) => {
     session.settle(round);
   });
+  // Звук (§12): AudioContext — в первом жесте, модуль звука — лениво; мьют — настройка «Звук», скрытая вкладка — пауза.
+  // ?soundleak=1 — положительный контроль замера утечек, только dev и e2e-сборка.
+  const leak = (import.meta.env.DEV || import.meta.env.MODE === 'e2e') && new URLSearchParams(window.location.search).get('soundleak') === '1';
+  const sound = new SoundGate({
+    target: window,
+    createContext: () => (typeof AudioContext === 'function' ? new AudioContext() : null),
+    load: (context) => import('../audio/index.ts').then((module) => module.createSound(context, { leak })),
+    clock: presenter,
+    enabled: { getSnapshot: () => settings.getSnapshot().sound, subscribe: (listener) => settings.subscribe(listener) },
+    hidden: {
+      getSnapshot: () => document.hidden,
+      subscribe: (listener) => {
+        document.addEventListener('visibilitychange', listener);
+        return () => {
+          document.removeEventListener('visibilitychange', listener);
+        };
+      },
+    },
+  });
+  sound.arm();
   // Автоигра (§11) жмёт «Спін» за игрока; пресет без автоигры (строгий) её не пускает.
   const autoplay = new Autoplay(
     controller,

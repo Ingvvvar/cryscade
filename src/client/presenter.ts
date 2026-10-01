@@ -17,6 +17,16 @@ export interface CheckpointStore {
 }
 
 /** Что показ сообщает контроллеру. */
+/**
+ * Ход часов показа — для звука (§12): показ раунда начался (новый — с 0, восстановленный — с начала группы) и каждый
+ * сдвиг часов. jumped — пропуск: сегменты между fromMs и toMs не звучат. Сетка покоя, стоп-кадр зонда и брошенный
+ * показ — не раунд: о них слушатель не слышит.
+ */
+export interface ClockListener {
+  started(schedule: Schedule, fromMs: number): void;
+  advanced(fromMs: number, toMs: number, jumped: boolean): void;
+}
+
 export interface PresentationListener {
   /** Часы встали на точке удержания featureIntro. */
   held(): void;
@@ -55,6 +65,7 @@ export class Presenter implements Presentation {
   readonly #settings: PresentationSettings;
   readonly #checkpoints: CheckpointStore;
   #listener: PresentationListener = NO_LISTENER;
+  #clockListener: ClockListener | null = null;
   #schedule: Schedule | null = null;
   #clock = 0;
   #shown: readonly number[] | null = null;
@@ -112,6 +123,14 @@ export class Presenter implements Presentation {
     this.#listener = listener;
   }
 
+  /** Слушатель хода часов — звук. Раунд уже идёт (звук догрузился посреди него) — слушатель слышит его с текущего места. */
+  observe(listener: ClockListener | null): void {
+    this.#clockListener = listener;
+    const schedule = this.#schedule;
+    if (listener === null || schedule === null || this.#roundId === null || this.#halted || this.#clock >= schedule.durationMs) return;
+    listener.started(schedule, this.#clock);
+  }
+
   play(round: ShownRound, restored: boolean): void {
     const schedule = this.#start(round.events, round.betMinor, round.winMinor, this.#settings.options());
     this.#roundId = round.roundId;
@@ -121,6 +140,7 @@ export class Presenter implements Presentation {
     this.#startMs = this.#clock;
     while ((schedule.holds[this.#nextHold] ?? Number.POSITIVE_INFINITY) < this.#clock) this.#nextHold += 1;
     this.#mark();
+    this.#clockListener?.started(schedule, this.#clock);
   }
 
   rest(grid: readonly number[]): void {
@@ -144,7 +164,7 @@ export class Presenter implements Presentation {
       this.#skips = 0;
     }
     this.#skips += 1;
-    this.#advanceTo(this.#skips === 1 ? group.endMs : (schedule.unitEnds[group.unit] ?? schedule.durationMs));
+    this.#advanceTo(this.#skips === 1 ? group.endMs : (schedule.unitEnds[group.unit] ?? schedule.durationMs), true);
   }
 
   resume(): void {
@@ -168,20 +188,22 @@ export class Presenter implements Presentation {
   tick(deltaMs: number): SceneState {
     const schedule = this.#schedule;
     if (schedule === null) return this.scene;
-    if (!this.#frozen && !this.#halted && !this.#hidden && !this.#held) this.#advanceTo(this.#clock + deltaMs);
+    if (!this.#frozen && !this.#halted && !this.#hidden && !this.#held) this.#advanceTo(this.#clock + deltaMs, false);
     sampleScene(schedule, this.#clock, this.scene);
     return this.scene;
   }
 
-  /** Часы вперёд до target: не дальше точки удержания и конца; на границе группы — контрольная точка. */
-  #advanceTo(target: number): void {
+  /** Часы вперёд до target: не дальше точки удержания и конца; на границе группы — контрольная точка. jumped — пропуск. */
+  #advanceTo(target: number, jumped: boolean): void {
     const schedule = this.#schedule;
     if (schedule === null) return;
     const hold = this.#roundId === null ? Number.POSITIVE_INFINITY : (schedule.holds[this.#nextHold] ?? Number.POSITIVE_INFINITY);
     const stop = Math.min(target, hold, schedule.durationMs);
+    const from = this.#clock;
     this.#clock = Math.max(this.#clock, stop);
     this.#mark();
     if (this.#roundId === null) return;
+    if (this.#clock > from) this.#clockListener?.advanced(from, this.#clock, jumped);
     if (this.#clock >= hold) {
       this.#nextHold += 1;
       this.#held = true;

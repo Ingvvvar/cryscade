@@ -27,6 +27,7 @@ export const UK: Dictionary = {
   text: {
     menu: 'Меню',
     sound: 'Звук',
+    soundOn: 'Увімкнено',
     win: 'Виграш',
     balance: 'Баланс',
     bet: 'Ставка',

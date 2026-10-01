@@ -16,6 +16,7 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "shots": "playwright test -c playwright.gpu.config.ts",
+    "sound:leaks": "playwright test -c playwright.sound.config.ts",
     "hello": "node tools/hello.ts",
     "math": "node tools/math/simulate.ts",
     "math:quick": "node tools/math/quick.ts",

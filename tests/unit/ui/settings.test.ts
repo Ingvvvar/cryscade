@@ -21,8 +21,8 @@ class MemoryStore implements KeyValueStore {
 
 describe('SettingsStore', () => {
   it('пусто — умолчания: украинский, обычный пресет', () => {
-    expect(new SettingsStore(() => new MemoryStore()).getSnapshot()).toStrictEqual({ language: 'uk', preset: 'standard' });
-    expect(DEFAULT_SETTINGS).toStrictEqual({ language: 'uk', preset: 'standard' });
+    expect(new SettingsStore(() => new MemoryStore()).getSnapshot()).toStrictEqual({ language: 'uk', preset: 'standard', sound: true });
+    expect(DEFAULT_SETTINGS).toStrictEqual({ language: 'uk', preset: 'standard', sound: true });
   });
 
   it('выбор пишется одной записью и читается новым хранилищем; подписчики слышат только перемену', () => {
@@ -35,9 +35,13 @@ describe('SettingsStore', () => {
     settings.setLanguage('en');
     settings.setPreset('strict');
     settings.setPreset('strict');
-    expect(heard).toBe(2);
-    expect(store.items.get(SETTINGS_KEY)).toBe('{"v":1,"language":"en","preset":"strict"}');
-    expect(new SettingsStore(() => store).getSnapshot()).toStrictEqual({ language: 'en', preset: 'strict' });
+    settings.setSound(false);
+    expect(heard).toBe(3);
+    expect(store.items.get(SETTINGS_KEY)).toBe('{"v":1,"language":"en","preset":"strict","sound":false}');
+    expect(new SettingsStore(() => store).getSnapshot()).toStrictEqual({ language: 'en', preset: 'strict', sound: false });
+    // Запись фазы 7 — без звука: он включён.
+    store.items.set(SETTINGS_KEY, '{"v":1,"language":"en","preset":"strict"}');
+    expect(new SettingsStore(() => store).getSnapshot()).toStrictEqual({ language: 'en', preset: 'strict', sound: true });
   });
 
   it.each([
@@ -46,6 +50,7 @@ describe('SettingsStore', () => {
     ['чужой язык', '{"v":1,"language":"de","preset":"strict"}'],
     ['чужой пресет', '{"v":1,"language":"en","preset":"lax"}'],
     ['не объект', '[1,2]'],
+    ['звук не флаг', '{"v":1,"language":"en","preset":"strict","sound":"no"}'],
     ['null', 'null'],
   ])('испорчено (%s) — умолчания', (_, raw) => {
     const store = new MemoryStore();
@@ -59,7 +64,7 @@ describe('SettingsStore', () => {
     });
     expect(settings.getSnapshot()).toStrictEqual(DEFAULT_SETTINGS);
     settings.setLanguage('en');
-    expect(settings.getSnapshot()).toStrictEqual({ language: 'en', preset: 'standard' });
+    expect(settings.getSnapshot()).toStrictEqual({ language: 'en', preset: 'standard', sound: true });
   });
 
   it('запись не удалась — выбор живёт в памяти, подписчики слышат', () => {

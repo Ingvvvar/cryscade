@@ -1,5 +1,5 @@
-// Настройки (§11, решение 5 фазы 7): язык — сразу, пресет — со следующего раунда; пресет из ссылки настройка не меняет.
-// Звук — фаза 8. Ленивый модуль: в начальном JS его нет (LAZY_MODULES гейта сборки).
+// Настройки (§11, решение 5 фазы 7): язык — сразу, пресет — со следующего раунда; пресет из ссылки настройка не меняет;
+// звук (§12) — сразу, мьют обеих шин. Ленивый модуль: в начальном JS его нет (LAZY_MODULES гейта сборки).
 
 import type { PresetName } from '../../client/index.ts';
 import { useExternal } from '../external.ts';
@@ -52,6 +52,19 @@ export function SettingsDialog({ services, onClose, returnFocus }: DialogProps) 
           </label>
         ))}
         <p className="field-hint">{locked === null ? dict.text.presetNext : dict.text.presetLocked}</p>
+      </fieldset>
+      <fieldset className="field">
+        <legend className="field-title">{dict.text.sound}</legend>
+        <label className="choice">
+          <input
+            type="checkbox"
+            checked={settings.sound}
+            onChange={(event) => {
+              services.settings.setSound(event.target.checked);
+            }}
+          />
+          <span>{dict.text.soundOn}</span>
+        </label>
       </fieldset>
     </Modal>
   );

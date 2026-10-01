@@ -40,6 +40,9 @@ export interface PanelProps {
   /** Открыть диалог; фокус по закрытии вернётся на returnFocus. */
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
   readonly autoplay: AutoplayControl;
+  /** Звук включён — кнопка ♪ (aria-pressed) переключает настройку. */
+  readonly sound: boolean;
+  readonly onSound: () => void;
 }
 
 /** Пункты меню — диалоги по порядку. */
@@ -136,7 +139,7 @@ function BetChoice({ game, snapshot, playable }: { readonly game: Game; readonly
   );
 }
 
-export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog, autoplay }: PanelProps) {
+export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog, autoplay, sound, onSound }: PanelProps) {
   const { dict, money } = useLanguage();
   const text = dict.text;
   const style = { '--u': `${String(layout.scale)}px` } as CSSProperties;
@@ -148,7 +151,7 @@ export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, on
       <Zone layout={layout} name="top">
         <Menu session={session} now={now} sessionInMenu={!sessionOnScreen} onOpenDialog={onOpenDialog} />
         {sessionOnScreen ? <SessionStrip session={session} now={now} className="session session-top" /> : <h1 className="title">Cryscade</h1>}
-        <button type="button" className="icon" aria-label={text.sound}>
+        <button type="button" className="icon" aria-label={text.sound} aria-pressed={sound} onClick={onSound}>
           ♪
         </button>
       </Zone>

@@ -402,3 +402,82 @@ describe('SessionCheckpoint', () => {
     }).not.toThrow();
   });
 });
+
+describe('Presenter: ход часов для звука (§12)', () => {
+  interface Heard {
+    readonly started: [number, number][];
+    readonly advanced: [number, number, boolean][];
+  }
+
+  function observed(options: { readonly checkpoints?: CheckpointStore } = {}): { readonly show: Presenter; readonly heard: Heard } {
+    const { presenter: show } = presenter(options);
+    const heard: Heard = { started: [], advanced: [] };
+    show.observe({
+      started: (schedule, fromMs) => heard.started.push([schedule.durationMs, fromMs]),
+      advanced: (fromMs, toMs, jumped) => heard.advanced.push([fromMs, toMs, jumped]),
+    });
+    return { show, heard };
+  }
+
+  it('новый раунд — с 0; тикер — сдвиг без прыжка; пропуск — прыжок до конца группы; конец — упор, дальше ни слова', () => {
+    const { show, heard } = observed();
+    show.rest(REST);
+    show.tick(16);
+    expect(heard).toStrictEqual({ started: [], advanced: [] });
+    show.play(SMALL, false);
+    const schedule = buildSchedule({ events: SMALL.events, betMinor: SMALL.betMinor, winMinor: SMALL.winMinor, previousGrid: REST }, NORMAL);
+    expect(heard.started).toStrictEqual([[schedule.durationMs, 0]]);
+    show.tick(16);
+    show.tick(20);
+    expect(heard.advanced).toStrictEqual([
+      [0, 16, false],
+      [16, 36, false],
+    ]);
+    show.skip();
+    const firstEnd = schedule.groups[0]?.endMs ?? -1;
+    expect(heard.advanced.at(-1)).toStrictEqual([36, firstEnd, true]);
+    show.tick(1_000_000);
+    expect(heard.advanced.at(-1)).toStrictEqual([firstEnd, schedule.durationMs, false]);
+    const before = heard.advanced.length;
+    show.tick(16);
+    expect(heard.advanced).toHaveLength(before);
+  });
+
+  it('подписался посреди раунда — слышит его с текущего места; после конца и на сетке покоя — нет', () => {
+    const { presenter: show } = presenter();
+    const heard: [number, number][] = [];
+    const listener = {
+      started: (schedule: { readonly durationMs: number }, fromMs: number) => heard.push([schedule.durationMs, fromMs]),
+      advanced: () => undefined,
+    };
+    show.rest(REST);
+    show.observe(listener);
+    show.play(CASCADES, false);
+    show.tick(500);
+    show.observe(listener);
+    const schedule = buildSchedule({ events: CASCADES.events, betMinor: CASCADES.betMinor, winMinor: CASCADES.winMinor, previousGrid: REST }, NORMAL);
+    expect(heard).toStrictEqual([
+      [schedule.durationMs, 0],
+      [schedule.durationMs, 500],
+    ]);
+    show.tick(1_000_000);
+    show.observe(listener);
+    expect(heard).toHaveLength(2);
+  });
+
+  it('восстановленный раунд — с начала группы контрольной точки; брошенный показ — без хода; слушатель снят — тишина', () => {
+    const checkpoints = new MemoryCheckpoints();
+    checkpoints.stored = { roundId: CASCADES.roundId, group: 2 };
+    const { show, heard } = observed({ checkpoints });
+    show.play(CASCADES, true);
+    const schedule = buildSchedule({ events: CASCADES.events, betMinor: CASCADES.betMinor, winMinor: CASCADES.winMinor, previousGrid: null }, NORMAL);
+    expect(heard.started).toStrictEqual([[schedule.durationMs, schedule.groups[2]?.startMs]]);
+    show.halt();
+    show.tick(16);
+    expect(heard.advanced).toStrictEqual([]);
+    show.observe(null);
+    show.play(SMALL, false);
+    show.tick(16);
+    expect([heard.started.length, heard.advanced]).toStrictEqual([1, []]);
+  });
+});

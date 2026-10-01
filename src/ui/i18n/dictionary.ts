@@ -24,6 +24,7 @@ export interface Dictionary {
   readonly text: {
     readonly menu: string;
     readonly sound: string;
+    readonly soundOn: string;
     readonly win: string;
     readonly balance: string;
     readonly bet: string;

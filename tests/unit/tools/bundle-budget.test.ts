@@ -71,7 +71,7 @@ describe('BundleBudget', () => {
 describe('ленивый модуль в начальном JS (§13)', () => {
   const PROBE = '/Users/someone/cryscade/src/ui/probe.ts';
 
-  it('список — зонд страницы, английский словарь и диалоги', () => {
+  it('список — зонд страницы, английский словарь, диалоги и звук', () => {
     expect(LAZY_MODULES).toStrictEqual([
       'src/ui/probe.ts',
       'src/ui/i18n/en.ts',
@@ -80,6 +80,10 @@ describe('ленивый модуль в начальном JS (§13)', () => {
       'src/ui/dialogs/history-dialog.tsx',
       'src/ui/dialogs/fairness-dialog.tsx',
       'src/ui/dialogs/lab-dialog.tsx',
+      'src/audio/index.ts',
+      'src/audio/director.ts',
+      'src/audio/cues.ts',
+      'src/audio/synth.ts',
     ]);
   });
 
