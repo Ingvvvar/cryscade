@@ -479,9 +479,14 @@ body {
   font-size: 0.85rem;
 }
 
-/* Ставка (§11): число — кнопка выбора; уровни — popover по центру экрана. */
+/* Ставка (§11): число — кнопка выбора; уровни — popover по центру экрана. Шрифт числа — как у .value: правило кнопок
+   панели (font: inherit) иначе перебило бы его. */
 .panel .bet-value {
   padding: calc(var(--u) * 2) calc(var(--u) * 14);
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: calc(var(--u) * 28);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   background: transparent;
   border-color: transparent;
 }

@@ -122,6 +122,8 @@ test('історія: зіграні раунди — час, ставка, ви
   await expect(page.getByTestId('revealed')).toBeVisible();
   await close(page);
   await open(page, 'Історія');
+  // Строки — после ответа history: all() не ждёт, без этого цикл мог пройти по пустой таблице.
+  await expect(rows).toHaveCount(2);
   for (const row of await rows.all()) {
     await row.getByRole('button', { name: 'Перевірити' }).click();
     await expect(row.locator('.verdict')).toHaveText('Збігається');
@@ -158,8 +160,12 @@ test('чесність: зобов’язання і nonce — як в IndexedDB
   await expect.poll(async () => (await readStorage(page)).rounds.filter((item) => item.status === 'closed').length).toBe(2);
   await waitForState(page, 'idle');
   await open(page, 'Чесність');
+  // Поле смены сида — после ответа: до него первое поле «Сід гравця» — панели проверки.
+  await expect(page.getByTestId('commitment')).toBeVisible();
   await seed.fill('Lucky7');
   await page.getByRole('button', { name: 'Змінити сід' }).click();
+  // Запись раскрытия — до ответа setClientSeed: базу читаем, когда ответ уже на экране.
+  await expect(page.getByTestId('revealed')).toBeVisible();
   const after = await readFairness(page);
   const old = after.secrets.find((item) => item.commitment === before.fairness?.commitment);
   await expect(page.getByTestId('revealed')).toHaveText(old?.secret ?? 'нет');

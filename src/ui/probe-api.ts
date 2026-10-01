@@ -113,6 +113,8 @@ export interface CryscadeProbe {
   sent(): SentBody[];
   /** Ответы воркера на запросы replay как есть — тело ответа: { ok, result } или { ok, error }. */
   replays(): unknown[];
+  /** Коммиты дерева App с загрузки — React Profiler (§11: не больше 10 за раунд без ввода). */
+  appCommits(): number;
   readonly lab: ProbeLab;
 }
 

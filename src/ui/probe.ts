@@ -77,6 +77,12 @@ export class PageProbe implements MountObserver {
   #skipping = false;
   readonly #shown: string[] = [];
   readonly #sent: SentBody[] = [];
+  /** Коммиты дерева App (React Profiler): замер рендеров за раунд (§11). */
+  #commits = 0;
+  /** onRender Profiler: стабильная функция — React зовёт её на каждый коммит дерева. */
+  readonly noteCommit = (): void => {
+    this.#commits += 1;
+  };
   /** id запросов replay, ответ на которые ещё не пришёл. */
   readonly #replayIds = new Set<number>();
   /** Ответы воркера на replay как есть: e2e сверяет события повтора с посчитанными в Node. */
@@ -264,6 +270,7 @@ export class PageProbe implements MountObserver {
       game: () => this.#game?.getSnapshot() ?? null,
       shownRounds: () => [...this.#shown],
       sent: () => [...this.#sent],
+      appCommits: () => this.#commits,
       replays: () => [...this.#replays],
       lab: {
         set: (settings: Partial<LabSettings>) => {

@@ -62,6 +62,11 @@ export interface CryscadeConfigOptions {
   readonly budget?: number;
   /** Модули, которые главный вход импортирует статически сверх своих импортов, — положительный контроль гейта. */
   readonly staticRoots?: readonly string[];
+  /**
+   * Профилирующий react-dom вместо прод-сборки (только e2e): у прод-сборки Profiler не зовёт onRender, а замер рендеров
+   * App за раунд (§11) идёт в e2e. Прод не меняется.
+   */
+  readonly profiling?: boolean;
 }
 
 export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig {
@@ -82,6 +87,7 @@ export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig 
   return {
     base: '/cryscade/',
     define: bookDefines(),
+    ...(options.profiling === true ? { resolve: { alias: [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }] } } : {}),
     plugins: [react(), ...inject, budget.main],
     worker: { plugins: budget.worker },
     // Порог Vite на размер чанка снят: гейт — бюджет начального JS выше.
@@ -89,4 +95,4 @@ export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig 
   };
 }
 
-export default defineConfig(() => cryscadeConfig());
+export default defineConfig(({ mode }) => cryscadeConfig({ profiling: mode === 'e2e' }));

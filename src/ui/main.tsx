@@ -3,7 +3,7 @@ import '@fontsource-variable/manrope';
 import './styles.css';
 // Звук подключён так, как его подключит сцена (§3): граф импортов проверяется на настоящей проводке.
 import '../audio/index.ts'; // wiring
-import { StrictMode } from 'react';
+import { Profiler, StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   BroadcastTabChannel,
@@ -124,9 +124,8 @@ async function mount(): Promise<void> {
       allTexts: LANGUAGES.map((name) => SCENE_TEXTS[name]),
     });
   };
-  createRoot(root).render(
-    <StrictMode>
-      <App
+  const app: ReactNode = (
+    <App
         create={create}
         choice={choice}
         observer={probe}
@@ -147,6 +146,17 @@ async function mount(): Promise<void> {
         language={language}
         services={{ settings, lockedPreset, fairness: controller, lab }}
       />
+  );
+  // Замер рендеров App за раунд (§11) — Profiler только при зонде (dev и e2e-сборка; в e2e — профилирующий react-dom).
+  createRoot(root).render(
+    <StrictMode>
+      {probe === null ? (
+        app
+      ) : (
+        <Profiler id="app" onRender={probe.noteCommit}>
+          {app}
+        </Profiler>
+      )}
     </StrictMode>,
   );
   // Повтор по ссылке (§7): вместо обычного запуска — события раунда без authenticate, замков и кошелька.
