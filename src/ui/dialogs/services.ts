@@ -1,7 +1,7 @@
 // Что диалоги получают от корня композиции (§11): хранилища и действия. Диалоги ленивые — их модули грузятся по первому
 // открытию; хозяин диалогов (dialog-host.tsx) отдаёт каждому один и тот же набор, диалог берёт нужное.
 
-import type { CallOutcome, PresetName } from '../../client/index.ts';
+import type { CallOutcome, LabSettings, PresetName } from '../../client/index.ts';
 import type { FairnessView, HistoryResult, SeedResult, VerifyResult } from '../../protocol/index.ts';
 import type { ExternalSource } from '../external.ts';
 import type { Language } from '../i18n/dictionary.ts';
@@ -21,11 +21,22 @@ export interface FairnessControl {
   verify(secret: string, clientSeed: string, nonce: number): Promise<CallOutcome<VerifyResult>>;
 }
 
+/** Лаборатория сети (§6.5): настройки и разовые действия — тот же декоратор транспорта, что всегда в цепочке. */
+export interface LabControl {
+  readonly settings: LabSettings;
+  set(settings: Partial<LabSettings>): void;
+  loseNextResponse(): void;
+  reloadMidNextRound(): void;
+  holdNextEndRound(): void;
+  releaseHeld(): void;
+}
+
 export interface DialogServices {
   readonly settings: SettingsControl;
   /** Пресет из ссылки (?jurisdiction=) — настройка его не меняет; null — решает настройка. */
   readonly lockedPreset: PresetName | null;
   readonly fairness: FairnessControl;
+  readonly lab: LabControl;
 }
 
 export interface DialogProps {

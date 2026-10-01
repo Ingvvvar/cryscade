@@ -55,6 +55,7 @@ export interface Dictionary {
     readonly rules: string;
     readonly history: string;
     readonly fairness: string;
+    readonly lab: string;
     readonly loading: string;
     /** Запрос не удался: сервер не ответил или ответ не годится. */
     readonly failed: string;
@@ -113,6 +114,16 @@ export interface Dictionary {
     foundMismatch(time: string): string;
     readonly notFound: string;
     readonly replayOnly: string;
+  };
+  /** Лаборатория сети (§6.5): поля настроек, разовые действия и что сделано. */
+  readonly lab: {
+    readonly intro: string;
+    readonly fields: { readonly latencyMs: string; readonly jitterMs: string; readonly requestLoss: string; readonly responseLoss: string };
+    readonly clear: string;
+    readonly cleared: string;
+    readonly actionsTitle: string;
+    readonly actions: { readonly loseNextResponse: string; readonly reloadMidNextRound: string; readonly holdNextEndRound: string; readonly releaseHeld: string };
+    readonly done: { readonly loseNextResponse: string; readonly reloadMidNextRound: string; readonly holdNextEndRound: string; readonly releaseHeld: string };
   };
   /** Итог раунда для экранного диктора (aria-live): один раз на раунд. Суммы — уже строками локали. */
   readonly announce: {

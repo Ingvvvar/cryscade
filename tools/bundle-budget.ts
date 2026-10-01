@@ -21,6 +21,7 @@ export const LAZY_MODULES: readonly string[] = [
   'src/ui/dialogs/rules-dialog.tsx',
   'src/ui/dialogs/history-dialog.tsx',
   'src/ui/dialogs/fairness-dialog.tsx',
+  'src/ui/dialogs/lab-dialog.tsx',
 ];
 
 /** Что бюджету нужно от чанка сборки. */

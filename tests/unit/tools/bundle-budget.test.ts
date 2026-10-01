@@ -79,6 +79,7 @@ describe('ленивый модуль в начальном JS (§13)', () => {
       'src/ui/dialogs/rules-dialog.tsx',
       'src/ui/dialogs/history-dialog.tsx',
       'src/ui/dialogs/fairness-dialog.tsx',
+      'src/ui/dialogs/lab-dialog.tsx',
     ]);
   });
 

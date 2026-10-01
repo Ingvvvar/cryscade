@@ -1,0 +1,140 @@
+import { expect, test, type Page } from '@playwright/test';
+import { readStorage, reconciled } from '../support/game-page.ts';
+import { collectConsole } from '../support/page-probe.ts';
+
+// Лаборатория сети в прод-сборке (§6.5, решение 2 фазы 7): зонда нет — игра видна только через DOM и IndexedDB.
+// Ревьюер на живом адресе ломает сеть диалогом, и деньги сходятся: потерянный ответ — повтор с тем же ключом, одно
+// списание; перезагрузка посреди раунда — раунд доигран; потеря всех запросов — экран ошибки, денег не тронуто.
+
+/** Покой без зонда: «Спін» доступен и не занят. */
+async function idle(page: Page, timeout = 30_000): Promise<void> {
+  const spin = page.getByRole('button', { name: 'Спін' });
+  await expect(spin).toHaveAttribute('aria-busy', 'false', { timeout });
+  await expect(spin).toBeEnabled({ timeout });
+}
+
+async function closedRounds(page: Page): Promise<number> {
+  return (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length;
+}
+
+async function labAction(page: Page, action: string, done: string): Promise<void> {
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  await expect(page.getByRole('dialog', { name: 'Лабораторія мережі' })).toBeVisible();
+  await page.getByRole('button', { name: action }).click();
+  await expect(page.getByTestId('lab-status')).toHaveText(done);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+test('загублена відповідь на play: гра повторює з тим самим ключем — один раунд, одне списання', async ({ page }) => {
+  test.setTimeout(60_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await idle(page);
+  await labAction(page, 'Загубити наступну відповідь', 'Наступна відповідь сервера загубиться — гра повторить запит з тим самим ключем');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(1);
+  await idle(page);
+  const stored = await readStorage(page);
+  expect([stored.rounds.length, stored.keys]).toStrictEqual([1, 1]);
+  expect(stored.wallet?.balanceMinor).toBe(reconciled(stored));
+  expect(problems).toEqual([]);
+});
+
+test('перезавантаження посеред раунду: сторінка встає, раунд доіграно, гроші зійшлися', async ({ page }) => {
+  test.setTimeout(60_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await idle(page);
+  await labAction(page, 'Перезавантажити посеред наступного раунду', 'Сторінка перезавантажиться, щойно сервер прийме наступну ставку');
+  const reloaded = page.waitForEvent('load');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await reloaded;
+  await idle(page);
+  await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(1);
+  const stored = await readStorage(page);
+  expect(stored.rounds).toHaveLength(1);
+  expect(stored.wallet?.balanceMinor).toBe(reconciled(stored));
+  expect(problems).toEqual([]);
+});
+
+test('втрата всіх запитів: після повторів — екран «Сервер гри не відповідає», грошей не чіпано; перезавантаження — гра знову', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await idle(page);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  await page.getByLabel('Втрата запитів, %').fill('100');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  await expect(page.getByLabel('Втрата запитів, %')).toHaveValue('100');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect(page.getByRole('alert')).toContainText('Сервер гри не відповідає', { timeout: 40_000 });
+  await expect(page.getByRole('button', { name: 'Повторити' })).toBeVisible();
+  const stored = await readStorage(page);
+  expect([stored.rounds.length, stored.wallet?.balanceMinor]).toStrictEqual([0, 100_000]);
+  await page.reload();
+  await idle(page);
+  await expect(page.getByTestId('balance')).toHaveText('1 000,00');
+  expect(problems).toEqual([]);
+});
+
+test('затримка завершення раунду: раунд активний, доки затримане не відпустять; потім закрито, гроші зійшлися', async ({ page }) => {
+  test.setTimeout(60_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await idle(page);
+  await labAction(page, 'Затримати наступне завершення раунду', 'Наступне завершення раунду чекатиме, доки його не відпустять');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect.poll(async () => (await readStorage(page)).wallet?.activeRoundId ?? null, { timeout: 30_000 }).not.toBeNull();
+  // Показ кончился, endRound держит лаборатория: раунд активен, спин занят.
+  await expect(page.getByRole('button', { name: 'Спін' })).toHaveAttribute('aria-busy', 'true');
+  await page.waitForTimeout(1500);
+  expect([await closedRounds(page), (await readStorage(page)).wallet?.activeRoundId === null]).toStrictEqual([0, false]);
+  await labAction(page, 'Відпустити затримане', 'Затримане відпущено');
+  await expect.poll(() => closedRounds(page), { timeout: 15_000 }).toBe(1);
+  await idle(page);
+  const stored = await readStorage(page);
+  expect(stored.wallet?.balanceMinor).toBe(reconciled(stored));
+  expect(problems).toEqual([]);
+});
+
+test('затримка мережі: запит доходить до сервера не раніше за неї; поля зберігають значення; «Чиста мережа» — нулі', async ({ page }) => {
+  test.setTimeout(60_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await idle(page);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  // Сверх предела поля — предел: задержка не больше 5000 мс.
+  await page.getByLabel('Затримка, мс').fill('9999');
+  await expect(page.getByLabel('Затримка, мс')).toHaveValue('5000');
+  await page.getByLabel('Затримка, мс').fill('1500');
+  await page.getByLabel('Розкид, мс').fill('300');
+  await page.getByLabel('Втрата відповідей, %').fill('5');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  await expect(page.getByLabel('Затримка, мс')).toHaveValue('1500');
+  await expect(page.getByLabel('Розкид, мс')).toHaveValue('300');
+  await expect(page.getByLabel('Втрата відповідей, %')).toHaveValue('5');
+  await page.getByLabel('Розкид, мс').fill('0');
+  await page.getByLabel('Втрата відповідей, %').fill('0');
+  await page.keyboard.press('Escape');
+  const started = Date.now();
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect.poll(async () => (await readStorage(page)).rounds.length, { timeout: 30_000, intervals: [50] }).toBe(1);
+  expect(Date.now() - started).toBeGreaterThanOrEqual(1500);
+  await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(1);
+  await idle(page);
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Лабораторія мережі' }).click();
+  await page.getByRole('button', { name: 'Чиста мережа' }).click();
+  await expect(page.getByTestId('lab-status')).toHaveText('Мережа знову чиста');
+  for (const label of ['Затримка, мс', 'Розкид, мс', 'Втрата запитів, %', 'Втрата відповідей, %']) await expect(page.getByLabel(label)).toHaveValue('0');
+  expect(problems).toEqual([]);
+});

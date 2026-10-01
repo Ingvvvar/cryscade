@@ -41,7 +41,7 @@ export interface PanelProps {
 }
 
 /** Пункты меню — диалоги по порядку. */
-const MENU: readonly DialogName[] = ['rules', 'settings', 'history', 'fairness'];
+const MENU: readonly DialogName[] = ['rules', 'settings', 'history', 'fairness', 'lab'];
 
 /** Меню (§11): popover с диалогами; в обычном пресете — и сессия. Фокус по закрытии диалога — на кнопку меню. */
 function Menu({ session, now, sessionInMenu, onOpenDialog }: Pick<PanelProps, 'session' | 'now' | 'onOpenDialog'> & { readonly sessionInMenu: boolean }) {

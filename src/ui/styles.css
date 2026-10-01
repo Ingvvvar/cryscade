@@ -708,3 +708,26 @@ body {
 .verdict-lines p {
   margin: 4px 0 0;
 }
+
+/* Лаборатория сети: поля настроек сеткой, разовые действия столбиком. */
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.lab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lab-actions .action {
+  text-align: start;
+}

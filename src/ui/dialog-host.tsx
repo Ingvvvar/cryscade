@@ -5,7 +5,7 @@
 import { useCallback, useState, type ComponentType, type ReactNode } from 'react';
 import type { DialogProps, DialogServices } from './dialogs/services.ts';
 
-export type DialogName = 'rules' | 'settings' | 'history' | 'fairness';
+export type DialogName = 'rules' | 'settings' | 'history' | 'fairness' | 'lab';
 
 type DialogComponent = ComponentType<DialogProps>;
 
@@ -14,6 +14,7 @@ const LOADERS: Readonly<Record<DialogName, () => Promise<DialogComponent>>> = {
   settings: () => import('./dialogs/settings-dialog.tsx').then((module) => module.SettingsDialog),
   history: () => import('./dialogs/history-dialog.tsx').then((module) => module.HistoryDialog),
   fairness: () => import('./dialogs/fairness-dialog.tsx').then((module) => module.FairnessDialog),
+  lab: () => import('./dialogs/lab-dialog.tsx').then((module) => module.LabDialog),
 };
 
 interface OpenDialog {

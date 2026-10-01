@@ -57,6 +57,7 @@ export const EN: Dictionary = {
     rules: 'Rules and payouts',
     history: 'History',
     fairness: 'Fairness',
+    lab: 'Network lab',
     loading: 'Loading…',
     failed: 'The game server did not answer — try again',
   },
@@ -107,6 +108,25 @@ export const EN: Dictionary = {
     foundMismatch: (time) => `Does not match the round of ${time}`,
     notFound: 'History has no round with this commitment and nonce',
     replayOnly: 'Fairness is not shown in a link replay — open the game',
+  },
+  lab: {
+    intro: 'Break the network between the game and the server and watch the game survive it: money is never doubled, a round is never lost.',
+    fields: { latencyMs: 'Latency, ms', jitterMs: 'Jitter, ms', requestLoss: 'Request loss, %', responseLoss: 'Response loss, %' },
+    clear: 'Clean network',
+    cleared: 'The network is clean again',
+    actionsTitle: 'One-off actions',
+    actions: {
+      loseNextResponse: 'Lose the next response',
+      reloadMidNextRound: 'Reload in the middle of the next round',
+      holdNextEndRound: 'Hold the next round end',
+      releaseHeld: 'Release what is held',
+    },
+    done: {
+      loseNextResponse: 'The next server response will be lost — the game retries with the same key',
+      reloadMidNextRound: 'The page reloads as soon as the server accepts the next bet',
+      holdNextEndRound: 'The next round end waits until it is released',
+      releaseHeld: 'Released',
+    },
   },
   announce: {
     win: (win, balance) => `Win ${win}. Balance ${balance}`,

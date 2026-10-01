@@ -16,6 +16,8 @@ export default defineConfig({
   reporter: 'list',
   projects: [
     { name: 'smoke', testMatch: 'smoke.spec.ts', use: { ...chrome, baseURL: url(PROD) } },
+    // Лаборатория сети в прод-сборке (решение 2 фазы 7): зонда нет — только DOM и IndexedDB.
+    { name: 'prod-lab', testMatch: 'lab.spec.ts', use: { ...chrome, baseURL: url(PROD) } },
     // StrictMode монтирует дважды только в dev-сборке React.
     { name: 'strict-mode', testMatch: 'strict-mode.spec.ts', use: { ...chrome, baseURL: url(DEV) } },
     // Headless shell: WebGPU нет, WebGL — SwiftShader. Проверка отката и видимой ошибки принудительного выбора.
