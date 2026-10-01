@@ -313,13 +313,84 @@ describe('загрузка книги', () => {
     expect(loader.calls).toBe(2);
   });
 
-  it('живой источник — честности нет: authenticate без неё, смена сида и загрузка книги — BAD_REQUEST', async () => {
+  it('живой источник — честности нет: authenticate без неё, смена сида, загрузка книги и пересчёт — BAD_REQUEST', async () => {
     const rig = new Rig();
     expect((await result(rig, AUTHENTICATE))['fairness']).toBeNull();
-    for (const body of [{ type: 'rotateSeed' }, { type: 'setClientSeed', clientSeed: 'a' }, { type: 'loadBook' }, { type: 'replay', book: 0 }]) {
+    for (const body of [
+      { type: 'rotateSeed' },
+      { type: 'setClientSeed', clientSeed: 'a' },
+      { type: 'loadBook' },
+      { type: 'replay', book: 0 },
+      { type: 'verify', secret: X0, clientSeed: 'a', nonce: 0 },
+    ]) {
       const response = await rig.send(body);
       expect(response.ok ? null : response.error.code, JSON.stringify(body)).toBe('BAD_REQUEST');
     }
+  });
+});
+
+describe('пересчёт выбора (verify, панель «Перевірити»)', () => {
+  it('раскрытый секрет: обязательство и запись книги — те же, что у сыгранного раунда; ничего не записано', async () => {
+    const rig = bookRig();
+    await result(rig, AUTHENTICATE);
+    const played = (await result(rig, play(100, 'k1')))['round'] as Record<string, unknown>;
+    await result(rig, endRound('r1'));
+    await result(rig, { type: 'rotateSeed' });
+    const before = rig.storage.snapshot();
+    const index = expectedIndex(X0, S0, 0);
+    const verified = await result(rig, { type: 'verify', secret: X0, clientSeed: S0, nonce: 0 });
+    expect(verified).toStrictEqual({ commitment: C0, bookIndex: index, counter: 0, payX100: RECORDS[index]?.payX100 });
+    expect([verified['bookIndex'], verified['payX100']]).toStrictEqual([played['bookIndex'], played['payX100']]);
+    expect(rig.storage.snapshot()).toStrictEqual(before);
+  });
+
+  it('чужой секрет — его обязательство и его выбор; секрет, сид или nonce не по формату — BAD_REQUEST', async () => {
+    const rig = bookRig();
+    const other = 'ab'.repeat(32);
+    expect(await result(rig, { type: 'verify', secret: other, clientSeed: 'Lucky7', nonce: 3 })).toStrictEqual({
+      commitment: sha256(Buffer.from(other, 'hex')),
+      bookIndex: expectedIndex(other, 'Lucky7', 3),
+      counter: 0,
+      payX100: RECORDS[expectedIndex(other, 'Lucky7', 3)]?.payX100,
+    });
+    for (const body of [
+      { type: 'verify', secret: 'AB'.repeat(32), clientSeed: 'a', nonce: 0 },
+      { type: 'verify', secret: 'ab'.repeat(31), clientSeed: 'a', nonce: 0 },
+      { type: 'verify', secret: other, clientSeed: 'a:b', nonce: 0 },
+      { type: 'verify', secret: other, clientSeed: 'a', nonce: -1 },
+      { type: 'verify', secret: other, clientSeed: 'a', nonce: 1.5 },
+      { type: 'verify', secret: other, clientSeed: 'a', nonce: 2 ** 53 },
+      { type: 'verify', clientSeed: 'a', nonce: 0 },
+    ]) {
+      const response = await rig.send(body);
+      expect(response.ok ? null : response.error.code, JSON.stringify(body)).toBe('BAD_REQUEST');
+    }
+  });
+
+  it('значение за границей на counter 0 — выбор с counter 1, как у раунда', async () => {
+    // HMAC стенда: для сообщения на counter 0 — восемь байт 0xff (за границей), иначе node:crypto.
+    const scripted = {
+      hmacSha256: (key: Uint8Array, message: Uint8Array): Promise<Uint8Array> =>
+        Promise.resolve(new TextDecoder().decode(message).endsWith(':0') ? new Uint8Array(32).fill(0xff) : new Uint8Array(createHmac('sha256', key).update(message).digest())),
+      sha256: (data: Uint8Array): Promise<Uint8Array> => Promise.resolve(new Uint8Array(createHash('sha256').update(data).digest())),
+    };
+    const rig = new Rig({ rounds: { kind: 'book', loader: new ScriptedBookLoader() }, crypto: scripted });
+    const value = createHmac('sha256', Buffer.from(X0, 'hex')).update('Seed1:4:1').digest().readBigUInt64BE(0);
+    const point = Number(value % 10n);
+    const index = point < 5 ? 0 : point < 8 ? 1 : 2;
+    expect(await result(rig, { type: 'verify', secret: X0, clientSeed: 'Seed1', nonce: 4 })).toStrictEqual({
+      commitment: C0,
+      bookIndex: index,
+      counter: 1,
+      payX100: RECORDS[index].payX100,
+    });
+  });
+
+  it('книга не загрузилась — INTERNAL; следующий пересчёт грузит её заново', async () => {
+    const rig = bookRig(new ScriptedBookLoader(testBook(), 1));
+    const failed = await rig.send({ type: 'verify', secret: X0, clientSeed: S0, nonce: 0 });
+    expect(failed.ok ? null : failed.error.code).toBe('INTERNAL');
+    expect((await result(rig, { type: 'verify', secret: X0, clientSeed: S0, nonce: 0 }))['commitment']).toBe(C0);
   });
 });
 

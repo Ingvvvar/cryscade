@@ -13,6 +13,7 @@ export {
 export { isAscendingInts, isClientSeed, isHex64, isIntIn, isNat, isPositive, isRecord, isToken } from './guards.ts';
 export {
   BOOK_RECORDS_MAX,
+  VERIFY_COUNTER_MAX,
   checkError,
   checkRequestBody,
   checkResult,
@@ -36,6 +37,7 @@ export {
   type RoundView,
   type SeedResult,
   type StorageNotice,
+  type VerifyResult,
   type WalletView,
 } from './messages.ts';
 export { PROBE_CHANNEL, checkForceRound, checkForceRoundAck, type ForceRound, type ForceRoundAck } from './probe-channel.ts';

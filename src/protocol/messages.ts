@@ -20,7 +20,12 @@ export type RequestBody =
   | { readonly type: 'replay'; readonly round: string }
   | { readonly type: 'replay'; readonly book: number }
   /** Загрузить книгу исходов заранее — страница просит после первого кадра, чтобы первый спин её не ждал. */
-  | { readonly type: 'loadBook' };
+  | { readonly type: 'loadBook' }
+  /**
+   * Фаза 7 (§7, панель «Перевірити»): пересчёт выбора по раскрытому секрету — обязательство (SHA-256 секрета) и запись
+   * книги, на которую указывает HMAC. Ничего не пишет. Независимая проверка — docs/fairness.md и tools/fairness.
+   */
+  | { readonly type: 'verify'; readonly secret: string; readonly clientSeed: string; readonly nonce: number };
 
 export type RequestType = RequestBody['type'];
 
@@ -139,6 +144,17 @@ export interface LoadBookResult {
   readonly records: number;
 }
 
+/** Пересчёт выбора: обязательство секрета, индекс книги, на каком counter значение прошло, и выплата записи. */
+export interface VerifyResult {
+  readonly commitment: string;
+  readonly bookIndex: number;
+  readonly counter: number;
+  readonly payX100: number;
+}
+
+/** counter выбора — от 0 до 63: дальше сервер бросает (server/fairness.ts, MAX_COUNTER). */
+export const VERIFY_COUNTER_MAX = 63;
+
 export interface Results {
   readonly authenticate: AuthenticateResult;
   readonly play: PlayResult;
@@ -149,6 +165,7 @@ export interface Results {
   readonly history: HistoryResult;
   readonly replay: ReplayResult;
   readonly loadBook: LoadBookResult;
+  readonly verify: VerifyResult;
 }
 
 export type ProtocolError =
@@ -187,6 +204,10 @@ export function checkRequestBody(body: unknown): string | null {
       return isIntIn(body['limit'], 1, 100) ? null : 'history: limit — целое 1…100';
     case 'replay':
       return replayTargetProblem(body);
+    case 'verify':
+      if (!isHex64(body['secret'])) return 'verify: секрет — 64 знака hex';
+      if (!isClientSeed(body['clientSeed'])) return 'verify: сид игрока — 1…64 знака [0-9A-Za-z]';
+      return isNat(body['nonce']) ? null : 'verify: nonce — не целое';
     default:
       return 'неизвестный тип запроса';
   }
@@ -350,6 +371,11 @@ export function checkResult(type: RequestType, value: unknown): string | null {
       return replayProblem(value);
     case 'loadBook':
       return isIntIn(value['records'], 1, BOOK_RECORDS_MAX) ? null : 'loadBook: records — не число записей книги';
+    case 'verify':
+      if (!isHex64(value['commitment'])) return 'verify: обязательство — не 64 знака hex';
+      if (!isIntIn(value['bookIndex'], 0, BOOK_RECORDS_MAX - 1)) return 'verify: bookIndex — не индекс книги';
+      if (!isIntIn(value['counter'], 0, VERIFY_COUNTER_MAX)) return 'verify: counter — не 0…63';
+      return isNat(value['payX100']) ? null : 'verify: payX100 — не целое';
   }
 }
 

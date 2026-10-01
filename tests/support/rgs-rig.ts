@@ -7,6 +7,7 @@ import {
   RgsServer,
   type Broadcast,
   type Clock,
+  type Crypto,
   type Entropy,
   type Lock,
   type RoundsOption,
@@ -92,6 +93,8 @@ export interface RigOptions {
   readonly config?: GameConfig;
   /** Источник раундов; по умолчанию — живой по сценарию сидов (честности нет). Книга — с загрузчиком. */
   readonly rounds?: RoundsOption;
+  /** HMAC и SHA-256 сервера; по умолчанию node:crypto. */
+  readonly crypto?: Crypto;
 }
 
 export class Rig {
@@ -111,7 +114,7 @@ export class Rig {
       clock: options.clock ?? new FixedClock(T0),
       entropy: this.entropy,
       broadcast: this.broadcast,
-      crypto: new NodeCrypto(),
+      crypto: options.crypto ?? new NodeCrypto(),
     };
     const config = options.config ?? DEFAULT_CONFIG;
     const rounds = options.rounds ?? { kind: 'live' };

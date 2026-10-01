@@ -1,7 +1,8 @@
 // Что диалоги получают от корня композиции (§11): хранилища и действия. Диалоги ленивые — их модули грузятся по первому
 // открытию; хозяин диалогов (dialog-host.tsx) отдаёт каждому один и тот же набор, диалог берёт нужное.
 
-import type { PresetName } from '../../client/index.ts';
+import type { CallOutcome, PresetName } from '../../client/index.ts';
+import type { FairnessView, HistoryResult, SeedResult, VerifyResult } from '../../protocol/index.ts';
 import type { ExternalSource } from '../external.ts';
 import type { Language } from '../i18n/dictionary.ts';
 import type { SettingsView } from '../settings.ts';
@@ -11,10 +12,20 @@ export interface SettingsControl extends ExternalSource<SettingsView> {
   setPreset(preset: PresetName): void;
 }
 
+/** История и честность (§7) — запросы мимо машины состояний; реализует контроллер игры. */
+export interface FairnessControl {
+  fairness(): Promise<CallOutcome<FairnessView | null>>;
+  history(limit: number): Promise<CallOutcome<HistoryResult>>;
+  setClientSeed(clientSeed: string): Promise<CallOutcome<SeedResult>>;
+  rotateSeed(): Promise<CallOutcome<SeedResult>>;
+  verify(secret: string, clientSeed: string, nonce: number): Promise<CallOutcome<VerifyResult>>;
+}
+
 export interface DialogServices {
   readonly settings: SettingsControl;
   /** Пресет из ссылки (?jurisdiction=) — настройка его не меняет; null — решает настройка. */
   readonly lockedPreset: PresetName | null;
+  readonly fairness: FairnessControl;
 }
 
 export interface DialogProps {

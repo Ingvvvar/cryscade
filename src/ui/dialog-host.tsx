@@ -5,12 +5,15 @@
 import { useCallback, useState, type ComponentType, type ReactNode } from 'react';
 import type { DialogProps, DialogServices } from './dialogs/services.ts';
 
-export type DialogName = 'settings';
+export type DialogName = 'rules' | 'settings' | 'history' | 'fairness';
 
 type DialogComponent = ComponentType<DialogProps>;
 
 const LOADERS: Readonly<Record<DialogName, () => Promise<DialogComponent>>> = {
+  rules: () => import('./dialogs/rules-dialog.tsx').then((module) => module.RulesDialog),
   settings: () => import('./dialogs/settings-dialog.tsx').then((module) => module.SettingsDialog),
+  history: () => import('./dialogs/history-dialog.tsx').then((module) => module.HistoryDialog),
+  fairness: () => import('./dialogs/fairness-dialog.tsx').then((module) => module.FairnessDialog),
 };
 
 interface OpenDialog {

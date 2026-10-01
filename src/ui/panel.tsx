@@ -40,6 +40,9 @@ export interface PanelProps {
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
 }
 
+/** Пункты меню — диалоги по порядку. */
+const MENU: readonly DialogName[] = ['rules', 'settings', 'history', 'fairness'];
+
 /** Меню (§11): popover с диалогами; в обычном пресете — и сессия. Фокус по закрытии диалога — на кнопку меню. */
 function Menu({ session, now, sessionInMenu, onOpenDialog }: Pick<PanelProps, 'session' | 'now' | 'onOpenDialog'> & { readonly sessionInMenu: boolean }) {
   const { dict } = useLanguage();
@@ -56,15 +59,18 @@ function Menu({ session, now, sessionInMenu, onOpenDialog }: Pick<PanelProps, 's
         ☰
       </button>
       <div ref={menuRef} id={id} popover="auto" className="menu" data-testid="menu">
-        <button
-          type="button"
-          className="menu-item"
-          onClick={() => {
-            open('settings');
-          }}
-        >
-          {dict.text.settings}
-        </button>
+        {MENU.map((name) => (
+          <button
+            key={name}
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              open(name);
+            }}
+          >
+            {dict.text[name]}
+          </button>
+        ))}
         {sessionInMenu && (
           <section className="menu-session" aria-label={dict.text.session}>
             <h2 className="menu-title">{dict.text.session}</h2>

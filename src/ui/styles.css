@@ -559,3 +559,152 @@ body {
     font-size: calc(var(--u) * 30);
   }
 }
+
+/* Содержимое диалогов (§11): правила, таблицы истории и выплат, честность. */
+.muted {
+  color: var(--muted);
+}
+
+.rules p {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.rules:focus {
+  outline: none;
+}
+
+.paytable,
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.paytable caption {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: start;
+}
+
+.paytable th,
+.paytable td,
+.history th,
+.history td {
+  padding: 6px 8px;
+  text-align: end;
+  border-bottom: 1px solid rgb(159 180 232 / 0.18);
+  white-space: nowrap;
+}
+
+.paytable th:first-child,
+.history th:first-child,
+.history td:first-child {
+  text-align: start;
+}
+
+.paytable thead th,
+.history thead th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll:focus {
+  outline: none;
+}
+
+.inline-action,
+.action {
+  font: inherit;
+  font-weight: 600;
+  color: var(--glow);
+  cursor: pointer;
+  background: transparent;
+  border: 1.5px solid rgb(63 224 208 / 0.5);
+  border-radius: 10px;
+}
+
+.inline-action {
+  padding: 2px 10px;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.action {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.verdict-ok {
+  color: var(--glow);
+  font-weight: 700;
+}
+
+.verdict-bad {
+  color: var(--warm);
+  font-weight: 700;
+}
+
+.facts {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0 0 8px;
+}
+
+.hex {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.text-input {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--cave-0);
+  border: 1.5px solid rgb(159 180 232 / 0.35);
+  border-radius: 10px;
+}
+
+.label-line {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.verify {
+  padding-top: 12px;
+  border-top: 1px solid rgb(159 180 232 / 0.2);
+}
+
+.verdict-lines p {
+  margin: 4px 0 0;
+}

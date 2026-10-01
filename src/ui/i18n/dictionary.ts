@@ -52,6 +52,67 @@ export interface Dictionary {
     readonly sessionNet: string;
     readonly sessionTime: string;
     readonly chooseBet: string;
+    readonly rules: string;
+    readonly history: string;
+    readonly fairness: string;
+    readonly loading: string;
+    /** Запрос не удался: сервер не ответил или ответ не годится. */
+    readonly failed: string;
+  };
+  /** Правила и выплаты (§11): числа — из конфига модели. */
+  readonly rules: {
+    /** Названия платящих символов по id 0…6. */
+    readonly symbols: readonly [string, string, string, string, string, string, string];
+    readonly symbol: string;
+    readonly table: string;
+    clusters(min: number): string;
+    readonly cascades: string;
+    spots(max: number): string;
+    /** list — «3 — 10, 4 — 12, …», собранный из конфига. */
+    feature(list: string): string;
+    /** Последняя ступень списка фриспинов — «6 і більше». */
+    orMore(count: number): string;
+    retrigger(min: number, add: number): string;
+    cap(times: string): string;
+    readonly rtp: string;
+  };
+  readonly history: {
+    readonly time: string;
+    readonly bet: string;
+    readonly win: string;
+    readonly book: string;
+    readonly nonce: string;
+    readonly check: string;
+    readonly replay: string;
+    readonly empty: string;
+    /** Раунд до честности (живой ГСЧ) и принудительный — их не проверить. */
+    readonly live: string;
+    readonly forced: string;
+    /** Секрет раунда ещё не раскрыт: проверка — после смены сида или секрета. */
+    readonly hidden: string;
+    readonly match: string;
+    readonly mismatch: string;
+  };
+  readonly fairness: {
+    readonly commitment: string;
+    readonly clientSeed: string;
+    readonly nonce: string;
+    readonly changeSeed: string;
+    readonly rotate: string;
+    readonly revealed: string;
+    readonly seedHint: string;
+    readonly roundActive: string;
+    readonly verify: string;
+    readonly secret: string;
+    readonly badSecret: string;
+    readonly badSeed: string;
+    readonly badNonce: string;
+    /** Итог пересчёта: запись книги и выплата. */
+    result(index: number, pay: string): string;
+    foundMatch(time: string): string;
+    foundMismatch(time: string): string;
+    readonly notFound: string;
+    readonly replayOnly: string;
   };
   /** Итог раунда для экранного диктора (aria-live): один раз на раунд. Суммы — уже строками локали. */
   readonly announce: {

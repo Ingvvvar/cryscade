@@ -112,6 +112,16 @@ const SAMPLES: readonly Sample[] = [
   },
   { name: 'ответ loadBook', value: result({ records: 58_354 }), accepts: (value) => parseResponse('loadBook', value).kind === 'result' },
   {
+    name: 'запрос verify',
+    value: { v: 1, id: 10, body: { type: 'verify', secret: HEX, clientSeed: 'Seed01', nonce: 5 } },
+    accepts: (value) => parseRequest(value).ok,
+  },
+  {
+    name: 'ответ verify',
+    value: result({ commitment: HEX, bookIndex: 1234, counter: 1, payX100: 95 }),
+    accepts: (value) => parseResponse('verify', value).kind === 'result',
+  },
+  {
     name: 'ответ authenticate',
     value: result({
       balanceMinor: 99_900,

@@ -22,10 +22,11 @@ import {
   type ResponseEnvelope,
   type RoundView,
   type SeedResult,
+  type VerifyResult,
   type WalletView,
 } from '../protocol/index.ts';
 import type { Book } from './book.ts';
-import { fromHex, toHex } from './fairness.ts';
+import { drawIndex, fromHex, toHex } from './fairness.ts';
 import { COMMIT_ATTEMPTS, DEMO_SEED, HISTORY_LIMIT, SERVER_MAX_REQUESTS } from './limits.ts';
 import type { BookLoader, Broadcast, Clock, Crypto, Entropy, Lock, Storage, StoreKey, StoreName, WriteOp } from './ports.ts';
 import {
@@ -247,7 +248,7 @@ export class RgsServer {
     if (body.type === 'play' && !isBetLevel(body.betMinor)) return responseEnvelope(id, fail({ code: 'INVALID_BET', betMinor: body.betMinor }));
     // Книга — до замка кошелька (§5, фаза 6): замок не держится, пока она качается. Не загрузилась — INTERNAL,
     // следующий запрос грузит заново.
-    if (this.#bookLoader !== null && (body.type === 'play' || body.type === 'loadBook' || (body.type === 'replay' && 'book' in body))) {
+    if (this.#bookLoader !== null && (body.type === 'play' || body.type === 'loadBook' || body.type === 'verify' || (body.type === 'replay' && 'book' in body))) {
       const problem = await this.#ensureBook(this.#bookLoader);
       if (problem !== null) return responseEnvelope(id, fail({ code: 'INTERNAL', message: problem }));
     }
@@ -290,6 +291,8 @@ export class RgsServer {
         return 'round' in body ? this.#replayRound(body.round) : this.#replayBook(body.book);
       case 'loadBook':
         return Promise.resolve(this.#bookSize());
+      case 'verify':
+        return this.#verify(body.secret, body.clientSeed, body.nonce);
     }
   }
 
@@ -314,6 +317,18 @@ export class RgsServer {
   #bookSize(): ResponseBody<LoadBookResult> {
     if (this.#bookLoader === null) return fail({ code: 'BAD_REQUEST', message: 'книги нет: источник раундов — живой' });
     return ok({ records: this.#loadedBook().size });
+  }
+
+  /**
+   * Пересчёт выбора по раскрытому секрету (§7, панель «Перевірити»): те же чистые функции, что у раунда, — обязательство
+   * и запись книги. Ничего не читает из хранилища и не пишет.
+   */
+  async #verify(secret: string, clientSeed: string, nonce: number): Promise<ResponseBody<VerifyResult>> {
+    if (this.#bookLoader === null) return fail({ code: 'BAD_REQUEST', message: 'книги нет: источник раундов — живой' });
+    const book = this.#loadedBook();
+    const key = fromHex(secret);
+    const draw = await drawIndex((hmacKey, message) => this.#crypto.hmacSha256(hmacKey, message), key, clientSeed, nonce, book);
+    return ok({ commitment: await this.#commitmentOf(secret), bookIndex: draw.index, counter: draw.counter, payX100: book.record(draw.index).payX100 });
   }
 
   async #authenticate(): Promise<ResponseBody<AuthenticateResult>> {

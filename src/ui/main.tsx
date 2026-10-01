@@ -132,7 +132,7 @@ async function mount(): Promise<void> {
         session={session}
         now={now}
         language={language}
-        services={{ settings, lockedPreset }}
+        services={{ settings, lockedPreset, fairness: controller }}
       />
     </StrictMode>,
   );

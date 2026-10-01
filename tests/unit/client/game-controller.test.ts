@@ -1299,6 +1299,45 @@ describe('закрытые раунды (сессия игрока)', () => {
   });
 });
 
+describe('диалоги истории и честности', () => {
+  it('fairness — свежий authenticate мимо машины: состояние и баланс не трогаются; в повторе — null без запроса', async () => {
+    const world = new ClientWorld();
+    const book = { kind: 'book', loader: new ScriptedBookLoader() } as const;
+    const a = world.open('a', { rounds: book });
+    await settle();
+    const before = a.snapshots.length;
+    const fairness = await a.controller.fairness();
+    const stored = world.storage.snapshot().fairness[0]?.[1] as { commitment: string; clientSeed: string; nonce: number } | undefined;
+    expect(fairness).toStrictEqual({ kind: 'ok', result: { commitment: stored?.commitment, clientSeed: stored?.clientSeed, nonce: 0 } });
+    expect([a.calls, a.state, a.snapshots.length]).toStrictEqual([['authenticate', 'authenticate'], IDLE, before]);
+    const r = world.replay('r', { book: 1 }, { rounds: book });
+    await settle();
+    expect(await r.controller.fairness()).toStrictEqual({ kind: 'ok', result: null });
+    expect(r.calls).toStrictEqual(['replay']);
+  });
+
+  it('history, смена сида, новый секрет и пересчёт — запросы как есть; ответы сервера — как есть', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a', { rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+    await settle();
+    a.controller.spin();
+    await settle();
+    const history = await a.controller.history(5);
+    const changed = await a.controller.setClientSeed('Lucky7');
+    const rotated = await a.controller.rotateSeed();
+    if (changed.kind !== 'ok' || rotated.kind !== 'ok' || history.kind !== 'ok') throw new Error('отказ');
+    const verified = await a.controller.verify(changed.result.revealed.secret, 'Lucky7', 0);
+    expect(a.port.received.slice(-4)).toStrictEqual([
+      { type: 'history', limit: 5 },
+      { type: 'setClientSeed', clientSeed: 'Lucky7' },
+      { type: 'rotateSeed' },
+      { type: 'verify', secret: changed.result.revealed.secret, clientSeed: 'Lucky7', nonce: 0 },
+    ]);
+    expect([history.result.rounds.length, rotated.result.revealed.commitment, verified.kind]).toStrictEqual([1, changed.result.fairness.commitment, 'ok']);
+    expect(await a.controller.setClientSeed('a:b')).toMatchObject({ kind: 'rejected', error: { code: 'BAD_REQUEST' } });
+  });
+});
+
 /** Замок раунда, который помнит каждое обращение. */
 class WatchedLock implements RoundLock {
   readonly calls: string[] = [];

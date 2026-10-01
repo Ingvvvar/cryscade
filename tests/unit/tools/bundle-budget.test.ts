@@ -72,7 +72,14 @@ describe('ленивый модуль в начальном JS (§13)', () => {
   const PROBE = '/Users/someone/cryscade/src/ui/probe.ts';
 
   it('список — зонд страницы, английский словарь и диалоги', () => {
-    expect(LAZY_MODULES).toStrictEqual(['src/ui/probe.ts', 'src/ui/i18n/en.ts', 'src/ui/dialogs/settings-dialog.tsx']);
+    expect(LAZY_MODULES).toStrictEqual([
+      'src/ui/probe.ts',
+      'src/ui/i18n/en.ts',
+      'src/ui/dialogs/settings-dialog.tsx',
+      'src/ui/dialogs/rules-dialog.tsx',
+      'src/ui/dialogs/history-dialog.tsx',
+      'src/ui/dialogs/fairness-dialog.tsx',
+    ]);
   });
 
   it('в статическом замыкании входа — отказ при любом размере, с модулем и файлом', () => {

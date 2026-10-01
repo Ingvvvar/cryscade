@@ -14,7 +14,14 @@ export const INITIAL_JS_BUDGET = 300 * 1024;
  * со своими фазами; книга (фаза 6) — файл данных, а не модуль. Каждый модуль списка ловит положительный контроль
  * tests/e2e/bundle.spec.ts: контрольная сборка импортирует их все статически и обязана упасть, назвав каждый.
  */
-export const LAZY_MODULES: readonly string[] = ['src/ui/probe.ts', 'src/ui/i18n/en.ts', 'src/ui/dialogs/settings-dialog.tsx'];
+export const LAZY_MODULES: readonly string[] = [
+  'src/ui/probe.ts',
+  'src/ui/i18n/en.ts',
+  'src/ui/dialogs/settings-dialog.tsx',
+  'src/ui/dialogs/rules-dialog.tsx',
+  'src/ui/dialogs/history-dialog.tsx',
+  'src/ui/dialogs/fairness-dialog.tsx',
+];
 
 /** Что бюджету нужно от чанка сборки. */
 export interface BudgetChunk {

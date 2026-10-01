@@ -5,9 +5,13 @@ import {
   checkWalletChanged,
   type AuthenticateResult,
   type ClientConfig,
+  type FairnessView,
+  type HistoryResult,
   type RequestBody,
   type Results,
+  type SeedResult,
   type StorageNotice,
+  type VerifyResult,
   type WalletChanged,
 } from '../protocol/index.ts';
 import type { KeySource, RoundLease, RoundLock, TabChannel } from './ports.ts';
@@ -236,6 +240,36 @@ export class GameController {
 
   betDown(): void {
     this.#stepBet(-1);
+  }
+
+  /**
+   * Честность для диалога (§7): свежее обязательство, сид игрока и nonce — authenticate мимо машины состояний, только
+   * чтение: другая вкладка могла сменить секрет. В повторе по ссылке — null: повтор не трогает кошелёк и честность.
+   */
+  async fairness(): Promise<CallOutcome<FairnessView | null>> {
+    if (this.#replay !== null) return { kind: 'ok', result: null };
+    const outcome = await this.#rgs.call({ type: 'authenticate' });
+    return outcome.kind === 'ok' ? { kind: 'ok', result: outcome.result.fairness } : outcome;
+  }
+
+  /** Последние раунды для диалога истории (§7), новые первыми. */
+  history(limit: number): Promise<CallOutcome<HistoryResult>> {
+    return this.#rgs.call({ type: 'history', limit });
+  }
+
+  /** Новый сид игрока — и новый секрет: прежний раскрыт. При активном раунде — ROUND_ACTIVE. */
+  setClientSeed(clientSeed: string): Promise<CallOutcome<SeedResult>> {
+    return this.#rgs.call({ type: 'setClientSeed', clientSeed });
+  }
+
+  /** Новый секрет: прежний раскрыт, nonce с нуля. При активном раунде — ROUND_ACTIVE. */
+  rotateSeed(): Promise<CallOutcome<SeedResult>> {
+    return this.#rgs.call({ type: 'rotateSeed' });
+  }
+
+  /** Пересчёт выбора по раскрытому секрету — панель «Перевірити». */
+  verify(secret: string, clientSeed: string, nonce: number): Promise<CallOutcome<VerifyResult>> {
+    return this.#rgs.call({ type: 'verify', secret, clientSeed, nonce });
   }
 
   /** Ставка из списка уровней — выбор в popover панели; только в покое и только уровень конфига. */
