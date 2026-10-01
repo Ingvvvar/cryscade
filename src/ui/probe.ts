@@ -24,6 +24,8 @@ function shownRoundId(state: ControllerSnapshot['state']): string | null {
       return state.roundId;
     case 'restoring':
       return state.roundId;
+    case 'replaying':
+      return state.roundId;
     default:
       return null;
   }
@@ -36,7 +38,14 @@ const AUTO_TAPS = 10_000;
 function showingKey(state: ControllerSnapshot['state']): string | null {
   if (state.name === 'presenting' || state.name === 'featureIntro') return `${state.name}:${state.roundId}`;
   if (state.name === 'restoring' && state.stage === 'show') return `restoring:${state.roundId}`;
+  if (state.name === 'replaying' && (state.stage === 'showing' || state.stage === 'held')) return `replaying:${state.stage}:${String(state.roundId)}`;
   return null;
+}
+
+function idOf(message: unknown): number | null {
+  if (typeof message !== 'object' || message === null) return null;
+  const id = (message as { readonly id?: unknown }).id;
+  return typeof id === 'number' ? id : null;
 }
 
 function bodyOf(message: unknown): SentBody | null {
@@ -68,6 +77,10 @@ export class PageProbe implements MountObserver {
   #skipping = false;
   readonly #shown: string[] = [];
   readonly #sent: SentBody[] = [];
+  /** id запросов replay, ответ на которые ещё не пришёл. */
+  readonly #replayIds = new Set<number>();
+  /** Ответы воркера на replay как есть: e2e сверяет события повтора с посчитанными в Node. */
+  readonly #replays: unknown[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
   readonly warmUp = new URLSearchParams(window.location.search).get('warmup') !== 'off';
 
@@ -167,15 +180,22 @@ export class PageProbe implements MountObserver {
     this.#presenter = presenter;
   }
 
-  /** Транспорт до воркера с журналом: что ушло после лаборатории сети, то дошло до сервера. */
+  /** Транспорт до воркера с журналом: что ушло после лаборатории сети, то дошло до сервера; ответы на replay — целиком. */
   record(inner: Transport): Transport {
     return {
       send: (message) => {
         const body = bodyOf(message);
         if (body !== null) this.#sent.push(body);
+        const id = idOf(message);
+        if (body?.type === 'replay' && id !== null) this.#replayIds.add(id);
         inner.send(message);
       },
-      listen: (listener) => inner.listen(listener),
+      listen: (listener) =>
+        inner.listen((message) => {
+          const id = idOf(message);
+          if (id !== null && this.#replayIds.delete(id)) this.#replays.push((message as { readonly body?: unknown }).body);
+          listener(message);
+        }),
     };
   }
 
@@ -243,6 +263,7 @@ export class PageProbe implements MountObserver {
       game: () => this.#game?.getSnapshot() ?? null,
       shownRounds: () => [...this.#shown],
       sent: () => [...this.#sent],
+      replays: () => [...this.#replays],
       lab: {
         set: (settings: Partial<LabSettings>) => {
           this.#labOrThrow().set(settings);

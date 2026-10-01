@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
 // Фаза 5: канал зонда cryscade-probe — принудительный раунд в воркере и его сиды; в проде ни страница, ни воркер его не знают.
 // Флаги зонда ?autoskip и ?warmup=off — только в dev и e2e, как сам зонд.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup'];
+const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup', 'replays'];
 
 function scripts(dir: string): { files: number; text: string } {
   const out: string[] = [];

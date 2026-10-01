@@ -1,5 +1,5 @@
 // Клиент (§6.5): контроллер, RgsClient, лаборатория сети, порты и их адаптеры — в памяти и браузерные.
-export { GameController, type ClientNotice, type ControllerSnapshot, type GameControllerPorts } from './game-controller.ts';
+export { GameController, type ClientNotice, type ControllerSnapshot, type GameControllerPorts, type ReplayTarget } from './game-controller.ts';
 export { MemoryRoundLock } from './memory-round-lock.ts';
 export { CLEAR_NETWORK, NetworkLabTransport, type LabSettings, type NetworkLabOptions } from './network-lab.ts';
 export { Presenter, type CheckpointStore, type Presentation, type PresentationListener, type PresentationSettings } from './presenter.ts';

@@ -9,6 +9,7 @@ import {
   type KeySource,
   type Presentation,
   type PresentationListener,
+  type ReplayTarget,
   type RoundLock,
   type TabChannel,
   type Transport,
@@ -16,7 +17,7 @@ import {
 import type { ShownRound } from '../../src/core/fsm/index.ts';
 import { DEFAULT_CONFIG } from '../../src/core/model/config.ts';
 import { isRecord, type RequestBody, type WalletChanged } from '../../src/protocol/index.ts';
-import { MemoryLock, MemoryStorage, RgsServer, type Entropy, type Storage } from '../../src/server/index.ts';
+import { MemoryLock, MemoryStorage, RgsServer, type Entropy, type RoundsOption, type Storage } from '../../src/server/index.ts';
 import { FixedClock, T0 } from './rgs-rig.ts';
 
 // Профиль браузера для контроллеров в Node: общее хранилище, общий замок кошелька и замок раунда (Web Locks),
@@ -163,6 +164,8 @@ export interface TabOptions {
   readonly presentation?: Presentation;
   /** Сервер вкладки не пишет в общий канал — так воркер в памяти не путает вкладки с IndexedDB (шаг В). */
   readonly silent?: boolean;
+  /** Источник раундов сервера вкладки; по умолчанию живой — сиды выбирает тест. */
+  readonly rounds?: RoundsOption;
 }
 
 /**
@@ -178,6 +181,8 @@ export class InstantPresentation implements Presentation {
     | 'resume'
     | 'halt'
   )[] = [];
+  /** Показанные раунды целиком — события, ставка и выигрыш. */
+  readonly shown: ShownRound[] = [];
   #listener: PresentationListener | null = null;
 
   listen(listener: PresentationListener): void {
@@ -186,6 +191,7 @@ export class InstantPresentation implements Presentation {
 
   play(round: ShownRound, restored: boolean): void {
     this.log.push(restored ? { restore: round.roundId } : { play: round.roundId });
+    this.shown.push(round);
     this.#listener?.finished();
   }
 
@@ -234,7 +240,7 @@ export class Tab {
         },
         crypto: new NodeCrypto(),
       },
-      { config: DEFAULT_CONFIG, rounds: { kind: 'live' } },
+      { config: DEFAULT_CONFIG, rounds: options.rounds ?? { kind: 'live' } },
     );
     this.port = new WorkerPort(server);
     const sleep = new TimeoutSleep();
@@ -290,6 +296,13 @@ export class ClientWorld {
   open(name: string, options: TabOptions = {}): Tab {
     const tab = new Tab(name, this, options);
     tab.controller.start();
+    return tab;
+  }
+
+  /** Открыть вкладку повтора (?replay=): контроллер запускается мимо authenticate. */
+  replay(name: string, target: ReplayTarget, options: TabOptions = {}): Tab {
+    const tab = new Tab(name, this, options);
+    tab.controller.startReplay(target);
     return tab;
   }
 

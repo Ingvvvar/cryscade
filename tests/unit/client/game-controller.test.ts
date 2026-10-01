@@ -26,6 +26,7 @@ import { ClientWorld, type Tab, type WorkerPort } from '../../support/client-wor
 import { fixtureRound } from '../../support/fixture-rounds.ts';
 import { plant } from '../../support/rgs-rig.ts';
 import { verifyRound } from '../../support/round-model.ts';
+import { ScriptedBookLoader, testBook } from '../../support/test-book.ts';
 
 // GameController на поддельных портах (§6.5, §8.1): вкладки — контроллеры над настоящим RgsServer на общем
 // хранилище в памяти, замок раунда — MemoryRoundLock с семантикой Web Locks, канал — с доставкой позже прямого
@@ -270,6 +271,7 @@ describe('запуск и спин', () => {
       grid: DEMO_GRID,
       winMinor: null,
       notice: null,
+      mode: 'play',
     });
     expect(a.calls).toStrictEqual(['authenticate']);
     expect(await world.lockFree()).toBe(true);
@@ -1206,5 +1208,120 @@ describe('гонки и закрытие', () => {
     const lease = await lock.tryAcquire();
     expect(lease).not.toBeNull();
     lease?.release();
+  });
+});
+
+/** Замок раунда, который помнит каждое обращение. */
+class WatchedLock implements RoundLock {
+  readonly calls: string[] = [];
+  readonly #inner: RoundLock;
+
+  constructor(inner: RoundLock) {
+    this.#inner = inner;
+  }
+
+  tryAcquire(): Promise<RoundLease | null> {
+    this.calls.push('tryAcquire');
+    return this.#inner.tryAcquire();
+  }
+
+  acquire(signal: AbortSignal): Promise<RoundLease> {
+    this.calls.push('acquire');
+    return this.#inner.acquire(signal);
+  }
+
+  steal(): Promise<RoundLease> {
+    this.calls.push('steal');
+    return this.#inner.steal();
+  }
+}
+
+describe('повтор (?replay=)', () => {
+  const MISSING = { name: 'error', kind: 'missing', retry: null, holdsLock: false };
+
+  it('раунд своей истории: один запрос replay — ни authenticate, ни замка, ни книги; показ того же раунда, на панели ставка раунда, баланса нет', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.controller.spin();
+    await settle();
+    expect(roundsIn(world)).toStrictEqual([{ roundId: 'ar1', status: 'closed', idempotencyKey: 'ak1' }]);
+    const before = world.storage.snapshot();
+    let watched: WatchedLock | null = null;
+    const r = world.replay('r', { round: 'ar1' }, {
+      wrapLock: (lock) => {
+        watched = new WatchedLock(lock);
+        return watched;
+      },
+    });
+    await settle();
+    expect(r.calls).toStrictEqual(['replay']);
+    expect(r.presentation.log).toStrictEqual([{ play: 'ar1' }]);
+    expect(r.presentation.shown).toStrictEqual([{ roundId: 'ar1', betMinor: 100, winMinor: 95, events: SMALL.events }]);
+    expect(r.state).toStrictEqual({ name: 'replaying', stage: 'done', roundId: 'ar1' });
+    expect([r.snapshot.mode, r.snapshot.balanceMinor, r.snapshot.betMinor, r.snapshot.winMinor]).toStrictEqual(['replay', null, 100, 95]);
+    expect((watched as WatchedLock | null)?.calls).toStrictEqual([]);
+    expect(world.storage.snapshot()).toStrictEqual(before);
+    // Спин, пополнение, «Повторити» и предзагрузка книги повтору не нужны: запросов больше нет.
+    r.controller.spin();
+    r.controller.refill();
+    r.controller.retry();
+    r.controller.prefetchBook();
+    await settle();
+    expect(r.calls).toStrictEqual(['replay']);
+    // Деньги другой вкладки повтор не слышит.
+    a.controller.spin();
+    await settle();
+    expect(a.snapshot.balanceMinor).toBe(99_990);
+    expect(balancePath(r)).toStrictEqual([null]);
+    expect(a.snapshot.mode).toBe('play');
+  });
+
+  it('запись книги: движок по сиду записи, ставка 1.00, показ — book-<index>; кошелёк не создан', async () => {
+    const world = new ClientWorld();
+    const r = world.replay('r', { book: 2 }, { rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+    await settle();
+    expect(r.calls).toStrictEqual(['replay']);
+    expect(r.presentation.shown).toStrictEqual([{ roundId: 'book-2', betMinor: 100, winMinor: 190, events: fixtureRound('base-win').events }]);
+    expect(r.state).toStrictEqual({ name: 'replaying', stage: 'done', roundId: 'book-2' });
+    expect(world.storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
+  });
+
+  it('раунда нет в истории браузера, записи нет в книге — экран «повтору нет» без «Повторити», запрос не повторяется', async () => {
+    const world = new ClientWorld();
+    const r = world.replay('r', { round: 'zz9' });
+    const b = world.replay('b', { book: 3 }, { rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+    await settle();
+    expect([r.state, b.state]).toStrictEqual([MISSING, MISSING]);
+    r.controller.retry();
+    b.controller.retry();
+    await settle();
+    expect([r.calls, b.calls]).toStrictEqual([['replay'], ['replay']]);
+    expect([r.presentation.log, b.presentation.log]).toStrictEqual([[], []]);
+  });
+
+  it('повтор после обычного запуска не действует: вкладка играет, книгу просит, деньги других вкладок слышит', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    const b = world.open('b');
+    await settle();
+    b.controller.startReplay({ round: 'ar1' });
+    b.controller.prefetchBook();
+    a.controller.spin();
+    await settle();
+    expect(b.calls).toStrictEqual(['authenticate', 'loadBook']);
+    expect([b.snapshot.mode, b.state, b.snapshot.balanceMinor]).toStrictEqual(['play', IDLE, 99_995]);
+  });
+
+  it('книга не загрузилась — экран ошибки с «Повторити»; повтор запроса грузит книгу заново и показывает запись', async () => {
+    const world = new ClientWorld();
+    const loader = new ScriptedBookLoader(testBook(), 1);
+    const r = world.replay('r', { book: 1 }, { rounds: { kind: 'book', loader } });
+    await settle();
+    expect(r.state).toStrictEqual({ name: 'error', kind: 'server', retry: { call: 'replay' }, holdsLock: false });
+    r.controller.retry();
+    await settle();
+    expect([r.calls, loader.calls, r.state]).toStrictEqual([['replay', 'replay'], 2, { name: 'replaying', stage: 'done', roundId: 'book-1' }]);
+    expect(r.presentation.shown.map((round) => [round.roundId, round.betMinor, round.winMinor])).toStrictEqual([['book-1', 100, 95]]);
   });
 });

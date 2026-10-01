@@ -93,6 +93,11 @@ export async function sentBodies(page: Page): Promise<SentBody[]> {
   return page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.sent() ?? []);
 }
 
+/** Ответы воркера на запросы replay этой загрузки страницы — тело ответа как есть. */
+export async function replays(page: Page): Promise<unknown[]> {
+  return page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.replays() ?? []);
+}
+
 /** Запросы игры — без предзагрузки книги: её страница шлёт сама после первого кадра сцены (фаза 6). */
 export async function gameCalls(page: Page): Promise<SentBody[]> {
   return (await sentBodies(page)).filter((body) => body.type !== 'loadBook');

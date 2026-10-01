@@ -26,6 +26,7 @@ import { MoneyFormat } from './money-format.ts';
 import type { PageProbe } from './probe.ts';
 import { PresentationPreferences, presetChoice } from './presentation-preferences.ts';
 import { rendererChoice } from './renderer-choice.ts';
+import { replayExit, replayTarget } from './replay-link.ts';
 import { SCENE_TEXT } from './texts.ts';
 import { REDUCED_MOTION_QUERY } from './viewport-watcher.ts';
 
@@ -104,10 +105,14 @@ async function mount(): Promise<void> {
             controller.prefetchBook();
           });
         }}
+        replayExit={replayExit(window.location.href)}
       />
     </StrictMode>,
   );
-  controller.start();
+  // Повтор по ссылке (§7): вместо обычного запуска — события раунда без authenticate, замков и кошелька.
+  const replay = replayTarget(window.location.search);
+  if (replay === null) controller.start();
+  else controller.startReplay(replay);
 }
 
 void mount();

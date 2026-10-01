@@ -3,8 +3,8 @@ import type { ClientEvent, ClientState, Command, ErrorKind, RejectCode, RetryTar
 // Состояния клиента (§8.1). Замок раунда cryscade-round вкладка берёт до play и держит до ответа endRound (§6.5).
 // Раунд доигрывает только вкладка с замком и только по authenticate, полученному под замком: иначе раунд, который
 // хозяин успел закончить между authenticate и захватом, показался бы второй раз. Показ идёт по часам презентации:
-// endRound — когда показ дошёл до конца (presented), featureIntro — стоянка часов на плашке фриспинов. В фазе 6 придёт
-// replaying.
+// endRound — когда показ дошёл до конца (presented), featureIntro — стоянка часов на плашке фриспинов. replaying — повтор
+// по ссылке (фаза 6): ни замков, ни денег, ни спина — только события раунда и тот же показ.
 // Полнота — `satisfies never` в switch каждого состояния: новое событие не скомпилируется, пока каждое состояние не
 // решит, что с ним делать. Недопустимая пара возвращает то же состояние с пометкой ignored и не бросает.
 
@@ -17,6 +17,7 @@ const ABANDON: Command = { type: 'abandon' };
 const RESET_BALANCE: Command = { type: 'callResetBalance' };
 const SKIP: Command = { type: 'skipPresentation' };
 const RESUME: Command = { type: 'resumePresentation' };
+const REPLAY: Command = { type: 'callReplay' };
 
 function stay(state: ClientState): Transition {
   return { state, commands: [], ignored: true };
@@ -73,6 +74,8 @@ export class BootingState implements ClientState {
     switch (event.type) {
       case 'start':
         return to(new AuthenticatingState(false), AUTHENTICATE);
+      case 'replayStart':
+        return to(new ReplayingState('loading', null), REPLAY);
       case 'spin':
       case 'retry':
       case 'takeOver':
@@ -90,6 +93,7 @@ export class BootingState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -131,6 +135,8 @@ export class AuthenticatingState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -178,6 +184,8 @@ export class IdleState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -228,6 +236,8 @@ export class RequestingState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -259,6 +269,8 @@ export class RequestingState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -324,6 +336,8 @@ export class PresentingState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -368,6 +382,8 @@ export class FeatureIntroState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -413,6 +429,8 @@ export class EndingState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -467,6 +485,8 @@ export class RestoringState implements ClientState {
       case 'unusable':
       case 'refill':
       case 'refilled':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -511,6 +531,8 @@ export class WaitingForTabState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -550,6 +572,8 @@ export class RefillingState implements ClientState {
       case 'ended':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -597,6 +621,8 @@ export class ErrorState implements ClientState {
       case 'refilled':
       case 'held':
       case 'tap':
+      case 'replayStart':
+      case 'replayLoaded':
         return stay(this);
       default:
         event satisfies never;
@@ -616,6 +642,67 @@ export class ErrorState implements ClientState {
         return to(new EndingState(retry.roundId), { type: 'callEndRound', roundId: retry.roundId });
       case 'resetBalance':
         return to(new RefillingState(), RESET_BALANCE);
+      case 'replay':
+        return to(new ReplayingState('loading', null), REPLAY);
+    }
+  }
+}
+
+/**
+ * Повтор по ссылке (§7): события раунда из истории или записи книги — и тот же показ, что у игры: тап пропускает, плашка
+ * фриспинов ждёт. Денег, замков и спина нет; показан — стоит на конце. Сбой запроса — экран ошибки с «Повторити»; ссылка
+ * в никуда — экран missing без повтора.
+ */
+export class ReplayingState implements ClientState {
+  readonly view: StateView;
+  readonly holdsLock = false;
+  readonly #stage: 'loading' | 'showing' | 'held' | 'done';
+  readonly #roundId: string | null;
+
+  constructor(stage: 'loading' | 'showing' | 'held' | 'done', roundId: string | null) {
+    this.#stage = stage;
+    this.#roundId = roundId;
+    this.view = { name: 'replaying', stage, roundId };
+  }
+
+  on(event: ClientEvent): Transition {
+    switch (event.type) {
+      case 'replayLoaded':
+        return this.#stage === 'loading'
+          ? to(new ReplayingState('showing', event.round.roundId), { type: 'startPresentation', round: event.round, restored: false })
+          : stay(this);
+      case 'rejected':
+        if (this.#stage !== 'loading') return stay(this);
+        // Ссылка ведёт в никуда: раунда нет в истории этого браузера или записи нет в книге — повтор запроса не поможет.
+        if (event.code === 'ROUND_NOT_FOUND' || event.code === 'BAD_REQUEST') return to(new ErrorState('missing', null, false));
+        return failed({ call: 'replay' }, false, event);
+      case 'unreachable':
+      case 'unusable':
+        return this.#stage === 'loading' ? failed({ call: 'replay' }, false, event) : stay(this);
+      case 'tap':
+        if (this.#stage === 'showing') return to(this, SKIP);
+        return this.#stage === 'held' ? to(new ReplayingState('showing', this.#roundId), RESUME) : stay(this);
+      case 'held':
+        return this.#stage === 'showing' ? to(new ReplayingState('held', this.#roundId)) : stay(this);
+      case 'presented':
+        return this.#stage === 'showing' ? to(new ReplayingState('done', this.#roundId)) : stay(this);
+      case 'start':
+      case 'replayStart':
+      case 'spin':
+      case 'retry':
+      case 'takeOver':
+      case 'lockGranted':
+      case 'lockBusy':
+      case 'lockLost':
+      case 'authenticated':
+      case 'played':
+      case 'ended':
+      case 'refill':
+      case 'refilled':
+        return stay(this);
+      default:
+        event satisfies never;
+        return stay(this);
     }
   }
 }

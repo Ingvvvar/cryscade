@@ -8,6 +8,7 @@ import {
   IdleState,
   PresentingState,
   RefillingState,
+  ReplayingState,
   RequestingState,
   RestoringState,
   WaitingForTabState,
@@ -51,6 +52,12 @@ const STATES: Readonly<Record<string, () => ClientState>> = {
   'error: endRound': () => new ErrorState('invalid', { call: 'endRound', roundId: 'r1' }, true),
   'error: resetBalance': () => new ErrorState('unreachable', { call: 'resetBalance' }, false),
   'error: перезагрузка': () => new ErrorState('version', null, false),
+  'replaying: загрузка': () => new ReplayingState('loading', null),
+  'replaying: показ': () => new ReplayingState('showing', 'r1'),
+  'replaying: плашка': () => new ReplayingState('held', 'r1'),
+  'replaying: показан': () => new ReplayingState('done', 'r1'),
+  'error: replay': () => new ErrorState('unreachable', { call: 'replay' }, false),
+  'error: повтора нет': () => new ErrorState('missing', null, false),
 };
 
 const CODES: readonly RejectCode[] = [
@@ -85,6 +92,8 @@ const EVENTS: Readonly<Record<string, ClientEvent>> = {
   unreachable: { type: 'unreachable' },
   'unusable: version': { type: 'unusable', reason: 'version' },
   'unusable: invalid': { type: 'unusable', reason: 'invalid' },
+  replayStart: { type: 'replayStart' },
+  replayLoaded: { type: 'replayLoaded', round: OTHER },
 };
 
 const AUTH: Command = { type: 'callAuthenticate' };
@@ -94,6 +103,7 @@ const ABANDON: Command = { type: 'abandon' };
 const RESET: Command = { type: 'callResetBalance' };
 const SKIP: Command = { type: 'skipPresentation' };
 const RESUME: Command = { type: 'resumePresentation' };
+const REPLAY: Command = { type: 'callReplay' };
 
 const IDLE: StateView = { name: 'idle', refusal: null };
 const WAITING: StateView = { name: 'waitingForTab', stealing: false };
@@ -102,6 +112,8 @@ const RETRY_AUTH = { call: 'authenticate' } as const;
 const RETRY_PLAY = { call: 'play', key: 'k1', betMinor: 100 } as const;
 const RETRY_END = { call: 'endRound', roundId: 'r1' } as const;
 const RETRY_RESET = { call: 'resetBalance' } as const;
+const RETRY_REPLAY = { call: 'replay' } as const;
+const LOADING: StateView = { name: 'replaying', stage: 'loading', roundId: null };
 const REFILLING: StateView = { name: 'refilling' };
 const error = (kind: string, retry: unknown, holdsLock: boolean): StateView => ({ name: 'error', kind, retry, holdsLock }) as StateView;
 
@@ -215,6 +227,26 @@ const TABLE: readonly Row[] = [
   ['error: endRound', 'retry', { name: 'ending', roundId: 'r1' }, [{ type: 'callEndRound', roundId: 'r1' }]],
   ['error: endRound', 'lockLost', WAITING, [QUEUE]],
   ['error: resetBalance', 'retry', REFILLING, [RESET]],
+
+  // Повтор (?replay=): мимо authenticate, замков и кошелька; показ — те же часы, конец показа ничего не шлёт.
+  ['booting', 'replayStart', LOADING, [REPLAY]],
+  ['replaying: загрузка', 'replayLoaded', { name: 'replaying', stage: 'showing', roundId: 'r9' }, [
+    { type: 'startPresentation', round: OTHER, restored: false },
+  ]],
+  // Раунда нет в истории этого браузера или записи нет в книге — повтор запроса не поможет, выход — обычный запуск.
+  ['replaying: загрузка', 'rejected ROUND_NOT_FOUND', error('missing', null, false), []],
+  ['replaying: загрузка', 'rejected BAD_REQUEST', error('missing', null, false), []],
+  ...unexpected('replaying: загрузка', ['INSUFFICIENT_FUNDS', 'ROUND_ACTIVE', 'INVALID_BET', 'IDEMPOTENCY_CONFLICT'], RETRY_REPLAY, false),
+  ['replaying: загрузка', 'rejected VERSION_MISMATCH', error('version', null, false), []],
+  ['replaying: загрузка', 'rejected INTERNAL', error('server', RETRY_REPLAY, false), []],
+  ['replaying: загрузка', 'unreachable', error('unreachable', RETRY_REPLAY, false), []],
+  ['replaying: загрузка', 'unusable: version', error('version', null, false), []],
+  ['replaying: загрузка', 'unusable: invalid', error('invalid', RETRY_REPLAY, false), []],
+  ['replaying: показ', 'tap', { name: 'replaying', stage: 'showing', roundId: 'r1' }, [SKIP]],
+  ['replaying: показ', 'held', { name: 'replaying', stage: 'held', roundId: 'r1' }, []],
+  ['replaying: показ', 'presented', { name: 'replaying', stage: 'done', roundId: 'r1' }, []],
+  ['replaying: плашка', 'tap', { name: 'replaying', stage: 'showing', roundId: 'r1' }, [RESUME]],
+  ['error: replay', 'retry', LOADING, [REPLAY]],
 ];
 
 const EXPECTED = new Map(TABLE.map(([state, event, next, commands]) => [`${state} × ${event}`, { next, commands }] as const));
@@ -228,7 +260,7 @@ describe('таблица переходов', () => {
   });
 
   it(`покрыто ${String(Object.keys(STATES).length)} × ${String(Object.keys(EVENTS).length)} пар`, () => {
-    expect(PAIRS.length).toBe(22 * 27);
+    expect(PAIRS.length).toBe(28 * 29);
   });
 
   it.each(PAIRS)('%s × %s', (stateName, eventName) => {
@@ -277,6 +309,12 @@ describe('состояния', () => {
     ['error: resetBalance', false],
     ['error: перезагрузка', false],
     ['refilling', false],
+    ['replaying: загрузка', false],
+    ['replaying: показ', false],
+    ['replaying: плашка', false],
+    ['replaying: показан', false],
+    ['error: replay', false],
+    ['error: повтора нет', false],
   ] as const)('%s: замок у вкладки — %s', (stateName, holds) => {
     expect(STATES[stateName]?.().holdsLock).toBe(holds);
   });

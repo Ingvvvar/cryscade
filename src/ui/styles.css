@@ -221,6 +221,18 @@ body {
   border-color: var(--glow);
 }
 
+/* Плашка повтора: полоса пропускает тап на сцену, ссылка выхода — нет. */
+.notice-replay {
+  border-color: var(--glow);
+}
+
+.notice-link {
+  pointer-events: auto;
+  margin-left: 0.75em;
+  color: var(--glow);
+  font-weight: 700;
+}
+
 /* Экран ошибки и ожидание чужой вкладки: сцена стоит, тап перехватывается. */
 .status-screen {
   position: absolute;
@@ -248,6 +260,7 @@ body {
   font-size: 1.1rem;
   letter-spacing: 0.06em;
   color: var(--text);
+  text-decoration: none;
   cursor: pointer;
   padding: 12px 28px;
   background: var(--cave-2);

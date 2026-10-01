@@ -26,6 +26,10 @@ export type RejectCode =
 export type ClientEvent =
   /** Контроллер запущен. */
   | { readonly type: 'start' }
+  /** Запуск повтора по ссылке (?replay=): без authenticate, замков и кошелька (фаза 6, §7). */
+  | { readonly type: 'replayStart' }
+  /** Сервер отдал события повторяемого раунда. */
+  | { readonly type: 'replayLoaded'; readonly round: ShownRound }
   /** «Спін»: ключ идемпотентности рождается при нажатии и живёт до ответа на play. */
   | { readonly type: 'spin'; readonly key: string; readonly betMinor: number }
   /** «Повторити» на экране ошибки. */
@@ -65,13 +69,16 @@ export type RetryTarget =
   | { readonly call: 'authenticate' }
   | { readonly call: 'play'; readonly key: string; readonly betMinor: number }
   | { readonly call: 'endRound'; readonly roundId: string }
-  | { readonly call: 'resetBalance' };
+  | { readonly call: 'resetBalance' }
+  | { readonly call: 'replay' };
 
 export type Command =
   | { readonly type: 'callAuthenticate' }
   | { readonly type: 'callPlay'; readonly key: string; readonly betMinor: number }
   | { readonly type: 'callEndRound'; readonly roundId: string }
   | { readonly type: 'callResetBalance' }
+  /** Запросить события повторяемого раунда; цель повтора знает контроллер. */
+  | { readonly type: 'callReplay' }
   /** Взять замок раунда, если свободен (ifAvailable). Ответ — lockGranted или lockBusy. */
   | { readonly type: 'takeLock' }
   /** Встать в очередь на замок. Ответ — lockGranted, когда хозяин отпустит или закроется. */
@@ -87,8 +94,11 @@ export type Command =
   /** Часы показа идут дальше с точки удержания featureIntro. */
   | { readonly type: 'resumePresentation' };
 
-/** Почему вкладка на экране ошибки. version и client лечит только перезагрузка, остальное — «Повторити». */
-export type ErrorKind = 'unreachable' | 'server' | 'invalid' | 'version' | 'client';
+/**
+ * Почему вкладка на экране ошибки. version и client лечит только перезагрузка, missing — выход из повтора (ссылка ведёт
+ * в никуда), остальное — «Повторити».
+ */
+export type ErrorKind = 'unreachable' | 'server' | 'invalid' | 'version' | 'client' | 'missing';
 
 /** Состояние снаружи — простые данные: для снимка контроллера и для тестов. */
 export type StateView =
@@ -106,6 +116,11 @@ export type StateView =
   | { readonly name: 'waitingForTab'; readonly stealing: boolean }
   /** resetBalance в пути. Замок раунда не нужен: при активном раунде сервер ответит ROUND_ACTIVE. */
   | { readonly name: 'refilling' }
+  /**
+   * Повтор по ссылке: loading — события в пути, showing — показ, held — показ стоит на плашке фриспинов, done — показан.
+   * Денег, замков и спина в повторе нет.
+   */
+  | { readonly name: 'replaying'; readonly stage: 'loading' | 'showing' | 'held' | 'done'; readonly roundId: string | null }
   | { readonly name: 'error'; readonly kind: ErrorKind; readonly retry: RetryTarget | null; readonly holdsLock: boolean };
 
 export type StateName = StateView['name'];

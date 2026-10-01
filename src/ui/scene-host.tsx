@@ -27,6 +27,8 @@ export interface SceneHostProps {
   readonly reload: () => void;
   /** Сцена готова: корень композиции просит книгу исходов после её первого кадра. */
   readonly onSceneReady: () => void;
+  /** Выход из повтора — обычный запуск страницы. */
+  readonly replayExit: string;
 }
 
 /** Пробел: в покое — спин, во время показа — пропуск или «продолжить». Кнопку и поле ввода пробел нажимает сам. */
@@ -46,7 +48,7 @@ function useSpaceKey(game: Game): void {
   }, [game]);
 }
 
-export function SceneHost({ create, choice, observer, game, source, preferences, money, reload, onSceneReady }: SceneHostProps) {
+export function SceneHost({ create, choice, observer, game, source, preferences, money, reload, onSceneReady, replayExit }: SceneHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const insetRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<SceneSession | null>(null);
@@ -101,8 +103,8 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
       />
       <div ref={insetRef} className="safe-area-probe" aria-hidden="true" />
       {layout !== null && <Panel layout={layout} game={game} snapshot={snapshot} turbo={turbo} onTurbo={onTurbo} money={money} />}
-      <NoticeBar snapshot={snapshot} />
-      <StatusScreen game={game} snapshot={snapshot} reload={reload} />
+      <NoticeBar snapshot={snapshot} exitHref={replayExit} />
+      <StatusScreen game={game} snapshot={snapshot} reload={reload} exitHref={replayExit} />
       {failed && (
         <p role="alert" className="scene-error">
           {rendererFailure(choice)}

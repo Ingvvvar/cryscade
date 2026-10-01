@@ -29,6 +29,9 @@ export interface GameControllerPorts {
   readonly presentation: Presentation;
 }
 
+/** Что повторить по ссылке (§7): раунд своей истории или запись книги — ?replay=round:<id> | ?replay=book:<index>. */
+export type ReplayTarget = { readonly round: string } | { readonly book: number };
+
 /** Полоса над игрой: хранилище в памяти, починка, база обновлена другой вкладкой. */
 export type ClientNotice = StorageNotice | 'versionchange';
 
@@ -44,6 +47,8 @@ export interface ControllerSnapshot {
   /** Выигрыш последнего показанного раунда. */
   readonly winMinor: number | null;
   readonly notice: ClientNotice | null;
+  /** replay — вкладка открыта по ссылке повтора: денег, замков и спина нет. */
+  readonly mode: 'play' | 'replay';
 }
 
 const DEFAULT_BET_MINOR = 100;
@@ -58,6 +63,7 @@ function sameGrid(a: readonly number[] | null, b: readonly number[]): boolean {
   return a !== null && a.length === b.length && a.every((symbol, cell) => symbol === b[cell]);
 }
 
+/** mode не сравнивается: он меняется только вместе с состоянием — startReplay действует лишь из booting. */
 function sameSnapshot(a: ControllerSnapshot, b: ControllerSnapshot): boolean {
   return (
     a.state === b.state &&
@@ -96,6 +102,8 @@ export class GameController {
   #draining = false;
   #disposed = false;
   #bookRequested = false;
+  /** Цель повтора; null — обычная игра. */
+  #replay: ReplayTarget | null = null;
   /** Хранилище сервера в памяти: вкладки независимы — замок свой, оповещения других вкладок не про наш кошелёк. */
   #volatile = false;
   /** Хранилище чинилось — баланс восстановлен до 1000. */
@@ -154,6 +162,16 @@ export class GameController {
     this.#dispatch({ type: 'start' });
   }
 
+  /**
+   * Повтор по ссылке (§7, фаза 6): вместо start — события раунда без authenticate, замков и кошелька; оповещения других
+   * вкладок повтору не нужны. Выход — обычный запуск страницы без ?replay.
+   */
+  startReplay(target: ReplayTarget): void {
+    if (this.#state.view.name !== 'booting') return;
+    this.#replay = target;
+    this.#dispatch({ type: 'replayStart' });
+  }
+
   /** «Спін». Ключ идемпотентности рождается здесь и живёт в данных состояния до ответа на play. */
   spin(): void {
     if (this.#state.view.name !== 'idle' || this.#betMinor === null) return;
@@ -186,7 +204,8 @@ export class GameController {
    * сервер переживает: следующий запрос качает её заново.
    */
   prefetchBook(): void {
-    if (this.#bookRequested || this.#disposed) return;
+    // Повтор не играет: книгу для повтора записи книги сервер грузит сам, по запросу replay.
+    if (this.#bookRequested || this.#disposed || this.#replay !== null) return;
     this.#bookRequested = true;
     void this.#rgs.call({ type: 'loadBook' });
   }
@@ -247,6 +266,15 @@ export class GameController {
           return { type: 'refilled' };
         });
         break;
+      case 'callReplay': {
+        const target = this.#replay;
+        if (target === null) break;
+        this.#request({ type: 'replay', ...target }, (result) => ({
+          type: 'replayLoaded',
+          round: { roundId: result.roundId ?? `book-${String(result.bookIndex)}`, betMinor: result.betMinor, winMinor: result.winMinor, events: result.events },
+        }));
+        break;
+      }
       case 'takeLock':
         void this.#takeLock();
         break;
@@ -326,6 +354,7 @@ export class GameController {
   }
 
   #fromTab(message: unknown): void {
+    if (this.#replay !== null) return;
     if (this.#early !== null) {
       this.#early.push(message);
       return;
@@ -342,6 +371,8 @@ export class GameController {
   #present(round: ShownRound, restored: boolean): void {
     this.#grid = finalGrid(round.events);
     this.#winMinor = round.winMinor;
+    // В повторе на панели — ставка показанного раунда; баланс не известен и не двигается.
+    if (this.#replay !== null) this.#betMinor = round.betMinor;
     this.#presentation.play(round, restored);
   }
 
@@ -418,6 +449,7 @@ export class GameController {
       grid: this.#grid,
       winMinor: this.#winMinor,
       notice: this.#storageClosed ? 'versionchange' : this.#volatile ? 'volatile' : this.#reset ? 'reset' : null,
+      mode: this.#replay === null ? 'play' : 'replay',
     };
   }
 

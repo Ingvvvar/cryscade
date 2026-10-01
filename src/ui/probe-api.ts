@@ -109,6 +109,8 @@ export interface CryscadeProbe {
   shownRounds(): string[];
   /** Тела запросов, ушедших в воркер после лаборатории сети: что дошло до сервера. */
   sent(): SentBody[];
+  /** Ответы воркера на запросы replay как есть — тело ответа: { ok, result } или { ok, error }. */
+  replays(): unknown[];
   readonly lab: ProbeLab;
 }
 

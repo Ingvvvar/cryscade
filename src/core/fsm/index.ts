@@ -8,6 +8,7 @@ export {
   IdleState,
   PresentingState,
   RefillingState,
+  ReplayingState,
   RequestingState,
   RestoringState,
   WaitingForTabState,
