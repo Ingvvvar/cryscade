@@ -66,7 +66,7 @@ export class SessionTracker {
     };
   }
 
-  settle(round: SettledRound): void {
+  settle(round: Pick<SettledRound, 'roundId' | 'betMinor' | 'winMinor'>): void {
     if (round.roundId === this.#stored.last) return;
     const netMinor = this.#stored.netMinor + round.winMinor - round.betMinor;
     if (!Number.isSafeInteger(netMinor)) return;

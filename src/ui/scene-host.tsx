@@ -2,7 +2,7 @@
 // двойной эффект StrictMode; монтирования идут цепочкой внутри SceneMount. Кадры рендер тянет сам из источника —
 // часов показа (Presenter): сетка, выигрыш и счётчик идут мимо React (§11: счётчик крутится в Pixi).
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { Layout } from '../render/layout.ts';
 import type { Renderer, SceneSource } from '../render/renderer.ts';
 import type { DialogName } from './dialog-host.tsx';
@@ -37,21 +37,54 @@ export interface SceneHostProps {
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
 }
 
-/** Пробел: в покое — спин, во время показа — пропуск или «продолжить». Кнопку и поле ввода пробел нажимает сам. */
-function useSpaceKey(game: Game): void {
+/**
+ * Клавиатура (§11): пробел — в покое спин, во время показа пропуск или «продолжить» (кнопку и поле ввода пробел
+ * нажимает сам); + и − — ставка. Внутри диалога и popover клавиши игры не действуют: там свои.
+ */
+function useGameKeys(game: Game): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.code !== 'Space' || event.repeat) return;
-      if (event.target instanceof Element && event.target.closest('button, input, select, textarea, [contenteditable]') !== null) return;
-      event.preventDefault();
-      if (game.getSnapshot().state.name === 'idle') game.spin();
-      else game.tap();
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const inside = (selector: string): boolean => target !== null && target.closest(selector) !== null;
+      if (inside('dialog, [popover], input, select, textarea, [contenteditable]')) return;
+      if (event.code === 'Space') {
+        if (inside('button, a')) return;
+        event.preventDefault();
+        if (game.getSnapshot().state.name === 'idle') game.spin();
+        else game.tap();
+      } else if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        game.betUp();
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        game.betDown();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
     };
   }, [game]);
+}
+
+/**
+ * Итог раунда — экранному диктору (§11): одно объявление на раунд, когда раунд закрыт, — не на каждый каскад. Текст
+ * ставится через ref: рендеров React нет.
+ */
+function useRoundAnnouncer(game: Game): RefObject<HTMLParagraphElement | null> {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const { dict, money } = useLanguage();
+  useEffect(
+    () =>
+      game.onRoundSettled((round) => {
+        const balance = money.format(round.balanceMinor);
+        const text = round.winMinor > 0 ? dict.announce.win(money.format(round.winMinor), balance) : dict.announce.noWin(balance);
+        if (ref.current !== null) ref.current.textContent = text;
+      }),
+    [game, dict, money],
+  );
+  return ref;
 }
 
 export function SceneHost({ create, choice, observer, game, source, preferences, reload, onSceneReady, replayExit, session, now, onOpenDialog }: SceneHostProps) {
@@ -68,7 +101,8 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
   const onTurbo = useCallback(() => {
     preferences.toggleTurbo();
   }, [preferences]);
-  useSpaceKey(game);
+  useGameKeys(game);
+  const announcer = useRoundAnnouncer(game);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -118,6 +152,7 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
         <Panel layout={layout} game={game} snapshot={snapshot} turbo={turbo} onTurbo={onTurbo} session={session} now={now} onOpenDialog={onOpenDialog} />
       )}
       <NoticeBar snapshot={snapshot} exitHref={replayExit} />
+      <p ref={announcer} className="sr-only" role="status" aria-live="polite" data-testid="announcer" />
       <StatusScreen game={game} snapshot={snapshot} reload={reload} exitHref={replayExit} />
       {failed && (
         <p role="alert" className="scene-error">

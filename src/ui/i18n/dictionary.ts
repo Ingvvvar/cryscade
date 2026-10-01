@@ -51,5 +51,11 @@ export interface Dictionary {
     readonly session: string;
     readonly sessionNet: string;
     readonly sessionTime: string;
+    readonly chooseBet: string;
+  };
+  /** Итог раунда для экранного диктора (aria-live): один раз на раунд. Суммы — уже строками локали. */
+  readonly announce: {
+    win(win: string, balance: string): string;
+    noWin(balance: string): string;
   };
 }

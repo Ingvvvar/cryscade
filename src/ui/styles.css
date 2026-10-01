@@ -150,7 +150,8 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: radial-gradient(circle at 50% 32%, rgb(63 224 208 / 0.9) 0%, var(--cave-2) 72%) !important;
+  /* Свет сверху, надпись — в тёмной части: самый светлый фон под «Спін» — 6.3:1 к тексту (AA, e2e shell.spec). */
+  background: radial-gradient(circle at 50% 20%, rgb(63 224 208 / 0.55) 0%, var(--cave-2) 64%) !important;
   border-color: rgb(63 224 208 / 0.7) !important;
   box-shadow: 0 0 calc(var(--u) * 28) rgb(63 224 208 / 0.35);
 }
@@ -469,4 +470,92 @@ body {
   margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* Ставка (§11): число — кнопка выбора; уровни — popover по центру экрана. */
+.panel .bet-value {
+  padding: calc(var(--u) * 2) calc(var(--u) * 14);
+  background: transparent;
+  border-color: transparent;
+}
+
+.panel .bet-value:not(:disabled):hover {
+  border-color: rgb(159 180 232 / 0.35);
+}
+
+.levels {
+  box-sizing: border-box;
+  width: min(92vw, calc(var(--u) * 560));
+  padding: calc(var(--u) * 20);
+  color: var(--text);
+  background: var(--cave-1);
+  border: calc(var(--u) * 1.5) solid rgb(159 180 232 / 0.35);
+  border-radius: calc(var(--u) * 16);
+  box-shadow: 0 calc(var(--u) * 16) calc(var(--u) * 48) rgb(0 0 0 / 0.5);
+}
+
+.levels::backdrop {
+  background: rgb(5 8 20 / 0.5);
+}
+
+.levels-title {
+  margin: 0 0 calc(var(--u) * 14);
+  color: var(--muted);
+  font-size: calc(var(--u) * 18);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.levels-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--u) * 12);
+}
+
+.panel .level {
+  min-height: calc(var(--u) * 64);
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: calc(var(--u) * 22);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel .level[aria-pressed='true'] {
+  color: var(--cave-0);
+  background: var(--glow);
+  border-color: var(--glow);
+}
+
+.notice-link:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}
+
+/* Только для экранного диктора: объявление итога раунда (aria-live). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Верхняя зона — контейнер (§11): узкая (телефон в портрете) — сессия без подписей, крупнее. */
+.zone-top {
+  container: top / inline-size;
+}
+
+@container top (max-width: 480px) {
+  .session-top .session-label {
+    display: none;
+  }
+
+  .session-top .session-value {
+    font-size: calc(var(--u) * 30);
+  }
 }

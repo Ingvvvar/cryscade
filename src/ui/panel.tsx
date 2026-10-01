@@ -81,6 +81,53 @@ function showing(state: ControllerSnapshot['state']): boolean {
   return state.name === 'presenting' || state.name === 'featureIntro' || (state.name === 'restoring' && state.stage === 'show');
 }
 
+/**
+ * Ставка и её выбор (§11): число — кнопка, popover со всеми уровнями конфига. Выбор закрывает popover и возвращает
+ * фокус на кнопку ставки сам (WebKit его не возвращает). Вне покоя кнопка выключена — popover не открыть.
+ */
+function BetChoice({ game, snapshot, playable }: { readonly game: Game; readonly snapshot: ControllerSnapshot; readonly playable: boolean }) {
+  const { dict, money } = useLanguage();
+  const id = useId();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const levelsRef = useRef<HTMLDivElement>(null);
+  const bet = snapshot.betMinor === null ? '—' : money.format(snapshot.betMinor);
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="value bet-value"
+        popoverTarget={id}
+        disabled={!playable}
+        aria-label={`${dict.text.chooseBet}: ${bet}`}
+        data-testid="bet"
+      >
+        {bet}
+      </button>
+      <div ref={levelsRef} id={id} popover="auto" className="levels" data-testid="bet-levels">
+        <p className="levels-title">{dict.text.chooseBet}</p>
+        <div className="levels-grid">
+          {snapshot.betLevelsMinor.map((level) => (
+            <button
+              key={level}
+              type="button"
+              className="level"
+              aria-pressed={level === snapshot.betMinor}
+              onClick={() => {
+                game.setBet(level);
+                levelsRef.current?.hidePopover();
+                buttonRef.current?.focus();
+              }}
+            >
+              {money.format(level)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog }: PanelProps) {
   const { dict, money } = useLanguage();
   const text = dict.text;
@@ -158,9 +205,7 @@ export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, on
       </Zone>
       <Zone layout={layout} name="betValue">
         <span className="label">{text.bet}</span>
-        <output className="value" data-testid="bet">
-          {snapshot.betMinor === null ? '—' : money.format(snapshot.betMinor)}
-        </output>
+        <BetChoice game={game} snapshot={snapshot} playable={playable} />
       </Zone>
       <Zone layout={layout} name="toggles">
         <button type="button" className="toggle" aria-pressed={turbo.turbo} disabled={!turbo.preset.turbo} onClick={onTurbo}>

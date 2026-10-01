@@ -4,6 +4,7 @@ import type { SceneLabels } from '../../src/render/renderer.ts';
 import { FORCED_SEEDS } from '../../src/ui/forced-rounds.ts';
 import { MoneyFormat } from '../../src/ui/money-format.ts';
 import { gameSnapshot, readStorage, waitForState, type StoredState } from '../support/game-page.ts';
+import { decodePng } from '../support/png.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 import { fixtureShown, seedShown } from '../support/shown-rounds.ts';
 
@@ -158,4 +159,135 @@ test('сессия в обычном пресете — в меню: резул�
   await fresh.getByRole('button', { name: 'Меню' }).click();
   await expect(fresh.getByTestId('menu').getByTestId('session-net')).toHaveText('0,00');
   expect(problems).toEqual([]);
+});
+
+/** Относительная яркость WCAG 2.x пикселя sRGB. */
+function luminance(r: number, g: number, b: number): number {
+  const channel = (value: number): number => (value / 255 <= 0.03928 ? value / 255 / 12.92 : ((value / 255 + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+test('контраст AA: «Спін» на своём градиенте — самый светлый фон под надписью не меньше 4.5:1 к тексту; портрет и ландшафт', async ({ browser }) => {
+  // Надпись прозрачная, канвас скрыт: под рамкой надписи остаётся только градиент кнопки на фоне страницы.
+  const text = luminance(0xee, 0xf3, 0xff);
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    const context = await browser.newContext({ viewport, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    await page.goto('./?autoskip=1');
+    await waitForState(page, 'idle');
+    await page.addStyleTag({ content: '.scene-canvas { visibility: hidden !important; } .spin { color: transparent !important; }' });
+    const box = await page.getByRole('button', { name: 'Спін' }).evaluate((button) => {
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    expect(box.width * box.height, 'рамка надписи').toBeGreaterThan(100);
+    const image = decodePng(await page.screenshot({ clip: box }));
+    let brightest = 0;
+    for (let at = 0; at < image.rgba.length; at += 4) brightest = Math.max(brightest, luminance(image.rgba[at] ?? 0, image.rgba[at + 1] ?? 0, image.rgba[at + 2] ?? 0));
+    const ratio = (text + 0.05) / (brightest + 0.05);
+    console.log(`«Спін», ${String(viewport.width)}×${String(viewport.height)}: самый светлый фон L = ${brightest.toFixed(3)}, контраст ${ratio.toFixed(2)}`);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    await context.close();
+  }
+});
+
+test('ставка с клавиатуры и из списка: + и − по уровням, в диалоге клавиши игры не действуют; popover — выбор, Esc, фокус на кнопку ставки; спин идёт с выбранной', async ({ page }) => {
+  const { problems } = collectConsole(page);
+  await page.goto('./?autoskip=1');
+  await waitForState(page, 'idle');
+  const bet = page.getByTestId('bet');
+  await expect(bet).toHaveText('1,00');
+  await page.keyboard.press('+');
+  await expect(bet).toHaveText('2,00');
+  await page.keyboard.press('-');
+  await page.keyboard.press('-');
+  await expect(bet).toHaveText('0,40');
+  await page.keyboard.press('=');
+  await expect(bet).toHaveText('1,00');
+  // В диалоге и в popover клавиши игры не действуют — и с фокусом на кнопке, не только в поле ввода.
+  await openSettings(page, 'Меню', 'Налаштування');
+  await page.getByRole('button', { name: 'Закрити' }).focus();
+  await page.keyboard.press('+');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(bet).toHaveText('1,00');
+  await bet.click();
+  const levels = page.getByTestId('bet-levels');
+  await expect(levels).toBeVisible();
+  await levels.getByRole('button', { name: '2,00', exact: true }).focus();
+  await page.keyboard.press('-');
+  await expect(bet).toHaveText('1,00');
+  await expect(levels.getByRole('button')).toHaveText(['0,20', '0,40', '1,00', '2,00', '4,00', '10,00', '20,00', '50,00', '100,00']);
+  await expect(levels.getByRole('button', { name: '1,00', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await levels.getByRole('button', { name: '10,00', exact: true }).click();
+  await expect(levels).toBeHidden();
+  await expect(bet).toHaveText('10,00');
+  await expect(bet).toBeFocused();
+  await bet.click();
+  await expect(levels).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(levels).toBeHidden();
+  await expect(bet).toHaveText('10,00');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect.poll(async () => (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length).toBe(1);
+  expect((await readStorage(page)).rounds.map((round) => round.betMinor)).toStrictEqual([1000]);
+  expect(problems).toEqual([]);
+});
+
+test('итог раунда — экранному диктору: одно объявление на раунд, когда раунд закрыт; текст — выигрыш и баланс', async ({ page }) => {
+  const { problems } = collectConsole(page);
+  await page.goto('./?autoskip=1');
+  await waitForState(page, 'idle');
+  await expect(page.getByTestId('announcer')).toHaveAttribute('aria-live', 'polite');
+  await page.evaluate(() => {
+    const node = document.querySelector('[data-testid="announcer"]');
+    const log: string[] = [];
+    (window as unknown as { announced: string[] }).announced = log;
+    if (node === null) throw new Error('нет объявлений');
+    new MutationObserver(() => {
+      log.push(node.textContent);
+    }).observe(node, { childList: true, characterData: true, subtree: true });
+  });
+  // Выигрыш и проигрыш — принудительными раундами (зонд, только e2e-сборка): оба вида текста.
+  for (const [name, closed] of [
+    ['smallWin', 1],
+    ['loss', 2],
+  ] as const) {
+    await page.evaluate((round) => (window as ProbeWindow).__cryscadeProbe?.force(round), name);
+    await spinOnce(page, closed);
+  }
+  const announced = await page.evaluate(() => (window as unknown as { announced: string[] }).announced);
+  const money = new MoneyFormat('uk-UA');
+  const rounds = [...(await readStorage(page)).rounds].sort((a, b) => a.seq - b.seq) as unknown as { winMinor: number; balanceAfterEnd: number }[];
+  expect(rounds.map((round) => round.winMinor > 0)).toStrictEqual([true, false]);
+  expect(announced).toStrictEqual(
+    rounds.map((round) =>
+      round.winMinor > 0
+        ? `Виграш ${money.format(round.winMinor)}. Баланс ${money.format(round.balanceAfterEnd)}`
+        : `Без виграшу. Баланс ${money.format(round.balanceAfterEnd)}`,
+    ),
+  );
+  expect(problems).toEqual([]);
+});
+
+test('сессия в строгом пресете: узкая верхняя зона (телефон) — без подписей, широкая — с ними (container query)', async ({ browser }) => {
+  for (const [viewport, labelled] of [
+    [{ width: 390, height: 844 }, false],
+    [{ width: 1440, height: 900 }, true],
+  ] as const) {
+    const context = await browser.newContext({ viewport });
+    const page = await context.newPage();
+    await page.goto('./?autoskip=1&jurisdiction=strict');
+    await waitForState(page, 'idle');
+    const labels = page.locator('.session-top .session-label');
+    await expect(labels).toHaveCount(2);
+    await expect(page.locator('.session-top [data-testid="session-net"]')).toBeVisible();
+    expect([viewport.width, await labels.first().isVisible(), await labels.last().isVisible()]).toStrictEqual([viewport.width, labelled, labelled]);
+    await context.close();
+  }
 });

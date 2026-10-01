@@ -37,6 +37,8 @@ export interface SettledRound {
   readonly roundId: string;
   readonly betMinor: number;
   readonly winMinor: number;
+  /** Баланс после зачисления этого раунда — из ответа endRound. */
+  readonly balanceMinor: number;
 }
 
 /** Полоса над игрой: хранилище в памяти, починка, база обновлена другой вкладкой. */
@@ -236,6 +238,14 @@ export class GameController {
     this.#stepBet(-1);
   }
 
+  /** Ставка из списка уровней — выбор в popover панели; только в покое и только уровень конфига. */
+  setBet(betMinor: number): void {
+    const levels = this.#config?.betLevelsMinor;
+    if (levels === undefined || !levels.includes(betMinor) || this.#state.view.name !== 'idle') return;
+    this.#betMinor = betMinor;
+    this.#publish();
+  }
+
   /** Вкладка закрывается: запрос в пути брошен, замок отпущен; выданный потом — тоже отпускается. */
   dispose(): void {
     if (this.#disposed) return;
@@ -276,7 +286,7 @@ export class GameController {
       case 'callEndRound':
         this.#request({ type: 'endRound', roundId: command.roundId }, (result) => {
           this.#applyWallet(result.wallet);
-          this.#settle(command.roundId);
+          this.#settle(command.roundId, result.balanceMinor);
           return { type: 'ended' };
         });
         break;
@@ -397,11 +407,11 @@ export class GameController {
     this.#presentation.play(round, restored);
   }
 
-  #settle(roundId: string): void {
+  #settle(roundId: string, balanceMinor: number): void {
     // endRound уходит только после показа раунда: на сцене — он.
     const shown = this.#shown;
     if (shown === null) return;
-    const round: SettledRound = { roundId, betMinor: shown.betMinor, winMinor: shown.winMinor };
+    const round: SettledRound = { roundId, betMinor: shown.betMinor, winMinor: shown.winMinor, balanceMinor };
     for (const listener of [...this.#settledListeners]) listener(round);
   }
 

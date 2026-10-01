@@ -53,5 +53,10 @@ export const EN: Dictionary = {
     session: 'Session',
     sessionNet: 'Net result',
     sessionTime: 'Time',
+    chooseBet: 'Choose bet',
+  },
+  announce: {
+    win: (win, balance) => `Win ${win}. Balance ${balance}`,
+    noWin: (balance) => `No win. Balance ${balance}`,
   },
 };

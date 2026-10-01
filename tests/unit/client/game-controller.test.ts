@@ -335,6 +335,25 @@ describe('запуск и спин', () => {
     expect(plays(a)).toStrictEqual([{ type: 'play', betMinor: 5000, idempotencyKey: 'ak1' }]);
   });
 
+  it('ставка из списка: только уровень конфига и только в idle; подписчики слышат выбор; спин идёт с выбранной', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    a.controller.setBet(2000);
+    expect(a.snapshot.betMinor).toBeNull();
+    await settle();
+    const heard = a.snapshots.length;
+    a.controller.setBet(2000);
+    expect([a.snapshot.betMinor, a.snapshots.length]).toStrictEqual([2000, heard + 1]);
+    a.controller.setBet(150);
+    a.controller.setBet(0);
+    expect(a.snapshot.betMinor).toBe(2000);
+    a.controller.spin();
+    a.controller.setBet(20);
+    expect(a.snapshot.betMinor).toBe(2000);
+    await settle();
+    expect(plays(a)).toStrictEqual([{ type: 'play', betMinor: 2000, idempotencyKey: 'ak1' }]);
+  });
+
   it('мало средств — спин не состоялся: idle с отказом, замок отпущен, раунда нет', async () => {
     const world = new ClientWorld();
     await plant(world.storage, [
@@ -1227,8 +1246,8 @@ describe('закрытые раунды (сессия игрока)', () => {
     a.controller.spin();
     await settle();
     expect(settled).toStrictEqual([
-      { roundId: 'ar1', betMinor: 100, winMinor: 95 },
-      { roundId: 'ar2', betMinor: 100, winMinor: 0 },
+      { roundId: 'ar1', betMinor: 100, winMinor: 95, balanceMinor: 99_995 },
+      { roundId: 'ar2', betMinor: 100, winMinor: 0, balanceMinor: 99_895 },
     ]);
   });
 
@@ -1244,7 +1263,7 @@ describe('закрытые раунды (сессия игрока)', () => {
     expect(settled).toStrictEqual([]);
     a.lab.releaseHeld();
     await settle();
-    expect(settled).toStrictEqual([{ roundId: 'ar1', betMinor: 100, winMinor: 95 }]);
+    expect(settled).toStrictEqual([{ roundId: 'ar1', betMinor: 100, winMinor: 95, balanceMinor: 99_995 }]);
   });
 
   it('доигранный чужой раунд — событие у вкладки, что его закрыла, со ставкой того раунда', async () => {
@@ -1262,7 +1281,7 @@ describe('закрытые раунды (сессия игрока)', () => {
     const fromB: SettledRound[] = [];
     b.controller.onRoundSettled((round) => fromB.push(round));
     await settle();
-    expect([fromA, fromB]).toStrictEqual([[], [{ roundId: 'ar1', betMinor: 200, winMinor: 190 }]]);
+    expect([fromA, fromB]).toStrictEqual([[], [{ roundId: 'ar1', betMinor: 200, winMinor: 190, balanceMinor: 99_990 }]]);
     expect(b.snapshot.betMinor).toBe(100);
   });
 

@@ -53,5 +53,10 @@ export const UK: Dictionary = {
     session: 'Сесія',
     sessionNet: 'Результат',
     sessionTime: 'Час',
+    chooseBet: 'Обрати ставку',
+  },
+  announce: {
+    win: (win, balance) => `Виграш ${win}. Баланс ${balance}`,
+    noWin: (balance) => `Без виграшу. Баланс ${balance}`,
   },
 };
