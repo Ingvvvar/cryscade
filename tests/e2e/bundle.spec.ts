@@ -3,13 +3,14 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
+import { LAZY_MODULES } from '../../tools/bundle-budget.ts';
 
 // Тестовые крючки только вне прод-сборки (§15, фаза 3). Сборки делает webServer этого конфига:
 // dist/ — прод, dist-e2e/ — --mode e2e. Положительный контроль: те же маркеры находятся в dist-e2e/.
 // Фаза 5: канал зонда cryscade-probe — принудительный раунд в воркере и его сиды; в проде ни страница, ни воркер его не знают.
 // Флаги зонда ?autoskip и ?warmup=off — только в dev и e2e, как сам зонд.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup', 'replays'];
+const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup', 'replays', 'sceneLabels'];
 
 function scripts(dir: string): { files: number; text: string } {
   const out: string[] = [];
@@ -56,10 +57,14 @@ test('гейт бюджета (§13): начальный JS в 300 КБ; лен�
   const initial = Number(measured?.[1]);
   expect(initial).toBeGreaterThan(0);
   expect(initial).toBeLessThanOrEqual(307_200);
-  // Ленивый модуль: зонд статически при реальном пороге — до 300 КБ далеко, а сборка обязана упасть, назвав модуль.
-  const eager = build('budget-eager', { CRYSCADE_BUDGET: '307200', CRYSCADE_STATIC_ROOT: './probe.ts' }, CONTROL);
+  // Ленивые модули: все статически при реальном пороге — сборка обязана упасть, назвав каждый: так проверено, что путь
+  // в списке совпадает с настоящим модулем, а не молча промахивается.
+  const roots = LAZY_MODULES.map((module) => `./${path.relative('src/ui', module)}`);
+  expect(roots.length).toBeGreaterThan(0);
+  const eager = build('budget-eager', { CRYSCADE_BUDGET: '307200', CRYSCADE_STATIC_ROOT: roots.join(',') }, CONTROL);
   expect(eager.status).not.toBe(0);
-  expect(eager.output).toMatch(/ленивый модуль в начальном JS — его место за динамическим импортом \(§13\): src\/ui\/probe\.ts в /);
+  expect(eager.output).toContain('ленивый модуль в начальном JS — его место за динамическим импортом (§13):');
+  expect(LAZY_MODULES.filter((module) => !eager.output.includes(`${module} в `))).toStrictEqual([]);
   expect(eager.output).not.toMatch(/больше бюджета/);
   // Тот же контрольный конфиг при том же пороге без статического импорта проходит: падение — от зонда, не от конфига.
   const same = build('budget-same', { CRYSCADE_BUDGET: '307200' }, CONTROL);

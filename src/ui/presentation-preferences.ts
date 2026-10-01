@@ -1,17 +1,18 @@
-// Параметры показа от игрока и страницы (§8.2, §11): турбо — кнопка панели, пресет — ?jurisdiction=strict (с фазы 7 —
-// и настройки), reduced motion — медиа-запрос. Показ читает их на старте раунда: переключённые посреди раунда действуют
-// со следующего. Турбо и пропуск — только если пресет их разрешает; имя пресета нигде не сравнивается.
+// Параметры показа от игрока и страницы (§8.2, §11): турбо — кнопка панели, пресет — ?jurisdiction= или настройки,
+// reduced motion — медиа-запрос. Показ читает их на старте раунда: переключённые посреди раунда действуют со
+// следующего — пресет фиксируется в options(), и пропуск идёт по пресету своего раунда. Кнопки панели (турбо, автоигра)
+// смотрят на выбранный пресет сразу. Имя пресета нигде не сравнивается — только флаги.
 
-import { PRESETS, type PresetFlags, type PresentationSettings, type ScheduleOptions } from '../client/index.ts';
+import type { PresetFlags, PresentationSettings, ScheduleOptions } from '../client/index.ts';
 import type { MediaQueryListLike } from './viewport-watcher.ts';
 
 export interface PreferencesView {
   readonly turbo: boolean;
-  /** Пресет разрешает турбо: иначе кнопка выключена. */
-  readonly turboAllowed: boolean;
+  /** Выбранный пресет: его флаги видит панель (турбо, автоигра, сессия на экране). */
+  readonly preset: PresetFlags;
 }
 
-/** Что панели нужно от параметров показа: кнопка турбо. */
+/** Что панели нужно от параметров показа: кнопка турбо и флаги пресета. */
 export interface TurboSwitch {
   getSnapshot(): PreferencesView;
   subscribe(listener: () => void): () => void;
@@ -19,29 +20,37 @@ export interface TurboSwitch {
 }
 
 export class PresentationPreferences implements PresentationSettings, TurboSwitch {
-  readonly #preset: PresetFlags;
   readonly #motion: MediaQueryListLike;
   readonly #listeners = new Set<() => void>();
+  /** Пресет раунда на сцене — зафиксирован на его старте. */
+  #active: PresetFlags;
   #view: PreferencesView;
 
   constructor(preset: PresetFlags, motion: MediaQueryListLike) {
-    this.#preset = preset;
+    this.#active = preset;
     this.#motion = motion;
-    this.#view = { turbo: false, turboAllowed: preset.turbo };
+    this.#view = { turbo: false, preset };
   }
 
   get skip(): boolean {
-    return this.#preset.skip;
+    return this.#active.skip;
   }
 
+  /** Старт раунда: выбранный пресет становится пресетом раунда. */
   options(): ScheduleOptions {
-    return { speed: this.#view.turbo && this.#preset.turbo ? 'turbo' : 'normal', preset: this.#preset, reducedMotion: this.#motion.matches };
+    this.#active = this.#view.preset;
+    return { speed: this.#view.turbo && this.#active.turbo ? 'turbo' : 'normal', preset: this.#active, reducedMotion: this.#motion.matches };
   }
 
   toggleTurbo(): void {
-    if (!this.#preset.turbo) return;
-    this.#view = { ...this.#view, turbo: !this.#view.turbo };
-    for (const listener of [...this.#listeners]) listener();
+    if (!this.#view.preset.turbo) return;
+    this.#publish({ ...this.#view, turbo: !this.#view.turbo });
+  }
+
+  /** Выбор пресета — со следующего раунда: текущий доигрывает со своим. */
+  setPreset(preset: PresetFlags): void {
+    if (preset === this.#view.preset) return;
+    this.#publish({ ...this.#view, preset });
   }
 
   getSnapshot(): PreferencesView {
@@ -54,9 +63,9 @@ export class PresentationPreferences implements PresentationSettings, TurboSwitc
       this.#listeners.delete(listener);
     };
   }
-}
 
-/** Пресет страницы: ?jurisdiction=strict — строгий, иначе обычный. */
-export function presetChoice(search: string): PresetFlags {
-  return new URLSearchParams(search).get('jurisdiction') === 'strict' ? PRESETS.strict : PRESETS.standard;
+  #publish(view: PreferencesView): void {
+    this.#view = view;
+    for (const listener of [...this.#listeners]) listener();
+  }
 }

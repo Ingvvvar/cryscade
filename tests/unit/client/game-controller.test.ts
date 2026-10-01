@@ -9,6 +9,7 @@ import {
   type Rgs,
   type RoundLease,
   type RoundLock,
+  type SettledRound,
   type Transport,
 } from '../../../src/client/index.ts';
 import { DEFAULT_CONFIG } from '../../../src/core/model/config.ts';
@@ -1208,6 +1209,74 @@ describe('гонки и закрытие', () => {
     const lease = await lock.tryAcquire();
     expect(lease).not.toBeNull();
     lease?.release();
+  });
+});
+
+describe('закрытые раунды (сессия игрока)', () => {
+  it('раунд закрыт ответом endRound — одно событие с его ставкой и выигрышем; слушатель отписывается', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a', { seeds: [0, 1] });
+    const settled: SettledRound[] = [];
+    const unlisten = a.controller.onRoundSettled((round) => settled.push(round));
+    await settle();
+    a.controller.spin();
+    await settle();
+    a.controller.spin();
+    await settle();
+    unlisten();
+    a.controller.spin();
+    await settle();
+    expect(settled).toStrictEqual([
+      { roundId: 'ar1', betMinor: 100, winMinor: 95 },
+      { roundId: 'ar2', betMinor: 100, winMinor: 0 },
+    ]);
+  });
+
+  it('ответ endRound задержан — события нет, пока его нет; пришёл — одно', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    const settled: SettledRound[] = [];
+    a.controller.onRoundSettled((round) => settled.push(round));
+    await settle();
+    a.lab.holdNextEndRound();
+    a.controller.spin();
+    await settle();
+    expect(settled).toStrictEqual([]);
+    a.lab.releaseHeld();
+    await settle();
+    expect(settled).toStrictEqual([{ roundId: 'ar1', betMinor: 100, winMinor: 95 }]);
+  });
+
+  it('доигранный чужой раунд — событие у вкладки, что его закрыла, со ставкой того раунда', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    const fromA: SettledRound[] = [];
+    a.controller.onRoundSettled((round) => fromA.push(round));
+    await settle();
+    a.controller.betUp();
+    a.lab.reloadMidNextRound();
+    a.controller.spin();
+    await settle();
+    a.close();
+    const b = world.open('b');
+    const fromB: SettledRound[] = [];
+    b.controller.onRoundSettled((round) => fromB.push(round));
+    await settle();
+    expect([fromA, fromB]).toStrictEqual([[], [{ roundId: 'ar1', betMinor: 200, winMinor: 190 }]]);
+    expect(b.snapshot.betMinor).toBe(100);
+  });
+
+  it('повтор по ссылке раунды не закрывает — событий нет', async () => {
+    const world = new ClientWorld();
+    const a = world.open('a');
+    await settle();
+    a.controller.spin();
+    await settle();
+    const r = world.replay('r', { round: 'ar1' });
+    const settled: SettledRound[] = [];
+    r.controller.onRoundSettled((round) => settled.push(round));
+    await settle();
+    expect([r.state, settled]).toStrictEqual([{ name: 'replaying', stage: 'done', roundId: 'ar1' }, []]);
   });
 });
 

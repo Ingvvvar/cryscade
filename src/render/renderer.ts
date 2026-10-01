@@ -3,6 +3,7 @@
 
 import type { SceneState, Schedule } from '../core/presentation/index.ts';
 import type { Viewport } from './layout.ts';
+import type { NumberStyle } from './number-layout.ts';
 
 export type RendererName = 'webgpu' | 'webgl';
 
@@ -68,4 +69,19 @@ export interface SourceSink {
   setSource(source: SceneSource | null): void;
 }
 
-export interface Renderer extends RendererLifecycle, ViewportSink, SourceSink {}
+/** Надписи и сумма выигрыша на сцене — что видит игрок; невидимое — null. Для зонда: смена языка доходит до каждой. */
+export interface SceneLabels {
+  readonly freeSpins: string | null;
+  readonly plaque: string | null;
+  /** Подсказка плашки начала фриспинов. */
+  readonly hint: string | null;
+  readonly bigWin: string | null;
+  readonly counter: string;
+}
+
+/** Язык игрока (§11): надписи и разделители чисел сцены. Смена — на лету: шрифт надписей уже несёт строки всех языков. */
+export interface LanguageSink {
+  setLanguage(texts: SceneTexts, numbers: NumberStyle): void;
+}
+
+export interface Renderer extends RendererLifecycle, ViewportSink, SourceSink, LanguageSink {}

@@ -60,22 +60,22 @@ function budgetPlugins(budget: BundleBudget): { readonly main: Plugin; readonly 
 export interface CryscadeConfigOptions {
   /** Бюджет начального JS, байт gzip; по умолчанию 300 КБ. Другой — только для положительных контролей гейта. */
   readonly budget?: number;
-  /** Модуль, который главный вход импортирует статически сверх своих импортов, — положительный контроль гейта. */
-  readonly staticRoot?: string;
+  /** Модули, которые главный вход импортирует статически сверх своих импортов, — положительный контроль гейта. */
+  readonly staticRoots?: readonly string[];
 }
 
 export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig {
   const budget = budgetPlugins(new BundleBudget(options.budget ?? INITIAL_JS_BUDGET));
-  const staticRoot = options.staticRoot;
+  const staticRoots = options.staticRoots ?? [];
   const inject: Plugin[] =
-    staticRoot === undefined
+    staticRoots.length === 0
       ? []
       : [
           {
             name: 'cryscade-budget-control',
             enforce: 'pre',
             transform(code, id) {
-              return id.endsWith('/src/ui/main.tsx') ? `import ${JSON.stringify(staticRoot)};\n${code}` : null;
+              return id.endsWith('/src/ui/main.tsx') ? `${staticRoots.map((root) => `import ${JSON.stringify(root)};`).join('\n')}\n${code}` : null;
             },
           },
         ];

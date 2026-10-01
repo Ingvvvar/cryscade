@@ -22,9 +22,10 @@ export default defineConfig({
     { name: 'fallback', testMatch: 'fallback.spec.ts', use: { ...devices['Desktop Chrome'], baseURL: url(E2E) } },
     { name: 'bundle', testMatch: 'bundle.spec.ts' },
     // Игра на e2e-сборке: зонд видит контроллер и лабораторию сети; вкладки одного профиля делят IndexedDB и замки.
-    { name: 'game', testMatch: /(game|resilience|storage|presentation|fairness|replay)\.spec\.ts$/, use: { ...chrome, baseURL: url(E2E) } },
-    // Повтор в WebKit: события движка JavaScriptCore = литерал из Node (§7, фаза 6).
-    { name: 'webkit', testMatch: 'replay.spec.ts', use: { ...devices['Desktop Safari'], baseURL: url(E2E) } },
+    { name: 'game', testMatch: /(game|resilience|storage|presentation|fairness|replay|shell)\.spec\.ts$/, use: { ...chrome, baseURL: url(E2E) } },
+    // WebKit: повтор — события движка JavaScriptCore = литерал из Node (§7, фаза 6); оболочка — диалоги и popover, где
+    // фокус WebKit возвращает иначе, чем Chromium (фаза 7).
+    { name: 'webkit', testMatch: /(replay|shell)\.spec\.ts$/, use: { ...devices['Desktop Safari'], baseURL: url(E2E) } },
   ],
   webServer: [
     {

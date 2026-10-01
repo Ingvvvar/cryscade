@@ -1,0 +1,57 @@
+// Английский словарь (§11) — ленивый модуль: грузится, когда игрок выбрал английский (LAZY_MODULES гейта сборки).
+
+import type { Dictionary } from './dictionary.ts';
+
+export const EN: Dictionary = {
+  language: 'en',
+  locale: 'en-GB',
+  notice: {
+    volatile: 'Browser storage is unavailable: the game works, but balance and history will not survive a reload',
+    reset: 'Game data in the browser was damaged — balance restored to 1000 credits',
+    versionchange: 'The game was updated in another tab — reload the page',
+  },
+  error: {
+    unreachable: 'The game server is not responding',
+    server: 'The game server could not complete the request',
+    invalid: 'The game server reply is damaged',
+    version: 'The game was updated — reload the page',
+    client: 'The game sent a bad request — reload the page',
+    missing: 'There is no replay at this link: a round is kept only in the browser where it was played',
+  },
+  refusal: {
+    INSUFFICIENT_FUNDS: 'Not enough credits for this bet — top up your balance',
+    INVALID_BET: 'There is no such bet',
+    IDEMPOTENCY_CONFLICT: 'The spin did not happen — try again',
+    ROUND_NOT_FOUND: 'The spin did not happen — try again',
+  },
+  text: {
+    menu: 'Menu',
+    sound: 'Sound',
+    win: 'Win',
+    balance: 'Balance',
+    bet: 'Bet',
+    betDown: 'Decrease bet',
+    betUp: 'Increase bet',
+    spin: 'Spin',
+    refill: 'Top up',
+    turbo: 'Turbo',
+    auto: 'Auto',
+    retry: 'Retry',
+    reload: 'Reload',
+    waiting: 'A round is running in another tab',
+    playHere: 'Play here',
+    replay: 'Round replay',
+    replayExit: 'Play',
+    close: 'Close',
+    settings: 'Settings',
+    language: 'Language',
+    preset: 'Game rules',
+    presetStandard: 'Standard',
+    presetStrict: 'Strict (UKGC model)',
+    presetNext: 'Apply from the next round',
+    presetLocked: 'Set by the link — settings do not change them',
+    session: 'Session',
+    sessionNet: 'Net result',
+    sessionTime: 'Time',
+  },
+};

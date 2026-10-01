@@ -277,3 +277,196 @@ body {
   cursor: default;
   opacity: 0.5;
 }
+
+/* Меню (§11): popover в верхнем слое — Esc и клик мимо закрывают его сами. Размеры — в единицах дизайна панели. */
+.menu {
+  position: fixed;
+  inset: auto;
+  top: calc(max(12px, env(safe-area-inset-top)) + var(--u) * 76);
+  left: calc(max(12px, env(safe-area-inset-left)) + var(--u) * 16);
+  margin: 0;
+  min-width: calc(var(--u) * 320);
+  padding: calc(var(--u) * 16);
+  color: var(--text);
+  background: var(--cave-1);
+  border: calc(var(--u) * 1.5) solid rgb(159 180 232 / 0.35);
+  border-radius: calc(var(--u) * 16);
+  box-shadow: 0 calc(var(--u) * 16) calc(var(--u) * 48) rgb(0 0 0 / 0.5);
+}
+
+.menu:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 12);
+}
+
+.panel .menu-item {
+  min-height: calc(var(--u) * 64);
+  padding: 0 calc(var(--u) * 20);
+  text-align: start;
+  font-size: calc(var(--u) * 22);
+  font-weight: 600;
+}
+
+.menu-session {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 8);
+  padding-top: calc(var(--u) * 8);
+  border-top: calc(var(--u) * 1.5) solid rgb(159 180 232 / 0.2);
+}
+
+.menu-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: calc(var(--u) * 16);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Сессия (§11): чистый результат и время; в строгом пресете — в центре верхней зоны вместо заголовка. */
+.session {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: calc(var(--u) * 10);
+  row-gap: calc(var(--u) * 4);
+}
+
+.session-label {
+  color: var(--muted);
+  font-size: calc(var(--u) * 16);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.session-value {
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: calc(var(--u) * 22);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-value + .session-label {
+  margin-left: calc(var(--u) * 10);
+}
+
+.session-top {
+  justify-content: center;
+}
+
+/* Диалоги (§11): нативный <dialog> в модальном режиме — фон и Esc от браузера. */
+.modal {
+  box-sizing: border-box;
+  width: min(92vw, 560px);
+  max-height: 86vh;
+  padding: 0;
+  color: var(--text);
+  background: var(--cave-1);
+  border: 1.5px solid rgb(159 180 232 / 0.35);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.5);
+}
+
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal::backdrop {
+  background: rgb(5 8 20 / 0.72);
+}
+
+.modal :focus-visible {
+  outline: 3px solid var(--glow);
+  outline-offset: 2px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 20px;
+  border-bottom: 1px solid rgb(159 180 232 / 0.2);
+}
+
+.modal-title {
+  margin: 0;
+  font-family: 'Unbounded Variable', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.modal-close {
+  width: 44px;
+  height: 44px;
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  background: transparent;
+  border: 1.5px solid rgb(159 180 232 / 0.35);
+  border-radius: 12px;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 20px 20px;
+  overflow: auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.field-title {
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: rgb(19 32 74 / 0.6);
+  border-radius: 12px;
+}
+
+.choice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--glow);
+}
+
+.field:disabled .choice {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.field-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

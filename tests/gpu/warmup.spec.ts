@@ -13,6 +13,8 @@ import { installTextureCounter, type TextureCounts } from './support/texture-cou
 // Правки фазы 5: и текстуры — первый кадр каждого уровня большого выигрыша и каждой плашки фичи не создаёт и не грузит
 // ни одной текстуры (страницы глифов грузит прогрев), даже после двух минут без надписей: сборщик Pixi снял бы за это
 // время страницу, которую не рисовали, — поэтому страницы ему не отданы.
+// Фаза 7: и после смены языка — шрифт надписей сразу несёт строки обоих языков, английские надписи новых страниц глифов
+// не создают (контроль — тот же тест без прогрева).
 
 type CountWindow = ProbeWindow & { __pipelineCounts?: PipelineCounts; __textureCounts?: TextureCounts };
 
@@ -89,17 +91,28 @@ interface FirstFrame {
   readonly group: string;
   /** Надпись плашки, которую зонд видит на этом кадре; большой выигрыш — null. */
   readonly plaque: string | null;
+  /** Она же по-английски. */
+  readonly plaqueEn: string | null;
 }
 
 const FIRST_FRAMES: readonly FirstFrame[] = [
-  { name: 'Великий виграш', round: seedShown(FORCED_SEEDS.bigWin1), segment: 'celebrate', group: 'bigWin', plaque: null },
-  { name: 'Величезний виграш', round: seedShown(FORCED_SEEDS.bigWin2), segment: 'celebrate', group: 'bigWin', plaque: null },
-  { name: 'Епічний виграш', round: seedShown(FORCED_SEEDS.bigWin3), segment: 'celebrate', group: 'bigWin', plaque: null },
-  { name: 'Максимальний виграш', round: seedShown(FORCED_SEEDS.maxWin), segment: 'celebrate', group: 'bigWin', plaque: null },
-  { name: 'плашка фріспінів', round: fixtureShown('feature-start'), segment: 'plaqueIn', group: 'feature', plaque: 'Фріспіни' },
-  { name: 'плашка ретриггера', round: fixtureShown('retrigger'), segment: 'plaqueIn', group: 'retrigger', plaque: '+5 фріспінів' },
-  { name: 'плашка капа', round: fixtureShown('biggest'), segment: 'cap', group: 'cascade', plaque: 'Максимальний виграш' },
+  { name: 'Великий виграш', round: seedShown(FORCED_SEEDS.bigWin1), segment: 'celebrate', group: 'bigWin', plaque: null, plaqueEn: null },
+  { name: 'Величезний виграш', round: seedShown(FORCED_SEEDS.bigWin2), segment: 'celebrate', group: 'bigWin', plaque: null, plaqueEn: null },
+  { name: 'Епічний виграш', round: seedShown(FORCED_SEEDS.bigWin3), segment: 'celebrate', group: 'bigWin', plaque: null, plaqueEn: null },
+  { name: 'Максимальний виграш', round: seedShown(FORCED_SEEDS.maxWin), segment: 'celebrate', group: 'bigWin', plaque: null, plaqueEn: null },
+  { name: 'плашка фріспінів', round: fixtureShown('feature-start'), segment: 'plaqueIn', group: 'feature', plaque: 'Фріспіни', plaqueEn: 'Free spins' },
+  { name: 'плашка ретриггера', round: fixtureShown('retrigger'), segment: 'plaqueIn', group: 'retrigger', plaque: '+5 фріспінів', plaqueEn: '+5 free spins' },
+  { name: 'плашка капа', round: fixtureShown('biggest'), segment: 'cap', group: 'cascade', plaque: 'Максимальний виграш', plaqueEn: 'Maximum win' },
 ];
+
+/** Английский — как игрок: меню, «Налаштування», English, Esc. */
+async function toEnglish(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Налаштування' }).click();
+  await page.getByRole('radio', { name: 'English' }).check();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Spin' })).toBeVisible();
+}
 
 interface FrameUse extends TextureCounts {
   readonly name: string;
@@ -131,13 +144,19 @@ async function firstFrame(page: Page, frame: FirstFrame): Promise<FrameUse> {
 }
 
 for (const renderer of ['webgl', 'webgpu'] as const) {
-  for (const warm of [true, false]) {
-    test(`${renderer}: первый кадр надписей после двух минут покоя — ${warm ? 'ни одной новой текстуры' : 'без прогрева (контроль) — с загрузкой'}`, async ({ page }) => {
+  for (const [warm, english] of [
+    [true, false],
+    [true, true],
+    [false, false],
+  ] as const) {
+    const title = warm ? `ни одной новой текстуры${english ? ' — и по-английски после смены языка' : ''}` : 'без прогрева (контроль) — с загрузкой';
+    test(`${renderer}: первый кадр надписей после двух минут покоя — ${title}`, async ({ page }) => {
       test.setTimeout(240_000);
       await page.addInitScript(installTextureCounter);
       await page.clock.install({ time: 0 });
       await page.goto(`./?renderer=${renderer}${warm ? '' : '&warmup=off'}`);
       await waitSettled(page);
+      if (english) await toEnglish(page);
       const info = await sceneInfo(page);
       expect(info.name).toBe(renderer);
       expect(info.software, `программный рендер: ${info.gpu}`).toBe(false);
@@ -151,7 +170,7 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
       console.log(
         `${renderer}, прогрев ${warm ? 'есть' : 'нет'} (${info.gpu}):\n${rows.map((row) => `  ${row.name}, t = ${String(row.t)}: создано ${String(row.created)}, загружено ${String(row.uploaded)}, мипмапов ${String(row.mipmaps)}`).join('\n')}`,
       );
-      expect(rows.map((row) => row.plaque), 'кадр показывает свою плашку').toStrictEqual(FIRST_FRAMES.map((frame) => frame.plaque));
+      expect(rows.map((row) => row.plaque), 'кадр показывает свою плашку').toStrictEqual(FIRST_FRAMES.map((frame) => (english ? frame.plaqueEn : frame.plaque)));
       if (warm) {
         for (const row of rows) expect([row.created, row.uploaded, row.mipmaps], `${row.name}: текстур не создано и не загружено`).toStrictEqual([0, 0, 0]);
       } else {

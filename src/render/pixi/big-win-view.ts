@@ -20,8 +20,8 @@ export class BigWinView {
   readonly #dim = new Graphics();
   readonly #title: BitmapText;
   readonly #amount: GlyphNumber;
-  readonly #texts: SceneTexts;
-  readonly #codes: NumberCodes;
+  #texts: SceneTexts;
+  #codes: NumberCodes;
   #level = -1;
 
   constructor(texts: SceneTexts, codes: NumberCodes) {
@@ -30,6 +30,18 @@ export class BigWinView {
     this.#title = new BitmapText({ text: texts.bigWin[0], style: { fontFamily: LABELS_FONT, fontSize: 52 }, tint: PALETTE.warm, anchor: 0.5 });
     this.#amount = new GlyphNumber({ font: DIGITS_FONT, size: 92, tint: PALETTE.text, anchorX: 0.5, anchorY: 0.5 });
     this.view.addChild(this.#dim, this.#title, this.#amount.view);
+  }
+
+  /** Надпись уровня, если празднование видно; для зонда. */
+  get title(): string | null {
+    return this.view.visible ? this.#title.text : null;
+  }
+
+  /** Язык сменился: надпись уровня — заново на следующем кадре, сумма — с новыми разделителями. */
+  setWords(texts: SceneTexts, codes: NumberCodes): void {
+    this.#texts = texts;
+    this.#codes = codes;
+    this.#level = -1;
   }
 
   setDesign(design: Design): void {

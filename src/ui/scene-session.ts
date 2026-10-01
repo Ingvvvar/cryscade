@@ -1,9 +1,11 @@
-// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна и источник кадра. Рендерер, дошедший
-// до готовности, получает текущий вьюпорт, reduced motion и источник кадра — часы показа, из которых он сам тянет кадры.
+// Сессия сцены: монтирование рендерера (SceneMount) плюс последнее состояние окна, источник кадра и язык. Рендерер,
+// дошедший до готовности, получает текущий вьюпорт, reduced motion, источник кадра — часы показа, из которых он сам тянет
+// кадры, — и язык игрока.
 // Раскладку отдаёт React-панели: она ставит кнопки по тем же зонам, что Pixi — сетку.
 
 import { computeLayout, type Layout, type Viewport } from '../render/layout.ts';
-import type { Renderer, SceneSource, SourceSink, ViewportSink } from '../render/renderer.ts';
+import type { NumberStyle } from '../render/number-layout.ts';
+import type { LanguageSink, Renderer, SceneSource, SceneTexts, SourceSink, ViewportSink } from '../render/renderer.ts';
 import { SceneMount } from './scene-mount.ts';
 
 /** Счётчики монтирований для тестового зонда. */
@@ -24,12 +26,13 @@ export interface SceneSessionOptions {
   readonly observer: MountObserver | null;
 }
 
-export class SceneSession implements ViewportSink, SourceSink {
+export class SceneSession implements ViewportSink, SourceSink, LanguageSink {
   readonly #options: SceneSessionOptions;
   readonly #mount: SceneMount<Renderer>;
   #viewport: { readonly viewport: Viewport; readonly pixelRatio: number } | null = null;
   #reducedMotion = false;
   #source: SceneSource | null = null;
+  #language: { readonly texts: SceneTexts; readonly numbers: NumberStyle } | null = null;
 
   constructor(options: SceneSessionOptions) {
     this.#options = options;
@@ -76,10 +79,16 @@ export class SceneSession implements ViewportSink, SourceSink {
     this.#mount.renderer?.setSource(source);
   }
 
+  setLanguage(texts: SceneTexts, numbers: NumberStyle): void {
+    this.#language = { texts, numbers };
+    this.#mount.renderer?.setLanguage(texts, numbers);
+  }
+
   #ready(renderer: Renderer): void {
     if (this.#viewport !== null) renderer.resize(this.#viewport.viewport, this.#viewport.pixelRatio);
     renderer.setReducedMotion(this.#reducedMotion);
     renderer.setSource(this.#source);
+    if (this.#language !== null) renderer.setLanguage(this.#language.texts, this.#language.numbers);
     this.#options.onReady?.();
   }
 }

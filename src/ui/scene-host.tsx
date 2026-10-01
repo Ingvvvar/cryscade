@@ -5,13 +5,16 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Layout } from '../render/layout.ts';
 import type { Renderer, SceneSource } from '../render/renderer.ts';
+import type { DialogName } from './dialog-host.tsx';
 import { DomViewportSource } from './dom-viewport.ts';
+import type { ExternalSource } from './external.ts';
 import { useGameSnapshot, type Game } from './game.ts';
-import type { MoneyFormat } from './money-format.ts';
+import { useLanguage } from './language-context.ts';
 import { Panel } from './panel.tsx';
 import type { TurboSwitch } from './presentation-preferences.ts';
 import { rendererFailure, type RendererChoice } from './renderer-choice.ts';
 import { SceneSession, type MountObserver } from './scene-session.ts';
+import type { SessionView } from './session.ts';
 import { NoticeBar, StatusScreen } from './status.tsx';
 import { ViewportWatcher } from './viewport-watcher.ts';
 
@@ -23,12 +26,15 @@ export interface SceneHostProps {
   /** Часы показа: из них рендер тянет кадры. */
   readonly source: SceneSource;
   readonly preferences: TurboSwitch;
-  readonly money: MoneyFormat;
   readonly reload: () => void;
   /** Сцена готова: корень композиции просит книгу исходов после её первого кадра. */
   readonly onSceneReady: () => void;
   /** Выход из повтора — обычный запуск страницы. */
   readonly replayExit: string;
+  readonly session: ExternalSource<SessionView>;
+  /** Часы для времени сессии — из корня композиции. */
+  readonly now: () => number;
+  readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
 }
 
 /** Пробел: в покое — спин, во время показа — пропуск или «продолжить». Кнопку и поле ввода пробел нажимает сам. */
@@ -48,13 +54,14 @@ function useSpaceKey(game: Game): void {
   }, [game]);
 }
 
-export function SceneHost({ create, choice, observer, game, source, preferences, money, reload, onSceneReady, replayExit }: SceneHostProps) {
+export function SceneHost({ create, choice, observer, game, source, preferences, reload, onSceneReady, replayExit, session, now, onOpenDialog }: SceneHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const insetRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<SceneSession | null>(null);
   const [layout, setLayout] = useState<Layout | null>(null);
   const [failed, setFailed] = useState(false);
   const snapshot = useGameSnapshot(game);
+  const language = useLanguage();
   const subscribe = useCallback((listener: () => void) => preferences.subscribe(listener), [preferences]);
   const view = useCallback(() => preferences.getSnapshot(), [preferences]);
   const turbo = useSyncExternalStore(subscribe, view);
@@ -92,6 +99,11 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
     };
   }, [create, observer, source, onSceneReady]);
 
+  // Язык игрока — надписям и суммам сцены: на живом рендерере сразу, новому — по готовности.
+  useEffect(() => {
+    sessionRef.current?.setLanguage(language.scene, language.money.style);
+  }, [language]);
+
   return (
     <div className="scene">
       <div
@@ -102,7 +114,9 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
         }}
       />
       <div ref={insetRef} className="safe-area-probe" aria-hidden="true" />
-      {layout !== null && <Panel layout={layout} game={game} snapshot={snapshot} turbo={turbo} onTurbo={onTurbo} money={money} />}
+      {layout !== null && (
+        <Panel layout={layout} game={game} snapshot={snapshot} turbo={turbo} onTurbo={onTurbo} session={session} now={now} onOpenDialog={onOpenDialog} />
+      )}
       <NoticeBar snapshot={snapshot} exitHref={replayExit} />
       <StatusScreen game={game} snapshot={snapshot} reload={reload} exitHref={replayExit} />
       {failed && (

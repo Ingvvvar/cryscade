@@ -32,6 +32,13 @@ export interface GameControllerPorts {
 /** Что повторить по ссылке (§7): раунд своей истории или запись книги — ?replay=round:<id> | ?replay=book:<index>. */
 export type ReplayTarget = { readonly round: string } | { readonly book: number };
 
+/** Раунд, закрытый этой вкладкой: пришёл ответ endRound — ставка списана, выигрыш зачислен. Для сессии игрока (§11). */
+export interface SettledRound {
+  readonly roundId: string;
+  readonly betMinor: number;
+  readonly winMinor: number;
+}
+
 /** Полоса над игрой: хранилище в памяти, починка, база обновлена другой вкладкой. */
 export type ClientNotice = StorageNotice | 'versionchange';
 
@@ -94,6 +101,7 @@ export class GameController {
   readonly #presentation: Presentation;
   readonly #wallet = new WalletBook();
   readonly #listeners = new Set<() => void>();
+  readonly #settledListeners = new Set<(round: SettledRound) => void>();
   readonly #inbox: ClientEvent[] = [];
   readonly #unlisten: () => void;
   readonly #unlistenNotices: () => void;
@@ -116,6 +124,8 @@ export class GameController {
   #betMinor: number | null = null;
   #grid: readonly number[] | null = null;
   #winMinor: number | null = null;
+  /** Раунд на сцене: его ставка и выигрыш уходят слушателям закрытия, когда придёт ответ endRound. */
+  #shown: ShownRound | null = null;
   #lease: RoundLease | null = null;
   /** Запрос в очереди на замок: его снимает перехват. */
   #queued: Queued | null = null;
@@ -155,6 +165,14 @@ export class GameController {
     this.#listeners.add(listener);
     return () => {
       this.#listeners.delete(listener);
+    };
+  }
+
+  /** Раунды, которые закрыла эта вкладка, — по одному на ответ endRound; свои и доигранные. */
+  onRoundSettled(listener: (round: SettledRound) => void): () => void {
+    this.#settledListeners.add(listener);
+    return () => {
+      this.#settledListeners.delete(listener);
     };
   }
 
@@ -227,6 +245,7 @@ export class GameController {
     this.#unlisten();
     this.#unlistenNotices();
     this.#listeners.clear();
+    this.#settledListeners.clear();
   }
 
   #dispatch(event: ClientEvent): void {
@@ -257,6 +276,7 @@ export class GameController {
       case 'callEndRound':
         this.#request({ type: 'endRound', roundId: command.roundId }, (result) => {
           this.#applyWallet(result.wallet);
+          this.#settle(command.roundId);
           return { type: 'ended' };
         });
         break;
@@ -369,11 +389,20 @@ export class GameController {
    * endRound на панели — баланс после ставки: зачисление приходит с ответом endRound.
    */
   #present(round: ShownRound, restored: boolean): void {
+    this.#shown = round;
     this.#grid = finalGrid(round.events);
     this.#winMinor = round.winMinor;
     // В повторе на панели — ставка показанного раунда; баланс не известен и не двигается.
     if (this.#replay !== null) this.#betMinor = round.betMinor;
     this.#presentation.play(round, restored);
+  }
+
+  #settle(roundId: string): void {
+    // endRound уходит только после показа раунда: на сцене — он.
+    const shown = this.#shown;
+    if (shown === null) return;
+    const round: SettledRound = { roundId, betMinor: shown.betMinor, winMinor: shown.winMinor };
+    for (const listener of [...this.#settledListeners]) listener(round);
   }
 
   #lock(): RoundLock {

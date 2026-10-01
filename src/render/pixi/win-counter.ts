@@ -11,7 +11,7 @@ const SIZE = 52;
 
 export class WinCounter {
   readonly #digits: GlyphNumber;
-  readonly #codes: NumberCodes;
+  #codes: NumberCodes;
   #design: Design | null = null;
 
   constructor(codes: NumberCodes) {
@@ -24,9 +24,19 @@ export class WinCounter {
     return this.#digits.view;
   }
 
+  /** Показанная сумма строкой — для зонда. */
+  get text(): string {
+    return this.#digits.text;
+  }
+
   setDesign(design: Design): void {
     this.#design = design;
     this.#place();
+  }
+
+  /** Разделители другой локали — со следующего кадра. */
+  setCodes(codes: NumberCodes): void {
+    this.#codes = codes;
   }
 
   apply(minor: number): void {

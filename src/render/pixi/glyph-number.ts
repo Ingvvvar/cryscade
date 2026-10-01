@@ -27,9 +27,11 @@ export class GlyphNumber {
   readonly #scale: number;
   readonly #anchorX: number;
   readonly #anchorY: number;
-  /** Что показано: вид и значение; смена того или другого — новая раскладка. */
+  /** Что показано: вид, значение и разделители; смена любого — новая раскладка (язык меняет разделители на лету). */
   #kind = -1;
   #value = -1;
+  #shownCodes: NumberCodes | null = null;
+  #length = 0;
   #width = 0;
 
   constructor(options: GlyphNumberOptions) {
@@ -62,11 +64,17 @@ export class GlyphNumber {
     for (const sprite of this.#sprites) sprite.tint = value;
   }
 
+  /** Показанное число строкой — для зонда; в кадре не зовётся. */
+  get text(): string {
+    return String.fromCharCode(...this.#codes.subarray(0, this.#length));
+  }
+
   /** Сумма в минимальных единицах с разделителями локали. */
   money(minor: number, codes: NumberCodes): void {
-    if (this.#kind === 0 && this.#value === minor) return;
+    if (this.#kind === 0 && this.#value === minor && this.#shownCodes === codes) return;
     this.#kind = 0;
     this.#value = minor;
+    this.#shownCodes = codes;
     this.#place(layoutMoney(minor, codes, this.#codes));
   }
 
@@ -85,6 +93,7 @@ export class GlyphNumber {
 
   #place(length: number): void {
     if (length > this.#sprites.length) throw new RangeError(`число длиннее ${String(this.#sprites.length)} глифов`);
+    this.#length = length;
     let pen = 0;
     for (let i = 0; i < this.#sprites.length; i++) {
       const sprite = this.#sprites[i];

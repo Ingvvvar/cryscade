@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { SceneState } from '../../../src/core/presentation/index.ts';
 import type { Layout, Viewport } from '../../../src/render/layout.ts';
-import type { Renderer, RendererInfo, SceneSource } from '../../../src/render/renderer.ts';
+import type { NumberStyle } from '../../../src/render/number-layout.ts';
+import type { Renderer, RendererInfo, SceneSource, SceneTexts } from '../../../src/render/renderer.ts';
+import { SCENE_TEXTS } from '../../../src/ui/scene-texts.ts';
 import { SceneSession, type MountObserver } from '../../../src/ui/scene-session.ts';
 
 const HOST = {} as HTMLElement;
 const SOURCE: SceneSource = { tick: () => new SceneState(), schedule: null, finished: false };
 const PORTRAIT: Viewport = { width: 390, height: 844, insets: { top: 47, right: 0, bottom: 34, left: 0 } };
 const LANDSCAPE: Viewport = { width: 1280, height: 720, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
+const EN_NUMBERS: NumberStyle = { group: ',', decimal: '.', groupFrom: 1000 };
 
 class FakeRenderer implements Renderer {
   readonly calls: string[] = [];
@@ -39,6 +42,10 @@ class FakeRenderer implements Renderer {
 
   setSource(source: SceneSource | null): void {
     this.calls.push(`source ${source === null ? 'нет' : 'есть'}`);
+  }
+
+  setLanguage(texts: SceneTexts, numbers: NumberStyle): void {
+    this.calls.push(`language ${texts.freeSpins} ${numbers.decimal}`);
   }
 }
 
@@ -109,6 +116,25 @@ describe('SceneSession', () => {
     await flush();
     session.resize(LANDSCAPE, 2);
     expect(renderers[0]?.calls.at(-1)).toBe('resize 1280@2');
+  });
+
+  it('язык до готовности копится и уходит рендереру по готовности; после — сразу; новый рендерер получает последний', async () => {
+    const { session, renderers } = setup();
+    session.attach(HOST);
+    session.setLanguage(SCENE_TEXTS.uk, { group: '\u00a0', decimal: ',', groupFrom: 1000 });
+    session.setLanguage(SCENE_TEXTS.en, EN_NUMBERS);
+    await flush();
+    renderers[0]?.finishInit();
+    await flush();
+    expect(renderers[0]?.calls).toStrictEqual(['motion false', 'source нет', 'language Free spins .']);
+    session.setLanguage(SCENE_TEXTS.uk, { group: '\u00a0', decimal: ',', groupFrom: 1000 });
+    expect(renderers[0]?.calls.at(-1)).toBe('language Фріспіни ,');
+    session.detach();
+    session.attach(HOST);
+    await flush();
+    renderers[1]?.finishInit();
+    await session.settled;
+    expect(renderers[1]?.calls.at(-1)).toBe('language Фріспіни ,');
   });
 
   it('раскладка для панели считается на каждый вьюпорт — и без рендерера', () => {

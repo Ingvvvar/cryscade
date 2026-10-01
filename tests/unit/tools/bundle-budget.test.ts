@@ -71,8 +71,8 @@ describe('BundleBudget', () => {
 describe('ленивый модуль в начальном JS (§13)', () => {
   const PROBE = '/Users/someone/cryscade/src/ui/probe.ts';
 
-  it('список — зонд страницы', () => {
-    expect(LAZY_MODULES).toStrictEqual(['src/ui/probe.ts']);
+  it('список — зонд страницы, английский словарь и диалоги', () => {
+    expect(LAZY_MODULES).toStrictEqual(['src/ui/probe.ts', 'src/ui/i18n/en.ts', 'src/ui/dialogs/settings-dialog.tsx']);
   });
 
   it('в статическом замыкании входа — отказ при любом размере, с модулем и файлом', () => {

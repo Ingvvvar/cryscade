@@ -26,9 +26,11 @@ export interface PixiRendererOptions {
   readonly inspector: SceneInspector | null;
   /** Прогрев шейдеров и страниц глифов до первого кадра; выключается только зондом — положительный контроль его проверок. */
   readonly warmUp: boolean;
-  /** Надписи сцены и разделители чисел — от ui: в render/ текста и формата нет. */
+  /** Надписи сцены и разделители чисел — от ui: в render/ текста и формата нет. Язык меняет setLanguage. */
   readonly texts: SceneTexts;
   readonly numbers: NumberStyle;
+  /** Надписи всех языков игрока: шрифт надписей ставится из них сразу — смена языка без новых страниц глифов. */
+  readonly allTexts: readonly SceneTexts[];
 }
 
 const SOFTWARE = /swiftshader|llvmpipe|software/i;
@@ -60,7 +62,9 @@ interface Scene {
 
 export class PixiRenderer implements Renderer {
   readonly #options: PixiRendererOptions;
-  readonly #codes: NumberCodes;
+  #texts: SceneTexts;
+  #numbers: NumberStyle;
+  #codes: NumberCodes;
   readonly #root = new Container({ label: 'design' });
   readonly #ambient = new AmbientClock();
   readonly #frameClock = new FrameClock();
@@ -83,6 +87,8 @@ export class PixiRenderer implements Renderer {
 
   constructor(options: PixiRendererOptions) {
     this.#options = options;
+    this.#texts = options.texts;
+    this.#numbers = options.numbers;
     this.#codes = numberCodes(options.numbers);
   }
 
@@ -106,13 +112,13 @@ export class PixiRenderer implements Renderer {
     });
     this.#ready = true;
     const info = describeRenderer(app.renderer);
-    const texts = sceneTextList(this.#options.texts);
+    const texts = this.#options.allTexts.flatMap(sceneTextList);
     const fontReady = (await ensureDigitsFont()) && (await ensureLabelsFont(texts));
     const atlas = new CrystalAtlas(app.renderer);
     const background = new CaveBackground();
     const frame = new FrameView(atlas);
     this.#root.addChild(frame.view);
-    const round = new RoundView(atlas, this.#root, { texts: this.#options.texts, codes: this.#codes });
+    const round = new RoundView(atlas, this.#root, { texts: this.#texts, codes: this.#codes });
     this.#scene = { atlas, background, frame, round };
     app.stage.addChild(background.view, this.#root);
     this.#ambient.setReducedMotion(this.#reducedMotion);
@@ -140,9 +146,10 @@ export class PixiRenderer implements Renderer {
           this.#frame(deltaMs);
         },
         missingGlyphs: (asked) =>
-          asked === null ? [...fontMissing(LABELS_FONT, texts), ...fontMissing(DIGITS_FONT, digitTexts(this.#options.numbers))] : fontMissing(LABELS_FONT, asked),
+          asked === null ? [...fontMissing(LABELS_FONT, texts), ...fontMissing(DIGITS_FONT, digitTexts(this.#numbers))] : fontMissing(LABELS_FONT, asked),
         chipRects: () => round.chipRects(),
         plaqueText: () => round.plaqueText(),
+        labels: () => round.labels(),
         pinAmbient: (seconds) => {
           this.#ambient.pin(seconds);
           this.#applyAmbient();
@@ -170,6 +177,13 @@ export class PixiRenderer implements Renderer {
 
   setSource(source: SceneSource | null): void {
     this.#source = source;
+  }
+
+  setLanguage(texts: SceneTexts, numbers: NumberStyle): void {
+    this.#texts = texts;
+    this.#numbers = numbers;
+    this.#codes = numberCodes(numbers);
+    this.#scene?.round.setWords(texts, this.#codes);
   }
 
   /** Безопасен в любом состоянии: и после неудачного init, и повторно. */

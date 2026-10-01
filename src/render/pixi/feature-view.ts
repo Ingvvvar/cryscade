@@ -1,5 +1,5 @@
 // Фича (§9): счётчик фриспинов в зоне feature и плашки — начало фриспинов, ретриггер, кап. Надписи — строками от ui
-// (SceneTexts), числа — глифами; ставятся со сменой плашки, не в каждом кадре. Ход плашки — альфа из SceneState.
+// (SceneTexts), числа — глифами; ставятся со сменой плашки или языка, не в каждом кадре. Ход плашки — альфа из SceneState.
 // Плашка начала фриспинов — надпись, число и подсказка; ретриггер («+5 фріспінів», число внутри надписи) и кап — одна
 // надпись по центру плашки.
 
@@ -27,6 +27,15 @@ export class FreeSpinsView {
     this.#label = new BitmapText({ text: texts.freeSpins, style: { fontFamily: LABELS_FONT, fontSize: 28 }, tint: PALETTE.muted });
     this.#count = new GlyphNumber({ font: DIGITS_FONT, size: 44, tint: PALETTE.warm, anchorX: 0, anchorY: 0.5, capacity: 6 });
     this.view.addChild(this.#label, this.#count.view);
+  }
+
+  setTexts(texts: SceneTexts): void {
+    this.#label.text = texts.freeSpins;
+  }
+
+  /** Подпись счётчика, если он виден; для зонда. */
+  get label(): string | null {
+    return this.view.visible ? this.#label.text : null;
   }
 
   setDesign(design: Design): void {
@@ -65,8 +74,8 @@ export class PlaqueView {
   readonly #title: BitmapText;
   readonly #value: GlyphNumber;
   readonly #hint: BitmapText;
-  readonly #texts: SceneTexts;
-  /** Показанная плашка: вид и число — смена того или другого ставит надпись заново. */
+  #texts: SceneTexts;
+  /** Показанная плашка: вид и число — смена того или другого (и языка) ставит надпись заново. */
   #kind = -1;
   #shown = -1;
 
@@ -96,9 +105,20 @@ export class PlaqueView {
     this.view.position.set(grid.x + grid.width / 2, grid.y + grid.height / 2);
   }
 
+  setTexts(texts: SceneTexts): void {
+    this.#texts = texts;
+    this.#hint.text = texts.tapToContinue;
+    this.#kind = -1;
+  }
+
   /** Надпись видимой плашки; плашки нет — null. Для зонда. */
   get text(): string | null {
     return this.view.visible ? this.#title.text : null;
+  }
+
+  /** Подсказка видимой плашки начала фриспинов; для зонда. */
+  get hint(): string | null {
+    return this.view.visible && this.#hint.visible ? this.#hint.text : null;
   }
 
   /** still — раунд под reduced motion: плашка проявляется без роста. */

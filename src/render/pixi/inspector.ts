@@ -5,7 +5,7 @@
 import { Sprite, Texture } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
 import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../layout.ts';
-import type { RendererInfo } from '../renderer.ts';
+import type { RendererInfo, SceneLabels } from '../renderer.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
 
 export interface SceneInfo extends RendererInfo {
@@ -86,6 +86,10 @@ export class SceneProbe implements SceneInspector {
 
   plaqueText(): string | null {
     return this.#scene?.plaqueText() ?? null;
+  }
+
+  sceneLabels(): SceneLabels | null {
+    return this.#scene?.labels() ?? null;
   }
 
   pinAmbient(seconds: number | null): void {

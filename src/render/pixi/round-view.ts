@@ -6,7 +6,7 @@ import { RenderLayer, type Container } from 'pixi.js';
 import type { SceneState, Schedule } from '../../core/presentation/index.ts';
 import type { ChipRect, Design } from '../layout.ts';
 import type { NumberCodes } from '../number-layout.ts';
-import type { SceneTexts } from '../renderer.ts';
+import type { SceneLabels, SceneTexts } from '../renderer.ts';
 import type { CrystalAtlas } from './atlas.ts';
 import { BigWinView } from './big-win-view.ts';
 import { ContourView } from './contour-view.ts';
@@ -59,6 +59,14 @@ export class RoundView {
     );
   }
 
+  /** Язык игрока: надписи фичи и большого выигрыша, разделители сумм (§11). */
+  setWords(texts: SceneTexts, codes: NumberCodes): void {
+    this.#counter.setCodes(codes);
+    this.#freeSpins.setTexts(texts);
+    this.#plaque.setTexts(texts);
+    this.#bigWin.setWords(texts, codes);
+  }
+
   setDesign(design: Design): void {
     this.#grid.setDesign(design);
     this.#contours.setDesign(design);
@@ -98,6 +106,11 @@ export class RoundView {
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null {
     return this.#plaque.text;
+  }
+
+  /** Надписи и сумма на сцене — для зонда. */
+  labels(): SceneLabels {
+    return { freeSpins: this.#freeSpins.label, plaque: this.#plaque.text, hint: this.#plaque.hint, bigWin: this.#bigWin.title, counter: this.#counter.text };
   }
 
   /** Видимые плашки чисел множителей, CSS-пиксели канваса. */

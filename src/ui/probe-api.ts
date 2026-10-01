@@ -3,7 +3,7 @@
 
 import type { ControllerSnapshot, LabSettings, ShownRound } from '../client/index.ts';
 import type { ChipRect, Layout, Rect } from '../render/layout.ts';
-import type { RendererInfo } from '../render/renderer.ts';
+import type { RendererInfo, SceneLabels } from '../render/renderer.ts';
 import type { ForcedName } from './forced-rounds.ts';
 
 export interface ProbeSceneInfo extends RendererInfo {
@@ -103,6 +103,8 @@ export interface CryscadeProbe {
   chipRects(): ChipRect[];
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
+  /** Надписи и сумма на сцене; сцены нет — null. Смена языка доходит до каждой. */
+  sceneLabels(): SceneLabels | null;
   /** Снимок контроллера игры; null — игра ещё не связана. */
   game(): ControllerSnapshot | null;
   /** id раундов, которые вкладка показала, по порядку: свои и доигранные. */

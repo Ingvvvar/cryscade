@@ -3,7 +3,7 @@
 
 import type { Application, Container } from 'pixi.js';
 import type { ChipRect, Layout } from '../layout.ts';
-import type { RendererInfo } from '../renderer.ts';
+import type { RendererInfo, SceneLabels } from '../renderer.ts';
 import type { CrystalAtlas } from './atlas.ts';
 
 /** То, что рендерер открывает зонду, пока жив. */
@@ -26,6 +26,8 @@ export interface InspectableScene {
   chipRects(): ChipRect[];
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
+  /** Надписи и сумма на сцене. */
+  labels(): SceneLabels;
   /** Закрепить время декора (фон, блик рамки); null — снять. */
   pinAmbient(seconds: number | null): void;
   /** Только фон: для паритета GLSL и WGSL. */

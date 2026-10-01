@@ -24,3 +24,21 @@ describe('MoneyFormat uk-UA', () => {
     expect(naive.format(9_007_199_254_740_899 / 100)).toBe('90\u00a0071\u00a0992\u00a0547\u00a0408,98');
   });
 });
+
+describe('MoneyFormat en-GB', () => {
+  const money = new MoneyFormat('en-GB');
+
+  it.each([
+    [0, '0.00'],
+    [5, '0.05'],
+    [100_000, '1,000.00'],
+    [123_456_789, '1,234,567.89'],
+    [9_007_199_254_740_991, '90,071,992,547,409.91'],
+  ])('%d → %s', (minor, text) => {
+    expect(money.format(minor)).toBe(text);
+  });
+
+  it('разделители для счётчиков Pixi — запятая и точка, группы с тысячи', () => {
+    expect(money.style).toStrictEqual({ group: ',', decimal: '.', groupFrom: 1000 });
+  });
+});

@@ -4,7 +4,9 @@ import { expect, test, type Page } from '@playwright/test';
 import type { ShownRound } from '../../src/client/index.ts';
 import type { SymbolId } from '../../src/core/model/symbols.ts';
 import type { Rect } from '../../src/render/layout.ts';
+import { sceneTextList } from '../../src/render/renderer.ts';
 import type { ScheduleSummary } from '../../src/ui/probe-api.ts';
+import { SCENE_TEXTS } from '../../src/ui/scene-texts.ts';
 import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
 import { fixtureShown, spotRound } from '../support/shown-rounds.ts';
 import { DRAW_BUDGET, DRAW_CEILING } from './support/draw-ceilings.ts';
@@ -263,12 +265,16 @@ test('глифы: в шрифтах надписей и чисел нет нед
   await waitSettled(page);
   const info = await sceneInfo(page);
   expect(info.fontReady, 'document.fonts видел Unbounded с текстом надписей').toBe(true);
-  const { scene, control } = await page.evaluate(() => {
-    const probe = (window as ProbeWindow).__cryscadeProbe;
-    return { scene: probe?.missingGlyphs() ?? null, control: probe?.missingGlyphs(['Ωж€']) ?? null };
-  });
+  const { scene, control, languages } = await page.evaluate(
+    (texts) => {
+      const probe = (window as ProbeWindow).__cryscadeProbe;
+      return { scene: probe?.missingGlyphs() ?? null, control: probe?.missingGlyphs(['Ωж€']) ?? null, languages: probe?.missingGlyphs(texts) ?? null };
+    },
+    [...sceneTextList(SCENE_TEXTS.uk), ...sceneTextList(SCENE_TEXTS.en)],
+  );
   expect(control, 'контроль: символы вне набора находятся').toStrictEqual(['Ω', '€']);
   expect(scene).toStrictEqual([]);
+  expect(languages, 'надписи обоих языков — в шрифте надписей сразу').toStrictEqual([]);
 });
 
 function mkdir(): string {

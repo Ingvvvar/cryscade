@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { glyphSet, missingGlyphs } from '../../../src/render/glyph-set.ts';
 import { sceneTextList } from '../../../src/render/renderer.ts';
-import { SCENE_TEXT } from '../../../src/ui/texts.ts';
+import { SCENE_TEXTS } from '../../../src/ui/scene-texts.ts';
 
 // Набор глифов шрифта надписей — из строк сцены (§9): уникальные символы по возрастанию кода. Недостающие —
 // символы строк, которых шрифт не знает; настоящий шрифт проверяет tests/gpu/presentation.spec.ts.
@@ -15,15 +15,15 @@ describe('glyphSet', () => {
     expect(glyphSet(['a\u{1F48E}b'])).toStrictEqual(['a', 'b', '\u{1F48E}']);
   });
 
-  it('надписи сцены: все символы строк ui и кириллица в наборе', () => {
-    const texts = sceneTextList(SCENE_TEXT);
+  it('надписи сцены обоих языков: все символы строк ui, кириллица и латиница в наборе', () => {
+    const texts = [...sceneTextList(SCENE_TEXTS.uk), ...sceneTextList(SCENE_TEXTS.en)];
     const set = glyphSet(texts);
     for (const text of texts) for (const char of text) expect(set).toContain(char);
-    expect(set).toEqual(expect.arrayContaining(['Ф', 'і', 'щ', 'ж']));
+    expect(set).toEqual(expect.arrayContaining(['Ф', 'і', 'щ', 'ж', 'F', 'T', 'w', 'x']));
   });
 
   it('надпись ретриггера с числом: в наборе все цифры, «+» и все формы слова', () => {
-    const texts = sceneTextList(SCENE_TEXT);
+    const texts = sceneTextList(SCENE_TEXTS.uk);
     expect(texts).toEqual(expect.arrayContaining(['Фріспіни', 'Натисніть, щоб продовжити', 'Максимальний виграш', 'Великий виграш', 'Епічний виграш']));
     expect(texts).toEqual(expect.arrayContaining(['+1 фріспін', '+2 фріспіни', '+5 фріспінів', '+21 фріспін', '+99 фріспінів']));
     expect(glyphSet(texts)).toEqual(expect.arrayContaining(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+']));

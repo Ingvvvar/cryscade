@@ -4,7 +4,7 @@
 
 import type { ControllerSnapshot } from '../client/index.ts';
 import type { Game } from './game.ts';
-import { ERROR_TEXT, NOTICE_TEXT, REFUSAL_TEXT, TEXT } from './texts.ts';
+import { useLanguage } from './language-context.ts';
 
 export interface StatusProps {
   readonly game: Game;
@@ -17,23 +17,24 @@ export interface StatusProps {
 
 /** Полосы над сценой; exitHref — выход из повтора в обычный запуск. */
 export function NoticeBar({ snapshot, exitHref }: { readonly snapshot: ControllerSnapshot; readonly exitHref: string }) {
+  const { dict } = useLanguage();
   const { state, notice } = snapshot;
-  const refusal = state.name === 'idle' && state.refusal !== null ? (REFUSAL_TEXT[state.refusal] ?? null) : null;
+  const refusal = state.name === 'idle' && state.refusal !== null ? (dict.refusal[state.refusal] ?? null) : null;
   const replay = snapshot.mode === 'replay';
   if (notice === null && refusal === null && !replay) return null;
   return (
     <div className="notices" role="status">
       {replay && (
         <p className="notice notice-replay" data-notice="replay">
-          {TEXT.replay}
+          {dict.text.replay}
           <a className="notice-link" href={exitHref}>
-            {TEXT.replayExit}
+            {dict.text.replayExit}
           </a>
         </p>
       )}
       {notice !== null && (
         <p className={`notice notice-${notice}`} data-notice={notice}>
-          {NOTICE_TEXT[notice]}
+          {dict.notice[notice]}
         </p>
       )}
       {refusal !== null && <p className="notice notice-refusal">{refusal}</p>}
@@ -42,18 +43,20 @@ export function NoticeBar({ snapshot, exitHref }: { readonly snapshot: Controlle
 }
 
 export function StatusScreen({ game, snapshot, reload, exitHref }: StatusProps) {
+  const { dict } = useLanguage();
+  const text = dict.text;
   const { state } = snapshot;
   if (state.name === 'error') {
     return (
       <div className="status-screen" role="alert" data-state="error" data-kind={state.kind}>
-        <p className="status-text">{ERROR_TEXT[state.kind]}</p>
+        <p className="status-text">{dict.error[state.kind]}</p>
         {state.retry === null && snapshot.mode === 'replay' ? (
           <a className="status-action" href={exitHref}>
-            {TEXT.replayExit}
+            {text.replayExit}
           </a>
         ) : state.retry === null ? (
           <button type="button" className="status-action" onClick={reload}>
-            {TEXT.reload}
+            {text.reload}
           </button>
         ) : (
           <button
@@ -63,7 +66,7 @@ export function StatusScreen({ game, snapshot, reload, exitHref }: StatusProps) 
               game.retry();
             }}
           >
-            {TEXT.retry}
+            {text.retry}
           </button>
         )}
       </div>
@@ -72,7 +75,7 @@ export function StatusScreen({ game, snapshot, reload, exitHref }: StatusProps) 
   if (state.name === 'waitingForTab') {
     return (
       <div className="status-screen" role="status" data-state="waitingForTab">
-        <p className="status-text">{TEXT.waiting}</p>
+        <p className="status-text">{text.waiting}</p>
         <button
           type="button"
           className="status-action"
@@ -81,7 +84,7 @@ export function StatusScreen({ game, snapshot, reload, exitHref }: StatusProps) 
             game.takeOver();
           }}
         >
-          {TEXT.playHere}
+          {text.playHere}
         </button>
       </div>
     );
