@@ -209,8 +209,12 @@ function refill(schedule: Schedule, segment: Segment, t: number, out: SceneState
   }
 }
 
-/** Плашка капа: появление, показ, уход — по четверти, половине и четверти сегмента. */
+/**
+ * Плашка капа: появление, показ, уход — по четверти, половине и четверти сегмента. С начала капа фриспинов нет:
+ * несыгранные сгорели — счётчик и признаки фичи уходят до конца раунда.
+ */
 function cap(schedule: Schedule, segment: Segment, t: number, out: SceneState): void {
+  out.freeSpinsLeft = -1;
   const item = schedule.plaques[segment.data];
   if (item === undefined || t >= segment.endMs) return;
   const p = (t - segment.startMs) / (segment.endMs - segment.startMs);

@@ -101,6 +101,8 @@ export interface CryscadeProbe {
   missingGlyphs(texts?: string[]): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели. */
   chipRects(): ChipRect[];
+  /** Части плашек множителей на кадре: замок, число (по умолчанию — обе). Тест наложения снимает их порознь. */
+  chipParts(lock: boolean, digits: boolean): void;
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
   /** Надписи и сумма на сцене; сцены нет — null. Смена языка доходит до каждой. */

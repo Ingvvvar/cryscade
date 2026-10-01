@@ -24,6 +24,8 @@ export interface InspectableScene {
   missingGlyphs(texts: readonly string[] | null): string[];
   /** Плашки чисел множителей на экране, CSS-пиксели: проверка читаемости меряет подложку мимо них. */
   chipRects(): ChipRect[];
+  /** Части плашек множителей на кадре: замок, число; тест наложения снимает их порознь. */
+  isolateChipParts(lock: boolean, digits: boolean): void;
   /** Надпись видимой плашки фичи; плашки нет — null. */
   plaqueText(): string | null;
   /** Надписи и сумма на сцене. */

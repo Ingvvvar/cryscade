@@ -171,6 +171,13 @@ body {
   text-transform: uppercase;
 }
 
+/* «Турбо» включено — тёмный текст на тёплой заливке: нажатое видно глазами, а не только диктору (aria-pressed). */
+.panel .toggle[aria-pressed='true'] {
+  color: var(--cave-0);
+  background: var(--warm);
+  border-color: var(--warm);
+}
+
 .scene-error {
   position: absolute;
   left: 16px;
@@ -590,6 +597,20 @@ body {
 
 .rules:focus {
   outline: none;
+}
+
+/* Иконки символов — кадры атласа 168 × 168 px (84 ед. × 2): в таблице — по высоте строки, в тексте — по кеглю. */
+.paytable-icon {
+  display: block;
+  width: 2.5em;
+  height: 2.5em;
+}
+
+.rules-icon {
+  width: 1.75em;
+  height: 1.75em;
+  margin-inline-end: 0.35em;
+  vertical-align: middle;
 }
 
 .paytable,

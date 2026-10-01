@@ -64,6 +64,7 @@ export const EN: Dictionary = {
   },
   rules: {
     symbols: ['Quartz', 'Amethyst', 'Citrine', 'Emerald', 'Sapphire', 'Ruby', 'Diamond'],
+    core: 'Core',
     symbol: 'Crystal',
     table: 'Payouts — bet multiplier by cluster size',
     clusters: (min) => `A win is a cluster of ${String(min)} or more equal crystals touching by their sides. It pays the multiplier from the table × the bet.`,

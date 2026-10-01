@@ -70,6 +70,12 @@ class Chip {
     this.view.visible = false;
   }
 
+  /** Какие части рисовать: замок, число. Для зонда — тест наложения снимает их порознь; кадр игры рисует обе. */
+  parts(lock: boolean, digits: boolean): void {
+    this.#lock.renderable = lock;
+    this.#number.view.renderable = digits;
+  }
+
   /** Рамки плашки и её содержимого — замка и числа (у глифов — прозрачные поля шрифта выше и ниже плашки). */
   rect(): ChipRect {
     return { plaque: bounds(this.#pill), content: bounds(this.#content) };
@@ -128,6 +134,11 @@ export class SpotChips {
       if (level < FIRST_LEVEL) chip.hide();
       else chip.show(level, locked, scene.spotPop[cell] ?? -1);
     }
+  }
+
+  /** Части плашек на кадре — для зонда (тест наложения замка и числа). */
+  parts(lock: boolean, digits: boolean): void {
+    for (const chip of this.#chips) chip.parts(lock, digits);
   }
 
   /** Видимые плашки — рамки на экране (getBounds: CSS-пиксели канваса). Для зонда, не для кадра. */

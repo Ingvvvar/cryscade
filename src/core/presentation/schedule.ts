@@ -361,9 +361,11 @@ class ScheduleBuilder {
     this.#add(group, 'refill', this.#fillMs, this.#steps.length - 1);
   }
 
+  /** Кап кончает раунд: несыгранные фриспины сгорают — следующие группы начинаются без фичи. */
   #cap(index: number): void {
     const group = this.#current(index);
     this.#capped = true;
+    this.#freeSpinsLeft = -1;
     this.#plaques.push({ kind: PLAQUE.cap, value: 0 });
     const { plaqueInMs, plaqueShowMs, plaqueOutMs } = this.#timings;
     this.#add(group, 'cap', plaqueInMs + plaqueShowMs + plaqueOutMs, this.#plaques.length - 1);

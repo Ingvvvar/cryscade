@@ -265,6 +265,9 @@ export class PageProbe implements MountObserver {
       },
       missingGlyphs: (texts) => scene.missingGlyphs(texts ?? null),
       chipRects: () => scene.chipRects(),
+      chipParts: (lock, digits) => {
+        scene.chipParts(lock, digits);
+      },
       plaqueText: () => scene.plaqueText(),
       sceneLabels: () => scene.sceneLabels(),
       game: () => this.#game?.getSnapshot() ?? null,

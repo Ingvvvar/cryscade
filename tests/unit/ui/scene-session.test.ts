@@ -47,6 +47,10 @@ class FakeRenderer implements Renderer {
   setLanguage(texts: SceneTexts, numbers: NumberStyle): void {
     this.calls.push(`language ${texts.freeSpins} ${numbers.decimal}`);
   }
+
+  symbolIcons(): Promise<readonly string[] | null> {
+    return Promise.resolve(null);
+  }
 }
 
 class Counter implements MountObserver {

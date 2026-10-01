@@ -33,9 +33,11 @@ const DIALOGS = ['rules', 'settings', 'history', 'fairness', 'lab'] as const;
 
 const LOOK: Readonly<Record<string, string>> = {
   panel: 'панель после двух раундов: подписи, суммы по локали, кнопка ставки, «Авто» и «Турбо»',
+  turbo: 'панель с нажатым «Турбо»: тёмный текст на тёплой заливке — нажатое видно глазами (прогон №3, п.0)',
   menu: 'меню-popover: пять пунктов и сессия (результат, время); не наезжает ли на сетку',
-  rules: 'правила и выплаты: текст правил с числами из конфига; таблица 7 × 6 — ниже, в прокрутке диалога (на телефоне её на первом экране нет)',
-  settings: 'настройки: язык и правила гри; подсказка «со следующего раунда»',
+  rules: 'правила и выплаты: текст правил с числами из конфига, иконка ядра в абзаце про фичу; таблица — ниже, в прокрутке диалога (на телефоне её на первом экране нет)',
+  'rules-table': 'правила: таблица выплат 7 × 6 — иконки символов из атласа рендера вместо имён (имя — в alt)',
+  settings: 'настройки: язык, правила гри и звук; подсказка «со следующего раунда»',
   history: 'история: два раунда — время, ставка, выигрыш, запись книги, nonce, «Перевірити» / «Відтворити»',
   fairness: 'честность: обязательство (hex переносится), сид игрока, кнопки, панель проверки',
   lab: 'лаборатория сети: четыре поля и разовые действия',
@@ -78,6 +80,13 @@ async function frameShots(browser: Browser, frame: keyof typeof FRAMES, language
   }
   await settled(page);
   await shoot(page, 'panel', frame, language, info.gpu);
+  const turbo = page.getByRole('button', { name: dict.text.turbo });
+  await turbo.click();
+  await expect(turbo).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(150);
+  await shoot(page, 'turbo', frame, language, info.gpu);
+  await turbo.click();
+  await expect(turbo).toHaveAttribute('aria-pressed', 'false');
   const menu = page.getByRole('button', { name: dict.text.menu });
   await menu.click();
   await expect(page.getByTestId('menu')).toBeVisible();
@@ -87,8 +96,14 @@ async function frameShots(browser: Browser, frame: keyof typeof FRAMES, language
     await menu.click();
     await page.getByRole('button', { name: dict.text[name] }).click();
     await expect(page.getByRole('dialog', { name: dict.text[name] })).toBeVisible();
+    if (name === 'rules') await expect(page.getByTestId('paytable').locator('tbody th img')).toHaveCount(7);
     await page.waitForTimeout(300);
     await shoot(page, name, frame, language, info.gpu);
+    if (name === 'rules') {
+      await page.getByTestId('paytable').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(200);
+      await shoot(page, 'rules-table', frame, language, info.gpu);
+    }
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
   }

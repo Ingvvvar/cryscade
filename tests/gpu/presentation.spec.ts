@@ -8,10 +8,11 @@ import { sceneTextList } from '../../src/render/renderer.ts';
 import type { ScheduleSummary } from '../../src/ui/probe-api.ts';
 import { SCENE_TEXTS } from '../../src/ui/scene-texts.ts';
 import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
+import type { Image } from '../support/png.ts';
 import { fixtureShown, spotRound } from '../support/shown-rounds.ts';
 import { DRAW_BUDGET, DRAW_CEILING } from './support/draw-ceilings.ts';
 import { installDrawCounter, type DrawCounts } from './support/draw-counter.ts';
-import { PINNED_AMBIENT_S, openStill, snapshot } from './support/frame.ts';
+import { PINNED_AMBIENT_S, difference, openStill, snapshot } from './support/frame.ts';
 import { MIN_CONTRAST, MIN_PIXELS, backingColour, readCell, repaintBody } from './support/readability.ts';
 
 // Презентация раунда на сцене (фаза 5, подход Б): кадры ставит зонд (still — показ стоит на моменте t).
@@ -257,6 +258,94 @@ test('webgl: плашки множителей — кегль 22, в преде�
     expect(spills, 'число и замок вышли за плашку').toEqual([]);
     expect(widths, 'ширина плашки — по кеглю 22').toEqual([]);
   }
+  await context.close();
+});
+
+// Замок и число плашки не накладываются (выжившая мутация П0 прогона №2): рамки этого не видят — у глифов BitmapFont
+// поля шрифта, и рамки замка и числа перекрываются и при верной раскладке. Поэтому пиксели: три кадра — только плашки,
+// плашки и замок, плашки и число; часть — пиксели, отличные от кадра «только плашки» (разница канала больше 16).
+// У каждой плашки (7 уровней × 7 символов): число нарисовано; замок — во фриспинах есть, в основной игре нет; общих
+// пикселей у замка и числа нет.
+test('webgl: замок и число плашки не пересекаются — 7 уровней × 7 символов, основная игра и фриспины (пиксели)', async ({ browser }) => {
+  const dpr = 2;
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: dpr });
+  const page = await context.newPage();
+  const info = await openStill(page, '?renderer=webgl');
+  expect(info.name).toBe('webgl');
+  expect(info.software, `программный рендер: ${info.gpu}`).toBe(false);
+  const grid = Array.from({ length: 49 }, (_, cell) => cell % 7);
+  const frame = async (lock: boolean, digits: boolean): Promise<Image> => {
+    await page.evaluate(
+      ({ withLock, withDigits }) => {
+        (window as ProbeWindow).__cryscadeProbe?.chipParts(withLock, withDigits);
+      },
+      { withLock: lock, withDigits: digits },
+    );
+    await page.clock.runFor(100);
+    return (await snapshot(page)).image;
+  };
+  const INK = 16;
+  const inked = (part: Image, base: Image, at: number): boolean =>
+    Math.max(
+      Math.abs((part.rgba[at] ?? 0) - (base.rgba[at] ?? 0)),
+      Math.abs((part.rgba[at + 1] ?? 0) - (base.rgba[at + 1] ?? 0)),
+      Math.abs((part.rgba[at + 2] ?? 0) - (base.rgba[at + 2] ?? 0)),
+    ) > INK;
+  const gaps: string[] = [];
+  for (const locked of [false, true]) {
+    await page.evaluate((shown) => {
+      (window as ProbeWindow).__cryscadeProbe?.still(shown, Number.MAX_SAFE_INTEGER);
+    }, spotRound(grid, LEVELS, locked));
+    // Тепло фриспинов набирается 600 мс хода тикера: кадры снимаются, когда оно встало, — иначе теплеет весь кадр.
+    await page.clock.runFor(1000);
+    const chips = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.chipRects() ?? []);
+    expect(chips, 'плашка у каждой клетки').toHaveLength(49);
+    const base = await frame(false, false);
+    const lockOnly = await frame(true, false);
+    const digitsOnly = await frame(false, true);
+    const again = await frame(false, false);
+    // Кадр стоит: два снимка «только плашки» расходятся не больше порога части — шум не сойдёт за замок или число.
+    expect(difference(base, again).max * 255, 'кадр «только плашки» стоит').toBeLessThanOrEqual(INK);
+    await frame(true, true);
+    const empty: string[] = [];
+    const locks: string[] = [];
+    const overlaps: string[] = [];
+    let narrowest = Number.POSITIVE_INFINITY;
+    chips.forEach((chip, cell) => {
+      const name = `клетка ${String(cell)} ×${String(2 ** ((LEVELS[cell] ?? 0) - 1))}${locked ? ' с замком' : ''}`;
+      const box = device(chip.plaque, dpr);
+      let lockPixels = 0;
+      let digitPixels = 0;
+      let both = 0;
+      let lockRight = Number.NEGATIVE_INFINITY;
+      let digitsLeft = Number.POSITIVE_INFINITY;
+      for (let y = Math.floor(box.y) - 2; y <= Math.ceil(box.y + box.height) + 2; y++) {
+        for (let x = Math.floor(box.x) - 2; x <= Math.ceil(box.x + box.width) + 2; x++) {
+          const at = (y * base.width + x) * 4;
+          const lock = inked(lockOnly, base, at);
+          const digit = inked(digitsOnly, base, at);
+          if (lock) {
+            lockPixels += 1;
+            lockRight = Math.max(lockRight, x);
+          }
+          if (digit) {
+            digitPixels += 1;
+            digitsLeft = Math.min(digitsLeft, x);
+          }
+          if (lock && digit) both += 1;
+        }
+      }
+      if (digitPixels === 0) empty.push(name);
+      if (locked ? lockPixels === 0 : lockPixels > 0) locks.push(`${name}: пикселей замка ${String(lockPixels)}`);
+      if (both > 0) overlaps.push(`${name}: общих пикселей ${String(both)}`);
+      if (locked) narrowest = Math.min(narrowest, digitsLeft - lockRight - 1);
+    });
+    expect(empty, 'число нарисовано у каждой плашки').toStrictEqual([]);
+    expect(locks, locked ? 'замок есть у каждой плашки во фриспинах' : 'в основной игре замка нет').toStrictEqual([]);
+    expect(overlaps, 'замок и число не пересекаются').toStrictEqual([]);
+    if (locked) gaps.push(`самый узкий зазор замок — число: ${String(narrowest)} px устройства (DPR ${String(dpr)})`);
+  }
+  console.log(`плашки: ${gaps.join('; ')}`);
   await context.close();
 });
 

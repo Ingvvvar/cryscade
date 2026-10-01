@@ -3,6 +3,7 @@
 
 import type { CallOutcome, LabSettings, PresetName } from '../../client/index.ts';
 import type { FairnessView, HistoryResult, SeedResult, VerifyResult } from '../../protocol/index.ts';
+import type { SymbolIcons } from '../../render/renderer.ts';
 import type { ExternalSource } from '../external.ts';
 import type { Language } from '../i18n/dictionary.ts';
 import type { SettingsView } from '../settings.ts';
@@ -38,6 +39,8 @@ export interface DialogServices {
   readonly lockedPreset: PresetName | null;
   readonly fairness: FairnessControl;
   readonly lab: LabControl;
+  /** Иконки символов для правил — из атласа живого рендерера. */
+  readonly icons: SymbolIcons;
 }
 
 export interface DialogProps {

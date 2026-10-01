@@ -18,6 +18,65 @@ const PAYTABLE_UK = [
   ['0,95', '3,80', '15', '60', '201', '598'],
 ];
 
+/** Иконка символа на странице: подпись, начало адреса, размер и средний цвет непрозрачных пикселей. */
+interface IconLook {
+  readonly alt: string;
+  readonly src: string;
+  readonly width: number;
+  readonly height: number;
+  readonly opaque: number;
+  readonly rgb: readonly [number, number, number];
+}
+
+function readIcons(page: Page, selector: string): Promise<IconLook[]> {
+  return page.locator(selector).evaluateAll((nodes) =>
+    Promise.all(
+      nodes.map(async (node) => {
+        const image = node as HTMLImageElement;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext('2d');
+        if (context === null) throw new Error('нет canvas 2d');
+        context.drawImage(image, 0, 0);
+        const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let opaque = 0;
+        for (let at = 0; at < data.length; at += 4) {
+          if ((data[at + 3] ?? 0) < 200) continue;
+          r += data[at] ?? 0;
+          g += data[at + 1] ?? 0;
+          b += data[at + 2] ?? 0;
+          opaque += 1;
+        }
+        const n = Math.max(opaque, 1);
+        return { alt: image.alt, src: image.src, width: image.naturalWidth, height: image.naturalHeight, opaque, rgb: [r / n, g / n, b / n] as [number, number, number] };
+      }),
+    ),
+  );
+}
+
+/** Оттенок HSV в градусах 0…360. */
+function hue([r, g, b]: readonly [number, number, number]): number {
+  const max = Math.max(r, g, b);
+  const span = max - Math.min(r, g, b);
+  if (span === 0) return 0;
+  const raw = max === r ? (g - b) / span : max === g ? 2 + (b - r) / span : 4 + (r - g) / span;
+  return (raw * 60 + 360) % 360;
+}
+
+/** Оттенки камней по их названиям — общеизвестные цвета, а не палитра кода: [от, до) в градусах, через 0 — ruby. */
+const STONE_HUES: readonly (readonly [number, string, number, number])[] = [
+  [1, 'аметист — фиолетовый', 240, 300],
+  [2, 'цитрин — жёлто-оранжевый', 25, 65],
+  [3, 'смарагд — зелёный', 130, 175],
+  [4, 'сапфир — синий', 200, 245],
+  [5, 'рубин — красный', 330, 370],
+];
+
 interface FairnessStores {
   readonly fairness: { readonly commitment: string; readonly clientSeed: string; readonly nonce: number } | null;
   readonly secrets: readonly { readonly commitment: string; readonly secret: string; readonly revealedAt: number | null }[];
@@ -70,7 +129,26 @@ test('правила і виплати: таблиця 7 × 6 — літерал
   await open(page, 'Правила і виплати');
   const table = page.getByTestId('paytable');
   await expect(table.locator('thead th')).toHaveText(['Кристал', '5–6', '7–8', '9–10', '11–12', '13–14', '15+']);
-  await expect(table.locator('tbody th')).toHaveText(['Кварц', 'Аметист', 'Цитрин', 'Смарагд', 'Сапфір', 'Рубін', 'Діамант']);
+  // Иконки символов — кадры атласа живого рендерера (84 ед. × 2 = 168 px), alt — имя; ядро — в абзаце про фичу.
+  await expect(table.locator('tbody th img')).toHaveCount(7);
+  const icons = await readIcons(page, '[data-testid="paytable"] tbody th img');
+  expect(icons.map((icon) => icon.alt)).toStrictEqual(['Кварц', 'Аметист', 'Цитрин', 'Смарагд', 'Сапфір', 'Рубін', 'Діамант']);
+  expect(icons.map((icon) => [icon.src.slice(0, 22), icon.width, icon.height])).toStrictEqual(Array.from({ length: 7 }, () => ['data:image/png;base64,', 168, 168]));
+  expect(new Set(icons.map((icon) => icon.src)).size, 'иконки разные').toBe(7);
+  for (const icon of icons) expect(icon.opaque, `${icon.alt}: кристалл нарисован`).toBeGreaterThan(2000);
+  for (const [symbol, stone, from, to] of STONE_HUES) {
+    const look = icons[symbol];
+    if (look === undefined) throw new Error(`нет иконки ${String(symbol)}`);
+    const shade = hue(look.rgb);
+    const turned = shade < from ? shade + 360 : shade;
+    expect(turned, `${stone}: оттенок ${shade.toFixed(0)}°`).toBeGreaterThanOrEqual(from);
+    expect(turned, `${stone}: оттенок ${shade.toFixed(0)}°`).toBeLessThan(to);
+  }
+  const [core] = await readIcons(page, '.rules p img');
+  expect([core?.alt, core?.src.slice(0, 22), core?.width, core?.height]).toStrictEqual(['Ядро', 'data:image/png;base64,', 168, 168]);
+  const coreHue = hue(core?.rgb ?? [0, 0, 0]);
+  expect(coreHue, `ядро — бирюзовое: ${coreHue.toFixed(0)}°`).toBeGreaterThanOrEqual(160);
+  expect(coreHue, `ядро — бирюзовое: ${coreHue.toFixed(0)}°`).toBeLessThan(200);
   const cells = await table.locator('tbody tr').evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent)));
   expect(cells).toStrictEqual(PAYTABLE_UK);
   const dialog = page.getByRole('dialog', { name: 'Правила і виплати' });
@@ -92,6 +170,17 @@ test('правила і виплати: таблиця 7 × 6 — літерал
     .locator('tbody tr')
     .evaluateAll((rows) => rows.map((row) => [...row.querySelectorAll('td')].map((cell) => cell.textContent)));
   expect(english).toStrictEqual(PAYTABLE_UK.map((row) => row.map((cell) => cell.replace(',', '.'))));
+  await expect(page.getByTestId('paytable').locator('tbody th img')).toHaveCount(7);
+  expect(await page.getByTestId('paytable').locator('tbody th img').evaluateAll((nodes) => nodes.map((node) => (node as HTMLImageElement).alt))).toStrictEqual([
+    'Quartz',
+    'Amethyst',
+    'Citrine',
+    'Emerald',
+    'Sapphire',
+    'Ruby',
+    'Diamond',
+  ]);
+  await expect(page.locator('.rules p img')).toHaveAttribute('alt', 'Core');
   await expect(page.getByRole('dialog', { name: 'Rules and payouts' })).toContainText(/maximum round win is 5,000× the bet/);
   expect(problems).toEqual([]);
 });

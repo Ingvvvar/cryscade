@@ -114,9 +114,14 @@ test('перехват кнопкой: A жива, B «Грати тут» до�
   await expect.poll(async () => (await sentBodies(a)).filter((body) => body.type === 'play').length).toBe(1);
   await spinButton(b).click();
   await waitForState(b, 'waitingForTab');
+  // B доигрывает раунд A с автопропуском за доли секунды и отдаёт замок: A прошла бы ожидание и встала в authenticate с
+  // теряющимися ответами раньше, чем тест её увидит. Конец раунда B держит лаборатория — замок у B, пока A ждёт.
+  await labCall(b, 'holdNextEndRound');
   await b.getByRole('button', { name: 'Грати тут' }).click();
   await waitForState(a, 'waitingForTab');
   await labCall(a, 'set', { responseLoss: 0 });
+  await waitForState(b, 'ending');
+  await labCall(b, 'releaseHeld');
   const afterB = await waitForState(b, 'idle');
   const [abandoned] = (await sentBodies(a)).filter((body) => body.type === 'play');
   // Окно, в котором A повторила бы play (таймаут 3 с + пауза 250 мс), — наблюдаем отсутствие повтора, не ждём исхода.

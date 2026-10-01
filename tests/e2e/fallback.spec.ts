@@ -27,4 +27,10 @@ test('?renderer=webgpu без WebGPU — видимая ошибка, канва
   const counts = await mountCounts(page);
   expect(counts.created).toBe(1);
   expect(counts.inits).toBe(0);
+  // Сцены нет — иконок из атласа нет: правила пишут имена символов текстом.
+  await page.getByRole('button', { name: 'Меню' }).click();
+  await page.getByRole('button', { name: 'Правила і виплати' }).click();
+  const table = page.getByTestId('paytable');
+  await expect(table.locator('tbody th')).toHaveText(['Кварц', 'Аметист', 'Цитрин', 'Смарагд', 'Сапфір', 'Рубін', 'Діамант']);
+  await expect(page.getByRole('dialog', { name: 'Правила і виплати' }).locator('img')).toHaveCount(0);
 });

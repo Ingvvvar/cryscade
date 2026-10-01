@@ -1,8 +1,11 @@
 // Правила и выплаты (§11, решение 3 фазы 7): строятся из данных модели — конфига игры, тот же объект, что у сервера в
 // воркере; таблица 7 × 6 — множители ставки по полосам размеров. Ленивый модуль (LAZY_MODULES гейта сборки).
+// Символы — иконками из атласа живого рендерера (data URL при открытии), alt — имя; пока иконок нет — имена текстом.
 
+import { useEffect, useState } from 'react';
 import { DEFAULT_CONFIG } from '../../core/model/config.ts';
 import { SPOT_MAX_LEVEL } from '../../core/model/grid.ts';
+import { SCATTER } from '../../core/model/symbols.ts';
 import { useLanguage } from '../language-context.ts';
 import { multiplier } from './format.ts';
 import { Modal } from './modal.tsx';
@@ -16,8 +19,24 @@ function bandLabels(bands: readonly number[]): string[] {
   });
 }
 
-export function RulesDialog({ onClose, returnFocus }: DialogProps) {
+export function RulesDialog({ services, onClose, returnFocus }: DialogProps) {
   const { dict } = useLanguage();
+  const [icons, setIcons] = useState<readonly string[] | null>(null);
+  useEffect(() => {
+    let open = true;
+    services.icons.symbolIcons().then(
+      (urls) => {
+        if (open) setIcons(urls);
+      },
+      () => {
+        // Иконки не снялись — правила остаются с именами текстом.
+      },
+    );
+    return () => {
+      open = false;
+    };
+  }, [services.icons]);
+  const core = icons?.[SCATTER];
   const config = DEFAULT_CONFIG;
   const rules = dict.rules;
   const steps = config.freeSpinsByScatters.flatMap((spins, cores) => (spins > 0 ? [{ cores, spins }] : []));
@@ -30,7 +49,10 @@ export function RulesDialog({ onClose, returnFocus }: DialogProps) {
         <p>{rules.clusters(config.clusterMin)}</p>
         <p>{rules.cascades}</p>
         <p>{rules.spots(2 ** (SPOT_MAX_LEVEL - 1))}</p>
-        <p>{rules.feature(feature)}</p>
+        <p>
+          {core === undefined ? null : <img className="rules-icon" src={core} alt={rules.core} />}
+          {rules.feature(feature)}
+        </p>
         <p>{rules.retrigger(config.retrigger.min, config.retrigger.add)}</p>
         <p>{rules.cap(cap)}</p>
         <p>{rules.rtp}</p>
@@ -50,7 +72,7 @@ export function RulesDialog({ onClose, returnFocus }: DialogProps) {
         <tbody>
           {config.paytableX100.map((row, symbol) => (
             <tr key={rules.symbols[symbol]}>
-              <th scope="row">{rules.symbols[symbol]}</th>
+              <th scope="row">{icons?.[symbol] === undefined ? rules.symbols[symbol] : <img className="paytable-icon" src={icons[symbol]} alt={rules.symbols[symbol]} />}</th>
               {row.map((pay, band) => (
                 <td key={config.sizeBands[band]}>{multiplier(pay, dict.locale)}</td>
               ))}

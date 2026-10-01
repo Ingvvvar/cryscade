@@ -82,6 +82,27 @@ describe('расписание фикстур', () => {
     expect(s.bigWinLevel).toBe(4);
   });
 
+  // biggest — раунд принудительного maxWin (сид 801200): кап в 12-м фриспине, после него по fsSpin осталось 3.
+  it('кап (biggest = maxWin): с начала плашки капа фриспинов нет — ни в празднование, ни в итоговом кадре', () => {
+    const s = schedule('biggest');
+    const capAt = s.segments.find((segment) => segment.kind === 'cap');
+    if (capAt === undefined) throw new Error('нет сегмента капа');
+    const out = new SceneState();
+    sampleScene(s, capAt.startMs - 1, out);
+    expect(out.freeSpinsLeft).toBe(3);
+    const after: number[] = [];
+    for (let t = capAt.startMs; t <= s.durationMs; t += 25) {
+      sampleScene(s, t, out);
+      after.push(out.freeSpinsLeft);
+    }
+    sampleScene(s, s.durationMs, out);
+    after.push(out.freeSpinsLeft);
+    expect(after.length).toBeGreaterThan(100);
+    expect(new Set(after)).toStrictEqual(new Set([-1]));
+    expect(s.groups.at(-1)?.kind).toBe('bigWin');
+    expect(s.groups.at(-1)?.start.freeSpinsLeft).toBe(-1);
+  });
+
   it.each(FIXTURE_NAMES)('%s: конец показа — ровно итоговая сетка раунда, все клетки в покое, счётчик — выигрыш', (name) => {
     const s = schedule(name);
     const out = new SceneState();

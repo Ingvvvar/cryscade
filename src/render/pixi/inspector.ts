@@ -84,6 +84,10 @@ export class SceneProbe implements SceneInspector {
     return this.#scene?.chipRects() ?? [];
   }
 
+  chipParts(lock: boolean, digits: boolean): void {
+    this.#scene?.isolateChipParts(lock, digits);
+  }
+
   plaqueText(): string | null {
     return this.#scene?.plaqueText() ?? null;
   }

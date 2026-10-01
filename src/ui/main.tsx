@@ -28,6 +28,7 @@ import { LanguageStore, type DictionaryLoader } from './language.ts';
 import type { PageProbe } from './probe.ts';
 import { PresentationPreferences } from './presentation-preferences.ts';
 import { rendererChoice } from './renderer-choice.ts';
+import { RendererIcons } from './renderer-icons.ts';
 import { replayExit, replayTarget } from './replay-link.ts';
 import { SCENE_TEXTS } from './scene-texts.ts';
 import { SessionTracker } from './session.ts';
@@ -131,17 +132,19 @@ async function mount(): Promise<void> {
     },
     () => preferences.getSnapshot().preset.autoplay,
   );
+  // Иконки символов в правилах — из атласа рендерера, которого фабрика создала последним.
+  const icons = new RendererIcons();
   const create = (): Renderer => {
     probe?.noteCreated();
     const current = language.getSnapshot();
-    return new PixiRenderer({
+    return icons.track(new PixiRenderer({
       preference: choice.preference,
       inspector: probe?.scene ?? null,
       warmUp: probe?.warmUp ?? true,
       texts: current.scene,
       numbers: current.money.style,
       allTexts: LANGUAGES.map((name) => SCENE_TEXTS[name]),
-    });
+    }));
   };
   const app: ReactNode = (
     <App
@@ -163,7 +166,7 @@ async function mount(): Promise<void> {
         now={now}
         autoplay={autoplay}
         language={language}
-        services={{ settings, lockedPreset, fairness: controller, lab }}
+        services={{ settings, lockedPreset, fairness: controller, lab, icons }}
       />
   );
   // Замер рендеров App за раунд (§11) — Profiler только при зонде (dev и e2e-сборка; в e2e — профилирующий react-dom).

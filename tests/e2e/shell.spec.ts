@@ -196,6 +196,47 @@ test('контраст AA: «Спін» на своём градиенте — �
   }
 });
 
+test('«Турбо»: aria-pressed и видимое нажатое — фон и цвет текста другие; контраст надписи на заливке — не меньше 4.5:1 по пикселям', async ({ page }) => {
+  const { problems } = collectConsole(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('./?autoskip=1');
+  await waitForState(page, 'idle');
+  const turbo = page.getByRole('button', { name: 'Турбо' });
+  const look = (): Promise<{ background: string; color: string }> =>
+    turbo.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return { background: style.backgroundColor, color: style.color };
+    });
+  await expect(turbo).toHaveAttribute('aria-pressed', 'false');
+  const off = await look();
+  await turbo.click();
+  await expect(turbo).toHaveAttribute('aria-pressed', 'true');
+  const on = await look();
+  expect(on.background, 'заливка нажатой').not.toBe(off.background);
+  expect(on.color, 'цвет надписи нажатой').not.toBe(off.color);
+  // Надпись прозрачная: под её рамкой остаётся только заливка кнопки. Текст тёмный — худший фон самый тёмный пиксель.
+  const text = /^rgb\((\d+), (\d+), (\d+)\)$/.exec(on.color);
+  if (text === null) throw new Error(`цвет надписи: ${on.color}`);
+  await page.addStyleTag({ content: '.toggle { color: transparent !important; }' });
+  const box = await turbo.evaluate((button) => {
+    const range = document.createRange();
+    range.selectNodeContents(button);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  });
+  expect(box.width * box.height, 'рамка надписи').toBeGreaterThan(100);
+  const image = decodePng(await page.screenshot({ clip: box }));
+  let darkest = 1;
+  for (let at = 0; at < image.rgba.length; at += 4) darkest = Math.min(darkest, luminance(image.rgba[at] ?? 0, image.rgba[at + 1] ?? 0, image.rgba[at + 2] ?? 0));
+  const ratio = (darkest + 0.05) / (luminance(Number(text[1]), Number(text[2]), Number(text[3])) + 0.05);
+  console.log(`«Турбо» нажато: самый тёмный фон L = ${darkest.toFixed(3)}, контраст ${ratio.toFixed(2)}`);
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
+  await turbo.click();
+  await expect(turbo).toHaveAttribute('aria-pressed', 'false');
+  expect((await look()).background, 'отжатая — прежняя заливка').toBe(off.background);
+  expect(problems).toEqual([]);
+});
+
 test('ставка с клавиатуры и из списка: + и − по уровням, в диалоге клавиши игры не действуют; popover — выбор, Esc, фокус на кнопку ставки; спин идёт с выбранной', async ({ page }) => {
   const { problems } = collectConsole(page);
   await page.goto('./?autoskip=1');

@@ -118,6 +118,11 @@ export class RoundView {
     return this.#chips.rects();
   }
 
+  /** Части плашек множителей на кадре: замок, число — для зонда. */
+  isolateChipParts(lock: boolean, digits: boolean): void {
+    this.#chips.parts(lock, digits);
+  }
+
   /** На поле сетка, и в последнем кадре всё в покое. */
   get settled(): boolean {
     return this.#settled;

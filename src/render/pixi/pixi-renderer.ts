@@ -4,8 +4,10 @@
 // Кадр рендер тянет сам: тикер двигает часы источника (SceneSource) и ставит его SceneState — рендер ничего не решает.
 // Порядок init: приложение → шрифты → атлас → сцена → прогрев → канвас в DOM → тикер.
 
-import { Application, Container, type Renderer as PixiRendererBackend, type Ticker, type WebGLRenderer, type WebGPURenderer } from 'pixi.js';
+import { Application, Container, Sprite, type Renderer as PixiRendererBackend, type Ticker, type WebGLRenderer, type WebGPURenderer } from 'pixi.js';
+import { SYMBOL_COUNT, type SymbolId } from '../../core/model/symbols.ts';
 import { AmbientClock } from '../ambient-clock.ts';
+import { ATLAS_RESOLUTION, symbolKey } from '../art/atlas-plan.ts';
 import { PALETTE } from '../art/palette.ts';
 import { FrameClock } from '../frame-clock.ts';
 import { computeLayout, renderResolution, type Layout, type Viewport } from '../layout.ts';
@@ -84,6 +86,8 @@ export class PixiRenderer implements Renderer {
   #source: SceneSource | null = null;
   #warmth = 0;
   #inspected: InspectableScene | null = null;
+  /** Иконки символов: атлас после init не меняется — снимаются один раз на рендерер. */
+  #icons: Promise<readonly string[]> | null = null;
 
   constructor(options: PixiRendererOptions) {
     this.#options = options;
@@ -148,6 +152,9 @@ export class PixiRenderer implements Renderer {
         missingGlyphs: (asked) =>
           asked === null ? [...fontMissing(LABELS_FONT, texts), ...fontMissing(DIGITS_FONT, digitTexts(this.#numbers))] : fontMissing(LABELS_FONT, asked),
         chipRects: () => round.chipRects(),
+        isolateChipParts: (lock, digits) => {
+          round.isolateChipParts(lock, digits);
+        },
         plaqueText: () => round.plaqueText(),
         labels: () => round.labels(),
         pinAmbient: (seconds) => {
@@ -186,6 +193,26 @@ export class PixiRenderer implements Renderer {
     this.#scene?.round.setWords(texts, this.#codes);
   }
 
+  /**
+   * Иконки символов — кадры атласа через временный спрайт: extract самой текстуры-кадра на WebGPU копирует весь атлас
+   * (GpuTextureSystem.generateCanvas не читает frame), а спрайт проходит generateTexture по своим границам на обоих.
+   */
+  symbolIcons(): Promise<readonly string[] | null> {
+    const app = this.#app;
+    const scene = this.#scene;
+    if (app === null || scene === null) return Promise.resolve(null);
+    this.#icons ??= Promise.all(
+      Array.from({ length: SYMBOL_COUNT }, (_, id) => {
+        const sprite = new Sprite(scene.atlas.texture(symbolKey(id as SymbolId)));
+        // Кадр рисуется синхронно в самом вызове: спрайт можно убрать сразу, PNG кодируется уже без него.
+        const url = app.renderer.extract.base64({ target: sprite, resolution: ATLAS_RESOLUTION });
+        sprite.destroy();
+        return url;
+      }),
+    );
+    return this.#icons;
+  }
+
   /** Безопасен в любом состоянии: и после неудачного init, и повторно. */
   destroy(): void {
     if (this.#inspected !== null) {
@@ -209,6 +236,7 @@ export class PixiRenderer implements Renderer {
     this.#canvas = null;
     this.#ready = false;
     this.#scene = null;
+    this.#icons = null;
   }
 
   /** Кадр: часы источника на deltaMs (целые мс от часов кадра), его SceneState — на сцену; тепло фриспинов — фону и рамке. */

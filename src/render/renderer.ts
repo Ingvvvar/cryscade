@@ -84,4 +84,10 @@ export interface LanguageSink {
   setLanguage(texts: SceneTexts, numbers: NumberStyle): void;
 }
 
-export interface Renderer extends RendererLifecycle, ViewportSink, SourceSink, LanguageSink {}
+/** Иконки символов для правил (§11): кадры атласа — PNG в data URL, простые данные через границу render → ui. */
+export interface SymbolIcons {
+  /** Иконки по id символа 0…7; сцены нет (init не прошёл, рендерер уничтожен) — null. */
+  symbolIcons(): Promise<readonly string[] | null>;
+}
+
+export interface Renderer extends RendererLifecycle, ViewportSink, SourceSink, LanguageSink, SymbolIcons {}

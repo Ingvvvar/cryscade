@@ -96,8 +96,13 @@ describe('контраст AA', () => {
     expect(weak).toStrictEqual([]);
   });
 
-  it('пары, которые точно есть: текст на странице, подпись на диалоге, тёмный текст выбранной ставки на свечении', () => {
+  it('пары, которые точно есть: текст на странице, подпись на диалоге, тёмный текст выбранной ставки на свечении и включённого «Турбо» на тёплом', () => {
     const found = pairs().map((pair) => `${pair.color}/${pair.background}`);
-    expect(found).toEqual(expect.arrayContaining(['text/cave-0', 'muted/cave-1', 'cave-0/glow', 'glow/cave-1']));
+    expect(found).toEqual(expect.arrayContaining(['text/cave-0', 'muted/cave-1', 'cave-0/glow', 'glow/cave-1', 'cave-0/warm']));
+    expect(RULES.find((rule) => rule.selector === ".panel .toggle[aria-pressed='true']")).toStrictEqual({
+      selector: ".panel .toggle[aria-pressed='true']",
+      color: 'cave-0',
+      background: 'warm',
+    });
   });
 });

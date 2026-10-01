@@ -66,6 +66,8 @@ export interface Dictionary {
   readonly rules: {
     /** Названия платящих символов по id 0…6. */
     readonly symbols: readonly [string, string, string, string, string, string, string];
+    /** Название скаттера — ядра (id 7): подпись его иконки в абзаце про фичу. */
+    readonly core: string;
     readonly symbol: string;
     readonly table: string;
     clusters(min: number): string;

@@ -77,6 +77,40 @@ test('фріспіни: зупинка — після раунду фічі (п�
   expect(problems).toEqual([]);
 });
 
+// Без автопропуска плашку фичи не тапает никто, кроме серии: тест от «Почати» до остановки ничего не вводит. Ход
+// состояний игры пишется в странице по кадрам — плашка стоит 800 мс серии (минус кадр опроса) и уходит сама.
+test('фріспіни без автопропуску: плашку фічі серія продовжує сама — стоїть 800 мс і йде далі без вводу', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { problems } = collectConsole(page);
+  await page.goto('./');
+  await waitForState(page, 'idle');
+  await page.getByRole('button', { name: 'Турбо' }).click();
+  await force(page, 'feature');
+  await page.evaluate(() => {
+    const w = window as ProbeWindow & { __states?: { name: string; at: number }[] };
+    const states: { name: string; at: number }[] = [];
+    w.__states = states;
+    const sample = (): void => {
+      const name = w.__cryscadeProbe?.game()?.state.name ?? 'none';
+      if (states.at(-1)?.name !== name) states.push({ name, at: performance.now() });
+      requestAnimationFrame(sample);
+    };
+    sample();
+  });
+  await startSeries(page);
+  await expect(bar(page)).toContainText('Автогру зупинено: фріспіни', { timeout: 75_000 });
+  const states = await page.evaluate(() => (window as ProbeWindow & { __states?: { name: string; at: number }[] }).__states ?? []);
+  const intro = states.findIndex((state) => state.name === 'featureIntro');
+  expect(intro, `плашка фичи была: ${states.map((state) => state.name).join(' → ')}`).toBeGreaterThan(-1);
+  const stood = (states[intro + 1]?.at ?? Number.NaN) - (states[intro]?.at ?? Number.NaN);
+  console.log(`плашка фичи стояла ${stood.toFixed(0)} мс; ход: ${states.map((state) => state.name).join(' → ')}`);
+  expect(stood, 'плашка стоит 800 мс серии (кадр опроса — 20 мс)').toBeGreaterThanOrEqual(780);
+  expect(stood, 'и уходит сама').toBeLessThan(2000);
+  expect(states.filter((state) => state.name === 'featureIntro')).toHaveLength(1);
+  expect(await closed(page)).toBe(1);
+  expect(problems).toEqual([]);
+});
+
 test('фріспіни без зупинки на них: прапорець знято — серія йде далі після раунду фічі', async ({ page }) => {
   test.setTimeout(60_000);
   const { problems } = collectConsole(page);
