@@ -4,6 +4,7 @@
 
 import type { ClientNotice, ErrorKind } from '../../client/index.ts';
 import type { ErrorCode } from '../../protocol/index.ts';
+import type { AutoplayStop } from '../autoplay.ts';
 
 export type Language = 'uk' | 'en';
 
@@ -114,6 +115,19 @@ export interface Dictionary {
     foundMismatch(time: string): string;
     readonly notFound: string;
     readonly replayOnly: string;
+  };
+  /** Автоигра (§11): настройки серии, полоса хода и причина остановки. */
+  readonly autoplay: {
+    readonly title: string;
+    readonly count: string;
+    readonly lossLimit: string;
+    readonly stopOnFeature: string;
+    readonly stopOnWin: string;
+    readonly start: string;
+    readonly stop: string;
+    left(count: number): string;
+    readonly stopped: Readonly<Record<AutoplayStop, string>>;
+    readonly dismiss: string;
   };
   /** Лаборатория сети (§6.5): поля настроек, разовые действия и что сделано. */
   readonly lab: {

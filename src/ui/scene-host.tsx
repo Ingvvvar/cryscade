@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { Layout } from '../render/layout.ts';
 import type { Renderer, SceneSource } from '../render/renderer.ts';
+import type { AutoplayControl } from './autoplay-controls.tsx';
 import type { DialogName } from './dialog-host.tsx';
 import { DomViewportSource } from './dom-viewport.ts';
 import type { ExternalSource } from './external.ts';
@@ -35,6 +36,7 @@ export interface SceneHostProps {
   /** Часы для времени сессии — из корня композиции. */
   readonly now: () => number;
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
+  readonly autoplay: AutoplayControl;
 }
 
 /**
@@ -87,7 +89,7 @@ function useRoundAnnouncer(game: Game): RefObject<HTMLParagraphElement | null> {
   return ref;
 }
 
-export function SceneHost({ create, choice, observer, game, source, preferences, reload, onSceneReady, replayExit, session, now, onOpenDialog }: SceneHostProps) {
+export function SceneHost({ create, choice, observer, game, source, preferences, reload, onSceneReady, replayExit, session, now, onOpenDialog, autoplay }: SceneHostProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const insetRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<SceneSession | null>(null);
@@ -149,9 +151,19 @@ export function SceneHost({ create, choice, observer, game, source, preferences,
       />
       <div ref={insetRef} className="safe-area-probe" aria-hidden="true" />
       {layout !== null && (
-        <Panel layout={layout} game={game} snapshot={snapshot} turbo={turbo} onTurbo={onTurbo} session={session} now={now} onOpenDialog={onOpenDialog} />
+        <Panel
+          layout={layout}
+          game={game}
+          snapshot={snapshot}
+          turbo={turbo}
+          onTurbo={onTurbo}
+          session={session}
+          now={now}
+          onOpenDialog={onOpenDialog}
+          autoplay={autoplay}
+        />
       )}
-      <NoticeBar snapshot={snapshot} exitHref={replayExit} />
+      <NoticeBar snapshot={snapshot} exitHref={replayExit} autoplay={autoplay} />
       <p ref={announcer} className="sr-only" role="status" aria-live="polite" data-testid="announcer" />
       <StatusScreen game={game} snapshot={snapshot} reload={reload} exitHref={replayExit} />
       {failed && (

@@ -3,6 +3,7 @@
 // держит сервер.
 
 import type { ControllerSnapshot } from '../client/index.ts';
+import { AutoplayBar, type AutoplayControl } from './autoplay-controls.tsx';
 import type { Game } from './game.ts';
 import { useLanguage } from './language-context.ts';
 
@@ -15,15 +16,40 @@ export interface StatusProps {
   readonly exitHref: string;
 }
 
-/** Полосы над сценой; exitHref — выход из повтора в обычный запуск. */
-export function NoticeBar({ snapshot, exitHref }: { readonly snapshot: ControllerSnapshot; readonly exitHref: string }) {
+/**
+ * Полосы над сценой; exitHref — выход из повтора в обычный запуск. Хранилище, отказ спину и повтор — живой областью
+ * (role="status"); полоса автоигры — вне её: ход серии диктор не читает на каждом раунде, итог раунда объявляет свой
+ * aria-live.
+ */
+export function NoticeBar({ snapshot, exitHref, autoplay }: { readonly snapshot: ControllerSnapshot; readonly exitHref: string; readonly autoplay: AutoplayControl }) {
   const { dict } = useLanguage();
   const { state, notice } = snapshot;
   const refusal = state.name === 'idle' && state.refusal !== null ? (dict.refusal[state.refusal] ?? null) : null;
   const replay = snapshot.mode === 'replay';
-  if (notice === null && refusal === null && !replay) return null;
   return (
-    <div className="notices" role="status">
+    <div className="notices">
+      <AutoplayBar autoplay={autoplay} />
+      {(notice !== null || refusal !== null || replay) && (
+        <NoticeLines replay={replay} notice={notice} refusal={refusal} exitHref={exitHref} />
+      )}
+    </div>
+  );
+}
+
+function NoticeLines({
+  replay,
+  notice,
+  refusal,
+  exitHref,
+}: {
+  readonly replay: boolean;
+  readonly notice: ControllerSnapshot['notice'];
+  readonly refusal: string | null;
+  readonly exitHref: string;
+}) {
+  const { dict } = useLanguage();
+  return (
+    <div className="notice-list" role="status">
       {replay && (
         <p className="notice notice-replay" data-notice="replay">
           {dict.text.replay}

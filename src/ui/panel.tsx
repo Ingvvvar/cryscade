@@ -4,6 +4,7 @@
 
 import { useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import type { ControllerSnapshot } from '../client/index.ts';
+import { AutoButton, type AutoplayControl } from './autoplay-controls.tsx';
 import { toScreen, type Layout, type ZoneName } from '../render/layout.ts';
 import type { DialogName } from './dialog-host.tsx';
 import type { ExternalSource } from './external.ts';
@@ -38,6 +39,7 @@ export interface PanelProps {
   readonly now: () => number;
   /** Открыть диалог; фокус по закрытии вернётся на returnFocus. */
   readonly onOpenDialog: (name: DialogName, returnFocus: HTMLElement | null) => void;
+  readonly autoplay: AutoplayControl;
 }
 
 /** Пункты меню — диалоги по порядку. */
@@ -134,7 +136,7 @@ function BetChoice({ game, snapshot, playable }: { readonly game: Game; readonly
   );
 }
 
-export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog }: PanelProps) {
+export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog, autoplay }: PanelProps) {
   const { dict, money } = useLanguage();
   const text = dict.text;
   const style = { '--u': `${String(layout.scale)}px` } as CSSProperties;
@@ -217,9 +219,7 @@ export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, on
         <button type="button" className="toggle" aria-pressed={turbo.turbo} disabled={!turbo.preset.turbo} onClick={onTurbo}>
           {text.turbo}
         </button>
-        <button type="button" className="toggle">
-          {text.auto}
-        </button>
+        <AutoButton autoplay={autoplay} allowed={turbo.preset.autoplay} playable={playable} />
       </Zone>
     </div>
   );

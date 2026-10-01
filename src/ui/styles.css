@@ -279,6 +279,13 @@ body {
   opacity: 0.5;
 }
 
+/* Popover панели (меню, ставка, автоигра) — в верхнем слое, но в DOM внутри .panel с pointer-events: none: без своего
+   auto поля и флажки в нём наследовали бы none, и клик уходил бы на канвас (§11). */
+.menu,
+.levels {
+  pointer-events: auto;
+}
+
 /* Меню (§11): popover в верхнем слое — Esc и клик мимо закрывают его сами. Размеры — в единицах дизайна панели. */
 .menu {
   position: fixed;
@@ -730,4 +737,45 @@ body {
 
 .lab-actions .action {
   text-align: start;
+}
+
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice-autoplay {
+  border-color: var(--glow);
+}
+
+button.notice-link {
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.autoplay .levels-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.autoplay {
+  display: none;
+}
+
+.autoplay:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 14);
+}
+
+.autoplay .choice {
+  font-size: calc(var(--u) * 20);
+}
+
+.panel .autoplay-start {
+  min-height: calc(var(--u) * 60);
+  font-size: calc(var(--u) * 22);
 }

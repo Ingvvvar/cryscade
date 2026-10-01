@@ -23,6 +23,7 @@ import { TAB_CHANNEL } from '../protocol/index.ts';
 import { PixiRenderer } from '../render/pixi/pixi-renderer.ts';
 import type { Renderer } from '../render/renderer.ts';
 import { App } from './App.tsx';
+import { Autoplay } from './autoplay.ts';
 import { LANGUAGES } from './i18n/dictionary.ts';
 import { UK } from './i18n/uk.ts';
 import { LanguageStore, type DictionaryLoader } from './language.ts';
@@ -100,6 +101,17 @@ async function mount(): Promise<void> {
   controller.onRoundSettled((round) => {
     session.settle(round);
   });
+  // Автоигра (§11) жмёт «Спін» за игрока; пресет без автоигры (строгий) её не пускает.
+  const autoplay = new Autoplay(
+    controller,
+    (ms, task) => {
+      const id = window.setTimeout(task, ms);
+      return () => {
+        window.clearTimeout(id);
+      };
+    },
+    () => preferences.getSnapshot().preset.autoplay,
+  );
   const create = (): Renderer => {
     probe?.noteCreated();
     const current = language.getSnapshot();
@@ -131,6 +143,7 @@ async function mount(): Promise<void> {
         replayExit={replayExit(window.location.href)}
         session={session}
         now={now}
+        autoplay={autoplay}
         language={language}
         services={{ settings, lockedPreset, fairness: controller, lab }}
       />
