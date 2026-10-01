@@ -18,8 +18,8 @@ export default defineConfig({
     { name: 'smoke', testMatch: 'smoke.spec.ts', use: { ...chrome, baseURL: url(PROD) } },
     // Лаборатория сети в прод-сборке (решение 2 фазы 7): зонда нет — только DOM и IndexedDB.
     { name: 'prod-lab', testMatch: 'lab.spec.ts', use: { ...chrome, baseURL: url(PROD) } },
-    // StrictMode монтирует дважды только в dev-сборке React.
-    { name: 'strict-mode', testMatch: 'strict-mode.spec.ts', use: { ...chrome, baseURL: url(DEV) } },
+    // StrictMode монтирует дважды только в dev-сборке React; разметка фаз кадра для DevTools — только в dev (§13).
+    { name: 'strict-mode', testMatch: /(strict-mode|devtools-marks)\.spec\.ts$/, use: { ...chrome, baseURL: url(DEV) } },
     // Headless shell: WebGPU нет, WebGL — SwiftShader. Проверка отката и видимой ошибки принудительного выбора.
     { name: 'fallback', testMatch: 'fallback.spec.ts', use: { ...devices['Desktop Chrome'], baseURL: url(E2E) } },
     { name: 'bundle', testMatch: 'bundle.spec.ts' },

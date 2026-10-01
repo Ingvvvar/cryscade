@@ -11,6 +11,7 @@ import {
   PROTOCOL_VERSION,
   TAB_CHANNEL,
   checkForceRound,
+  checkMemoryLeak,
   type ForceRound,
   type ForceRoundAck,
   type StorageClosed,
@@ -333,6 +334,10 @@ async function forcedRounds(): Promise<RgsServerOptions['decorateSource']> {
     const channel = new BroadcastChannel(PROBE_CHANNEL);
     channel.onmessage = (event: MessageEvent<unknown>) => {
       const message: unknown = event.data;
+      if (checkMemoryLeak(message) === null) {
+        forced.leak();
+        return;
+      }
       if (checkForceRound(message) !== null) return;
       const { seed } = message as ForceRound;
       forced.force(seed);

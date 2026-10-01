@@ -135,9 +135,10 @@ async function firstFrame(page: Page, frame: FirstFrame): Promise<FrameUse> {
     counts.created = 0;
     counts.uploaded = 0;
     counts.mipmaps = 0;
+    counts.destroyed = 0;
     probe.still(round, t);
     probe.renderOnce();
-    return { t, created: counts.created, uploaded: counts.uploaded, mipmaps: counts.mipmaps, plaque: probe.plaqueText() };
+    return { t, created: counts.created, uploaded: counts.uploaded, mipmaps: counts.mipmaps, destroyed: counts.destroyed, plaque: probe.plaqueText() };
   }, frame);
   if (use === null) throw new Error(`${frame.name}: сегмента ${frame.segment} в группе ${frame.group} нет`);
   return { name: frame.name, ...use };

@@ -10,7 +10,7 @@ import { LAZY_MODULES } from '../../tools/bundle-budget.ts';
 // Фаза 5: канал зонда cryscade-probe — принудительный раунд в воркере и его сиды; в проде ни страница, ни воркер его не знают.
 // Флаги зонда ?autoskip и ?warmup=off — только в dev и e2e, как сам зонд.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup', 'replays', 'sceneLabels', 'appCommits', 'soundleak', 'chipParts'];
+const MARKERS = ['__cryscadeProbe', 'addControlSprites', 'removeControlSprites', 'renderOnce', 'cryscade-probe', 'forceRoundAck', 'autoskip', 'warmup', 'replays', 'sceneLabels', 'appCommits', 'soundleak', 'chipParts', 'startFrames', 'stopFrames', 'frameWork', 'memleak', 'memoryLeak'];
 
 function scripts(dir: string): { files: number; text: string } {
   const out: string[] = [];
@@ -36,6 +36,17 @@ test('прод-бандл без зонда, e2e-бандл с ним', () => {
     expect(count(e2e.text, marker), `положительный контроль: ${marker} в dist-e2e`).toBeGreaterThan(0);
     expect(count(prod.text, marker), `${marker} в dist`).toBe(0);
   }
+});
+
+// Разметка фаз кадра для DevTools (§13) — только dev: маркер detail.devtools есть в модуле, который отдаёт dev-сервер
+// (положительный контроль: строка — настоящая, её ищем), и нет ни в прод-, ни в e2e-бандле.
+test('разметка кадра для DevTools — только dev: в модуле dev-сервера маркер есть, в dist и dist-e2e — нет', async () => {
+  const response = await fetch('http://localhost:5173/cryscade/src/render/pixi/frame-marks.ts');
+  expect(response.ok, 'dev-сервер отдал модуль разметки').toBe(true);
+  const dev = await response.text();
+  expect(count(dev, 'track-entry'), 'положительный контроль: маркер в dev-модуле').toBeGreaterThan(0);
+  expect(count(scripts('dist').text, 'track-entry'), 'track-entry в dist').toBe(0);
+  expect(count(scripts('dist-e2e').text, 'track-entry'), 'track-entry в dist-e2e').toBe(0);
 });
 
 const CONTROL = 'vite.budget-control.config.ts';

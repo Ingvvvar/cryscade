@@ -2,10 +2,10 @@
 // В прод-бандле его нет: tests/e2e/bundle.spec.ts ищет маркеры в dist/ и, положительным контролем, в dist-e2e/.
 
 import { PRESETS, type ControllerSnapshot, type LabSettings, type Presenter, type Transport } from '../client/index.ts';
-import { PROBE_CHANNEL, checkForceRoundAck, type ForceRound, type ForceRoundAck } from '../protocol/index.ts';
+import { PROBE_CHANNEL, checkForceRoundAck, type ForceRound, type ForceRoundAck, type MemoryLeak } from '../protocol/index.ts';
 import { SceneProbe } from '../render/pixi/inspector.ts';
 import { FORCED_SEEDS, type ForcedName } from './forced-rounds.ts';
-import type { CryscadeProbe, MountCounts, PresentationInfo, ProbeLab, ScheduleSummary, SentBody } from './probe-api.ts';
+import { FRAME_TAGS, type CryscadeProbe, type MountCounts, type PresentationInfo, type ProbeLab, type ScheduleSummary, type SentBody } from './probe-api.ts';
 import type { MountObserver } from './scene-session.ts';
 
 /** Что зонду нужно от контроллера: снимок, подписка и тап игрока (пропуск показа). */
@@ -30,6 +30,9 @@ function shownRoundId(state: ControllerSnapshot['state']): string | null {
       return null;
   }
 }
+
+/** Объект положительного контроля замера памяти: 8192 дробных числа массивом — 64 КБ в куче V8 на раунд. */
+const LEAK_DOUBLES = 8192;
 
 /** Предел тапов автопропуска за один заход: раунд с сотней фриспинов — пара сотен тапов. */
 const AUTO_TAPS = 10_000;
@@ -89,6 +92,25 @@ export class PageProbe implements MountObserver {
   readonly #replays: unknown[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
   readonly warmUp = new URLSearchParams(window.location.search).get('warmup') !== 'off';
+  /**
+   * ?memleak=1 — положительный контроль замера памяти (§13): на каждый новый раунд зонд держит объект и текстуру на GPU,
+   * а воркер по каналу зонда — свой объект. Только dev и e2e-сборка.
+   */
+  readonly #memLeak = new URLSearchParams(window.location.search).get('memleak') === '1';
+  readonly #leakedObjects: number[][] = [];
+  /** Канал зонда к воркеру для контроля утечки — один на всю страницу: закрытый сразу после postMessage терял сообщения. */
+  #leakChannel: BroadcastChannel | null = null;
+  /** Метка кадра замера (FRAME_TAGS): покой, каскад — раунд основной игры, фича — группы с фриспинами, большой выигрыш. */
+  readonly #frameTag = (): number => {
+    const presenter = this.#presenter;
+    const schedule = presenter?.schedule ?? null;
+    if (presenter === null || schedule === null || presenter.finished) return FRAME_TAGS.indexOf('idle');
+    const group = schedule.groups[presenter.group];
+    if (group === undefined) return FRAME_TAGS.indexOf('idle');
+    if (group.kind === 'bigWin') return FRAME_TAGS.indexOf('bigWin');
+    if (group.kind === 'feature' || group.kind === 'retrigger' || group.start.freeSpinsLeft >= 0) return FRAME_TAGS.indexOf('feature');
+    return FRAME_TAGS.indexOf('cascade');
+  };
 
   noteAttach(): void {
     this.#attaches += 1;
@@ -112,7 +134,10 @@ export class PageProbe implements MountObserver {
     this.#lab = lab;
     game.subscribe(() => {
       const roundId = shownRoundId(game.getSnapshot().state);
-      if (roundId !== null && !this.#shown.includes(roundId)) this.#shown.push(roundId);
+      if (roundId !== null && !this.#shown.includes(roundId)) {
+        this.#shown.push(roundId);
+        if (this.#memLeak) this.#leak();
+      }
       this.#skipAhead();
     });
   }
@@ -137,6 +162,15 @@ export class PageProbe implements MountObserver {
     } finally {
       this.#skipping = false;
     }
+  }
+
+  /** Положительный контроль замера памяти: объект и текстура здесь, объект в воркере — по каналу зонда. */
+  #leak(): void {
+    this.#leakedObjects.push(new Array<number>(LEAK_DOUBLES).fill(0.5));
+    this.scene.leakTexture();
+    this.#leakChannel ??= new BroadcastChannel(PROBE_CHANNEL);
+    const message: MemoryLeak = { type: 'memoryLeak' };
+    this.#leakChannel.postMessage(message);
   }
 
   #presentation(): PresentationInfo | null {
@@ -274,6 +308,13 @@ export class PageProbe implements MountObserver {
       shownRounds: () => [...this.#shown],
       sent: () => [...this.#sent],
       appCommits: () => this.#commits,
+      startFrames: () => {
+        this.scene.startFrames(this.#frameTag);
+      },
+      stopFrames: () => this.scene.stopFrames(),
+      frameWork: (ms) => {
+        this.scene.frameWork(ms);
+      },
       replays: () => [...this.#replays],
       lab: {
         set: (settings: Partial<LabSettings>) => {

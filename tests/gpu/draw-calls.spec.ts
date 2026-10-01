@@ -3,6 +3,7 @@ import { sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.
 import { DRAW_BUDGET, DRAW_CEILING } from './support/draw-ceilings.ts';
 import { installDrawCounter, type DrawCounts } from './support/draw-counter.ts';
 import { PINNED_AMBIENT_S } from './support/frame.ts';
+import { writeMeasure } from './support/phase9.ts';
 
 // Draw-call в покое: потолок-храповик DRAW_CEILING.rest на обоих рендерерах, бюджет §13 (WebGL ≤ 15) — внешняя граница.
 // Кадр — один app.render() при остановленном тикере; счёт — на границе API, с первой отрисовки.
@@ -54,6 +55,7 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.removeControlSprites());
     const again = await draws();
     console.log(`${renderer} (${info.gpu}): покой ${String(idle)}, +${String(control)} разных текстур ${String(distinct)}, +${String(control)} из атласа ${String(atlas)}`);
+    writeMeasure(`draw-calls-idle-${renderer}`, { renderer: info.name, gpu: info.gpu, idle, control: { sprites: control, distinct, atlas } });
 
     expect(idle, 'кадр рисует хоть что-то').toBeGreaterThan(0);
     expect(distinct - idle, 'положительный контроль: разные текстуры рвут батч').toBeGreaterThanOrEqual(2);

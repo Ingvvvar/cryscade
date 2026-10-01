@@ -13,6 +13,7 @@ import { fixtureShown, spotRound } from '../support/shown-rounds.ts';
 import { DRAW_BUDGET, DRAW_CEILING } from './support/draw-ceilings.ts';
 import { installDrawCounter, type DrawCounts } from './support/draw-counter.ts';
 import { PINNED_AMBIENT_S, difference, openStill, snapshot } from './support/frame.ts';
+import { writeMeasure } from './support/phase9.ts';
 import { MIN_CONTRAST, MIN_PIXELS, backingColour, readCell, repaintBody } from './support/readability.ts';
 
 // Презентация раунда на сцене (фаза 5, подход Б): кадры ставит зонд (still — показ стоит на моменте t).
@@ -116,6 +117,14 @@ for (const renderer of ['webgl', 'webgpu'] as const) {
     console.log(
       `${renderer} (${info.gpu}): кадров ${String(frames)}; каскад и фича — ${describeWorst(cascade)}; большой выигрыш — ${describeWorst(bigWin)}; контроль +${String(control)} текстур: ${String(withControl)}`,
     );
+    writeMeasure(`draw-calls-frames-${renderer}`, {
+      renderer: info.name,
+      gpu: info.gpu,
+      frames,
+      cascade: { draws: cascade.draws, round: cascade.round?.roundId ?? null, segment: cascade.segment, t: cascade.t },
+      bigWin: { draws: bigWin.draws, round: bigWin.round?.roundId ?? null, segment: bigWin.segment, t: bigWin.t },
+      control: { textures: control, draws: withControl },
+    });
 
     expect(frames, 'кадры нашлись').toBeGreaterThan(100);
     expect(bigWin.draws, 'кадры большого выигрыша нашлись и что-то рисуют').toBeGreaterThan(0);

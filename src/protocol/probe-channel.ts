@@ -32,3 +32,17 @@ export function checkForceRound(value: unknown): string | null {
 export function checkForceRoundAck(value: unknown): string | null {
   return checkSeedMessage(value, 'forceRoundAck');
 }
+
+/**
+ * Положительный контроль замера памяти (§13, фаза 9): зонд шлёт его на каждый новый раунд под ?memleak=1, воркер держит
+ * объект на каждое такое сообщение — проверка кучи воркера обязана покраснеть.
+ */
+export interface MemoryLeak {
+  readonly type: 'memoryLeak';
+}
+
+/** Воркер: сообщение канала зонда — memoryLeak. Не бросает. */
+export function checkMemoryLeak(value: unknown): string | null {
+  if (!isRecord(value)) return 'сообщение — не объект';
+  return value['type'] === 'memoryLeak' ? null : 'сообщение — не memoryLeak';
+}

@@ -2,7 +2,7 @@
 // условием сборки, в прод-бандл он не попадает (греп с положительным контролем — tests/e2e/bundle.spec.ts).
 // Наружу — только простые данные.
 
-import { Sprite, Texture } from 'pixi.js';
+import { Sprite, Texture, UPDATE_PRIORITY } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
 import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../layout.ts';
 import type { RendererInfo, SceneLabels } from '../renderer.ts';
@@ -19,12 +19,64 @@ export const SCENE_READY_EVENT = 'cryscade:scene-ready';
 
 export type ControlKind = 'distinct' | 'atlas';
 
+/** Метка кадра для замера: что на сцене в этот кадр — решает зонд страницы по показу. */
+export type FrameTagger = () => number;
+
+/** Записанные кадры: длительность, мс, и метка — по индексу. */
+export interface FrameSamples {
+  readonly ms: number[];
+  readonly tags: number[];
+}
+
+/** Кадров в одном замере — с запасом на минуты игры при 120 Гц. */
+const FRAME_CAPACITY = 60_000;
+
+/**
+ * Время кадра изнутри кадра (§13): от первого слушателя тикера приложения (INTERACTION, раньше часов показа) до
+ * последнего (UTILITY, после render Pixi на LOW). Пишет в заранее выделенные массивы — сам кадр не нагружает.
+ */
+class FrameTimer {
+  readonly #ms = new Float64Array(FRAME_CAPACITY);
+  readonly #tags = new Uint8Array(FRAME_CAPACITY);
+  readonly #tagger: FrameTagger;
+  #count = 0;
+  #start = 0;
+  readonly begin = (): void => {
+    this.#start = performance.now();
+  };
+  readonly end = (): void => {
+    if (this.#count >= FRAME_CAPACITY) return;
+    this.#ms[this.#count] = performance.now() - this.#start;
+    this.#tags[this.#count] = this.#tagger();
+    this.#count += 1;
+  };
+
+  constructor(tagger: FrameTagger) {
+    this.#tagger = tagger;
+  }
+
+  samples(): FrameSamples {
+    return { ms: Array.from(this.#ms.subarray(0, this.#count)), tags: Array.from(this.#tags.subarray(0, this.#count)) };
+  }
+}
+
 export class SceneProbe implements SceneInspector {
   #scene: InspectableScene | null = null;
   #inits = 0;
   #destroys = 0;
   readonly #controls: Sprite[] = [];
   readonly #controlTextures: Texture[] = [];
+  #timer: FrameTimer | null = null;
+  /** Положительный контроль замера кадра: работа, которую слушатель тикера жжёт в каждом кадре, мс. */
+  #workMs = 0;
+  readonly #work = (): void => {
+    const until = performance.now() + this.#workMs;
+    while (performance.now() < until) {
+      // Кадр занят: столько работы контроль прибавляет каждому кадру.
+    }
+  };
+  /** Положительный контроль замера памяти: текстуры на GPU, которые никто не отпустит. */
+  readonly #leaked: Texture[] = [];
 
   attach(scene: InspectableScene): void {
     this.#scene = scene;
@@ -131,10 +183,65 @@ export class SceneProbe implements SceneInspector {
     }
   }
 
+  /** Начать замер времени кадра; прежний замер выбрасывается. */
+  startFrames(tagger: FrameTagger): void {
+    const scene = this.#scene;
+    if (scene === null) return;
+    this.#stopTimer();
+    const timer = new FrameTimer(tagger);
+    scene.app.ticker.add(timer.begin, undefined, UPDATE_PRIORITY.INTERACTION);
+    scene.app.ticker.add(timer.end, undefined, UPDATE_PRIORITY.UTILITY);
+    this.#timer = timer;
+  }
+
+  /** Остановить замер и отдать кадры; замера не было — пусто. */
+  stopFrames(): FrameSamples {
+    const samples = this.#timer?.samples() ?? { ms: [], tags: [] };
+    this.#stopTimer();
+    return samples;
+  }
+
+  /** Положительный контроль замера кадра: слушатель NORMAL жжёт ms в каждом кадре; 0 — снять. */
+  frameWork(ms: number): void {
+    const ticker = this.#scene?.app.ticker;
+    if (ticker === undefined) return;
+    ticker.remove(this.#work);
+    this.#workMs = ms;
+    if (ms > 0) ticker.add(this.#work, undefined, UPDATE_PRIORITY.NORMAL);
+  }
+
+  /** Положительный контроль замера памяти: ещё одна текстура на GPU — из сборщика Pixi выведена, не отпускается. */
+  leakTexture(): void {
+    const scene = this.#scene;
+    if (scene === null) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    // Пустой холст WebGPU не копирует в текстуру (copyExternalImageToTexture: «fails extracting valid resource»).
+    const context = canvas.getContext('2d');
+    if (context === null) throw new Error('нет 2D-контекста для текстуры контроля');
+    context.fillStyle = `rgb(${String(this.#leaked.length % 256)}, 64, 160)`;
+    context.fillRect(0, 0, 64, 64);
+    const texture = Texture.from(canvas);
+    texture.source.autoGarbageCollect = false;
+    scene.app.renderer.texture.initSource(texture.source);
+    this.#leaked.push(texture);
+  }
+
   /** Текстуры контроля не уничтожаются: побывав в батче WebGPU, источник держит модульный кэш Pixi (atlas.ts). */
   removeControlSprites(): void {
     for (const sprite of this.#controls) sprite.destroy();
     this.#controls.length = 0;
+  }
+
+  #stopTimer(): void {
+    const timer = this.#timer;
+    const ticker = this.#scene?.app.ticker;
+    if (timer !== null && ticker !== undefined) {
+      ticker.remove(timer.begin);
+      ticker.remove(timer.end);
+    }
+    this.#timer = null;
   }
 
   #controlTexture(index: number): Texture {

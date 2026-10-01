@@ -40,7 +40,7 @@ export {
   type VerifyResult,
   type WalletView,
 } from './messages.ts';
-export { PROBE_CHANNEL, checkForceRound, checkForceRoundAck, type ForceRound, type ForceRoundAck } from './probe-channel.ts';
+export { PROBE_CHANNEL, checkForceRound, checkForceRoundAck, checkMemoryLeak, type ForceRound, type ForceRoundAck, type MemoryLeak } from './probe-channel.ts';
 export { checkRoundEvents, isRoundEvents, isSymbolGrid } from './round-events.ts';
 export { checkStorageClosed, type StorageClosed } from './storage-closed.ts';
 export { TAB_CHANNEL, checkWalletChanged, type WalletChanged } from './wallet-changed.ts';

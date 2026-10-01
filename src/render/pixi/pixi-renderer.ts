@@ -16,6 +16,7 @@ import { sceneTextList, type Renderer, type RendererInfo, type RendererName, typ
 import { CrystalAtlas } from './atlas.ts';
 import { CaveBackground } from './background.ts';
 import { DIGITS_FONT, LABELS_FONT, digitTexts, ensureDigitsFont, ensureLabelsFont, fontMissing, fontPages } from './fonts.ts';
+import { FrameMarks } from './frame-marks.ts';
 import { FrameView } from './frame-view.ts';
 import { RoundView } from './round-view.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
@@ -88,6 +89,8 @@ export class PixiRenderer implements Renderer {
   #inspected: InspectableScene | null = null;
   /** Иконки символов: атлас после init не меняется — снимаются один раз на рендерер. */
   #icons: Promise<readonly string[]> | null = null;
+  /** Фазы кадра для DevTools — только dev (§13). */
+  #marks: FrameMarks | null = null;
 
   constructor(options: PixiRendererOptions) {
     this.#options = options;
@@ -135,6 +138,10 @@ export class PixiRenderer implements Renderer {
     }
     host.appendChild(canvas);
     app.ticker.add(this.#tick);
+    if (import.meta.env.DEV) {
+      this.#marks = new FrameMarks();
+      this.#marks.attach(app.ticker);
+    }
     app.start();
     const inspector = this.#options.inspector;
     if (inspector !== null) {
@@ -223,6 +230,8 @@ export class PixiRenderer implements Renderer {
     const scene = this.#scene;
     if (app !== null && this.#ready) {
       app.ticker.remove(this.#tick);
+      this.#marks?.detach(app.ticker);
+      this.#marks = null;
       if (scene !== null) {
         scene.round.destroy();
         scene.frame.destroy();

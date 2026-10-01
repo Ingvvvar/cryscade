@@ -66,6 +66,15 @@ export interface PresentationInfo {
   readonly reducedMotion: boolean;
 }
 
+/** Метки кадров замера времени кадра (§13) по индексу: что показывала сцена. */
+export const FRAME_TAGS = ['idle', 'cascade', 'feature', 'bigWin'] as const;
+
+/** Кадры замера: длительность изнутри кадра, мс, и индекс метки из FRAME_TAGS. */
+export interface FrameSamples {
+  readonly ms: readonly number[];
+  readonly tags: readonly number[];
+}
+
 export interface CryscadeProbe {
   info(): ProbeSceneInfo | null;
   mounts(): MountCounts;
@@ -117,6 +126,14 @@ export interface CryscadeProbe {
   replays(): unknown[];
   /** Коммиты дерева App с загрузки — React Profiler (§11: не больше 10 за раунд без ввода). */
   appCommits(): number;
+  /**
+   * Замер времени кадра изнутри кадра (§13): с первого слушателя тикера приложения до последнего, после render Pixi;
+   * метка — по показу (FRAME_TAGS). start — с нуля.
+   */
+  startFrames(): void;
+  stopFrames(): FrameSamples;
+  /** Положительный контроль замера кадра: слушатель тикера жжёт ms в каждом кадре; 0 — снять. */
+  frameWork(ms: number): void;
   readonly lab: ProbeLab;
 }
 
