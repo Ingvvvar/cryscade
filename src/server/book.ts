@@ -22,7 +22,10 @@ export interface BookRecord {
 const U32_MAX = 0xffff_ffff;
 const isU32 = (value: number): boolean => Number.isSafeInteger(value) && value >= 0 && value <= U32_MAX;
 
-/** Записи → байты книги. Сумма весов — точное целое до 2^53: иначе накопленные веса не выбрать без BigInt. */
+/**
+ * Записи → байты книги. Сумма весов — точное целое: не больше 80 000 записей с весом до 2^32 − 1 меньше 2^53 (границу
+ * держит тест книги) — накопленные веса выбираются без BigInt.
+ */
 export function encodeBook(records: readonly BookRecord[]): Uint8Array {
   if (records.length < 1 || records.length > BOOK_MAX_RECORDS) throw new RangeError(`записей ${String(records.length)}, можно 1…${String(BOOK_MAX_RECORDS)}`);
   const bytes = new Uint8Array(HEADER + RECORD * records.length);
@@ -40,7 +43,6 @@ export function encodeBook(records: readonly BookRecord[]): Uint8Array {
     view.setUint32(at + 4, payX100, true);
     view.setUint32(at + 8, weight, true);
   });
-  if (!Number.isSafeInteger(total)) throw new RangeError('сумма весов вне точных целых');
   view.setBigUint64(10, BigInt(total), true);
   return bytes;
 }

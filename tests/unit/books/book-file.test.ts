@@ -73,6 +73,7 @@ describe('книга в public/books', () => {
   it('записи — по итогу, потом по сиду; сиды не повторяются; последняя — кап', () => {
     let previous = { payX100: -1, seed: -1 };
     const seeds = new Set<number>();
+    expect(loaded.size).toBe(58_354);
     for (let index = 0; index < loaded.size; index++) {
       const record = loaded.record(index);
       expect(record.payX100 > previous.payX100 || (record.payX100 === previous.payX100 && record.seed > previous.seed)).toBe(true);

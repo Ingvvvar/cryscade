@@ -89,6 +89,35 @@ const CLUSTER = fc
     return [...cells].sort((a, b) => a - b);
   });
 
+describe('clusterContour — границы', () => {
+  it.each([-1, 49, 1.5])('клетка %s — RangeError с её номером', (cell) => {
+    expect(() => clusterContour([0, cell])).toThrow(RangeError);
+    expect(() => clusterContour([0, cell])).toThrow(`контур: клетка ${String(cell)} вне сетки`);
+  });
+
+  it('срезанные углы клетки — снаружи, на четверть клетки внутрь — внутри', () => {
+    // Клетка (2, 3): срез угла — 1/8 клетки по каждой оси, точка в 0.05 от угла лежит за срезом.
+    const rings = clusterContour([3 * 7 + 2]);
+    const corners = [
+      [2.05, 3.05],
+      [2.95, 3.05],
+      [2.95, 3.95],
+      [2.05, 3.95],
+    ];
+    // Середины верхнего и нижнего края — на высоте срезов: луч вправо пересекает срез, и точка внутри.
+    const inner = [
+      [2.25, 3.25],
+      [2.75, 3.25],
+      [2.75, 3.75],
+      [2.25, 3.75],
+      [2.5, 3.05],
+      [2.5, 3.95],
+    ];
+    expect(corners.map(([x = 0, y = 0]) => contourContains(rings, x, y))).toStrictEqual([false, false, false, false]);
+    expect(inner.map(([x = 0, y = 0]) => contourContains(rings, x, y))).toStrictEqual([true, true, true, true, true, true]);
+  });
+});
+
 describe('clusterContour — property', () => {
   it('кольца замкнуты (вершин ≥ 4, у каждого ребра — ось или срез 45°), центры внутри — ровно клетки кластера', () => {
     fc.assert(

@@ -1,0 +1,1435 @@
+[
+  {
+    "file": "src/core/engine/board.ts",
+    "code": "for (let row = GRID_SIDE - 1; row >= 0; row--) {",
+    "column": 22,
+    "end": 35,
+    "mutator": "ArithmeticOperator",
+    "replacement": "GRID_SIDE + 1",
+    "reason": "строки 7 и 8 за сеткой: клетка ≥ 49, #exploded[cell] — undefined !== 0, continue"
+  },
+  {
+    "file": "src/core/engine/board.ts",
+    "code": "for (let row = 0; row < GRID_SIDE; row++) {",
+    "column": 23,
+    "end": 38,
+    "mutator": "EqualityOperator",
+    "replacement": "row <= GRID_SIDE",
+    "reason": "строка 7: row >= #emptyTop[col] (не больше 7) — continue"
+  },
+  {
+    "file": "src/core/engine/board.ts",
+    "code": "for (let col = 0; col < GRID_SIDE; col++) {",
+    "nth": 2,
+    "column": 25,
+    "end": 40,
+    "mutator": "EqualityOperator",
+    "replacement": "col <= GRID_SIDE",
+    "reason": "колонка 7: #emptyTop[7] — undefined → 0, row >= 0 — continue"
+  },
+  {
+    "file": "src/core/engine/board.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) {",
+    "nth": 2,
+    "column": 24,
+    "end": 41,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "#grid[49] — undefined, не ядро"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "for (let index = 0; index < size; index++) this.#cells[this.#cellCount + index] = cells[index] ?? 0;",
+    "column": 25,
+    "end": 37,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= size",
+    "reason": "лишняя клетка ложится за кластером: следующий add её перезапишет, cellAt читает только до size"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "for (let start = 0; start < CELL_COUNT; start++) {",
+    "column": 25,
+    "end": 43,
+    "mutator": "EqualityOperator",
+    "replacement": "start <= CELL_COUNT",
+    "reason": "#visited[49] — undefined !== 0: continue"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (this.#visited[start] !== 0) continue;",
+    "column": 11,
+    "end": 37,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "посещённая клетка уже в своей компоненте: повторный обход даёт компоненту из одной клетки — меньше clusterMin (≥ 2)"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (cell >= GRID_SIDE) top = this.#visit(grid, cell - GRID_SIDE, symbol, top);",
+    "column": 11,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у клеток верхней строки сосед сверху отрицательный: #visited[−n] — undefined !== 0, обхода нет"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (cell >= GRID_SIDE) top = this.#visit(grid, cell - GRID_SIDE, symbol, top);",
+    "column": 11,
+    "end": 28,
+    "mutator": "EqualityOperator",
+    "replacement": "cell > GRID_SIDE",
+    "reason": "у клетки 7 сосед сверху — 0: компонента обходится от наименьшей клетки, и если 0 в ней, обход начат с 0"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (cell < CELL_COUNT - GRID_SIDE) top = this.#visit(grid, cell + GRID_SIDE, symbol, top);",
+    "column": 11,
+    "end": 40,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "сосед снизу у нижней строки — клетка ≥ 49: undefined, обхода нет"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (cell < CELL_COUNT - GRID_SIDE) top = this.#visit(grid, cell + GRID_SIDE, symbol, top);",
+    "column": 11,
+    "end": 40,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT - GRID_SIDE",
+    "reason": "сосед снизу у клетки 42 — 49: undefined, обхода нет"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "if (cell < CELL_COUNT - GRID_SIDE) top = this.#visit(grid, cell + GRID_SIDE, symbol, top);",
+    "column": 18,
+    "end": 40,
+    "mutator": "ArithmeticOperator",
+    "replacement": "CELL_COUNT + GRID_SIDE",
+    "reason": "соседи снизу у нижней строки — клетки ≥ 49: undefined, обхода нет"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "while (j >= 0 && (cells[j] ?? 0) > cell) {",
+    "column": 14,
+    "end": 20,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "компонента[0] — её наименьшая клетка (старт обхода): вставка не доходит до j = −1"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "while (j >= 0 && (cells[j] ?? 0) > cell) {",
+    "column": 14,
+    "end": 20,
+    "mutator": "EqualityOperator",
+    "replacement": "j > 0",
+    "reason": "компонента[0] — её наименьшая клетка (старт обхода): сдвигать на место 0 нечего"
+  },
+  {
+    "file": "src/core/engine/clusters.ts",
+    "code": "while (j >= 0 && (cells[j] ?? 0) > cell) {",
+    "column": 24,
+    "end": 46,
+    "mutator": "EqualityOperator",
+    "replacement": "(cells[j] ?? 0) >= cell",
+    "reason": "клетки компоненты различны: > и >= совпадают"
+  },
+  {
+    "file": "src/core/engine/paytable.ts",
+    "code": "for (let symbol = 0; symbol < PAYING_SYMBOL_COUNT; symbol++) {",
+    "nth": 1,
+    "column": 26,
+    "end": 54,
+    "mutator": "EqualityOperator",
+    "replacement": "symbol <= PAYING_SYMBOL_COUNT",
+    "reason": "строка символа 7 пишется за #bySize: запись в типизированный массив за длиной не происходит"
+  },
+  {
+    "file": "src/core/engine/paytable.ts",
+    "code": "const row = config.paytableX100[symbol] ?? [];",
+    "column": 50,
+    "end": 52,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "validate гарантирует все строки: запасной массив — только для типа"
+  },
+  {
+    "file": "src/core/engine/paytable.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? SIZES)) band += 1;",
+    "column": 16,
+    "end": 39,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/paytable.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? SIZES)) band += 1;",
+    "column": 16,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "band + 1 <= bands.length",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/paytable.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? SIZES)) band += 1;",
+    "column": 16,
+    "end": 24,
+    "mutator": "ArithmeticOperator",
+    "replacement": "band - 1",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "#spinOpen = false;",
+    "column": 15,
+    "end": 20,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "begin() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "#featured = false;",
+    "column": 15,
+    "end": 20,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "begin() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "#capped = false;",
+    "column": 13,
+    "end": 18,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "begin() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "#cappedInFeature = false;",
+    "column": 22,
+    "end": 27,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "begin() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? CELL_COUNT + 1)) band += 1;",
+    "column": 14,
+    "end": 37,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? CELL_COUNT + 1)) band += 1;",
+    "column": 14,
+    "end": 37,
+    "mutator": "EqualityOperator",
+    "replacement": "band + 1 <= bands.length",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? CELL_COUNT + 1)) band += 1;",
+    "column": 14,
+    "end": 22,
+    "mutator": "ArithmeticOperator",
+    "replacement": "band - 1",
+    "reason": "за последней полосой bands[band + 1] — undefined, запасное значение больше любого размера (≤ 49): цикл дальше не идёт"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "while (band + 1 < bands.length && size >= (bands[band + 1] ?? CELL_COUNT + 1)) band += 1;",
+    "column": 69,
+    "end": 83,
+    "mutator": "ArithmeticOperator",
+    "replacement": "CELL_COUNT - 1",
+    "reason": "запасное значение недостижимо: band + 1 < bands.length ложно раньше"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "for (let index = 0; index < this.#usage.length; index++) {",
+    "column": 25,
+    "end": 51,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= this.#usage.length",
+    "reason": "индекс за длиной: своё значение — undefined → 0, к приёмнику прибавляется 0"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "for (let index = 0; index < this.#cascades.length; index++) {",
+    "column": 25,
+    "end": 54,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= this.#cascades.length",
+    "reason": "индекс за длиной: своё значение — undefined → 0, к приёмнику прибавляется 0"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "this.#cappedInFeature = false;",
+    "column": 29,
+    "end": 34,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "#cappedInFeature задаёт cap(); читается только при #capped"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "for (let index = 0; index < spots.count; index++) this.#maxLevel = Math.max(this.#maxLevel, spots.levelAt(index));",
+    "column": 25,
+    "end": 44,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= spots.count",
+    "reason": "levelAt(count) — клетка из хвоста списка: её уровень уже учтён на её шаге (в раунде уровни только растут, сброс — в 0)"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "} else if (this.#capped) {",
+    "column": 16,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "без капа payX100 = основная + фича: присваивание даёт то же значение"
+  },
+  {
+    "file": "src/core/engine/stats-recorder.ts",
+    "code": "this.#spinOpen = false;",
+    "nth": 2,
+    "column": 22,
+    "end": 27,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "после закрытия спина fill() открывает следующий, begin() сбрасывает: второго закрытия без fill нет"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "if (i < 0 || j < 0 || i >= SAMPLES || j >= SAMPLES) return 0;",
+    "column": 16,
+    "end": 21,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "за краем маски индекс клетки уходит за сетку: mask[…] — undefined → 0, как и у явной проверки"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "if (i < 0 || j < 0 || i >= SAMPLES || j >= SAMPLES) return 0;",
+    "column": 41,
+    "end": 53,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "за краем маски индекс клетки уходит за сетку: mask[…] — undefined → 0, как и у явной проверки"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "if (i < 0 || j < 0 || i >= SAMPLES || j >= SAMPLES) return 0;",
+    "column": 41,
+    "end": 53,
+    "mutator": "EqualityOperator",
+    "replacement": "j > SAMPLES",
+    "reason": "j = SAMPLES: клетки 49…55 — undefined → 0, как и у явной проверки"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const key = (x: number, y: number): number => x * 1024 + y;",
+    "column": 47,
+    "end": 59,
+    "mutator": "ArithmeticOperator",
+    "replacement": "x * 1024 - y",
+    "reason": "ключ точки остаётся взаимно однозначным (y < 1024 полуединиц), порядок вставки тот же"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const key = (x: number, y: number): number => x * 1024 + y;",
+    "column": 47,
+    "end": 55,
+    "mutator": "ArithmeticOperator",
+    "replacement": "x / 1024",
+    "reason": "ключ точки остаётся взаимно однозначным (y < 1024 полуединиц), порядок вставки тот же"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "for (let j = -1; j < SAMPLES; j++) {",
+    "column": 20,
+    "end": 31,
+    "mutator": "EqualityOperator",
+    "replacement": "j <= SAMPLES",
+    "reason": "лишний ряд квадратов за краем: все углы вне маски, отрезков нет"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "for (let i = -1; i < SAMPLES; i++) {",
+    "column": 22,
+    "end": 33,
+    "mutator": "EqualityOperator",
+    "replacement": "i <= SAMPLES",
+    "reason": "лишний столбец квадратов за краем: все углы вне маски, отрезков нет"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "for (const [from, to] of CASES[index] ?? []) link(midpoint(i, j, from), midpoint(i, j, to));",
+    "column": 48,
+    "end": 50,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "индекс случая 0…15 всегда в таблице: запасной массив только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const next = (links.get(current) ?? []).find((candidate) => !visited.has(candidate));",
+    "column": 43,
+    "end": 45,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "у каждой точки контура есть соседи: запасной массив только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "rings.push(simplified(loop.map((k) => coords.get(k) ?? [0, 0])));",
+    "column": 60,
+    "end": 66,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[]",
+    "reason": "у каждого ключа есть координаты: запасная точка только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const before = points[(index + points.length - 1) % points.length] ?? [0, 0];",
+    "column": 75,
+    "end": 81,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[]",
+    "reason": "индекс по модулю длины всегда в массиве: запасная точка только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const at = points[index] ?? [0, 0];",
+    "column": 33,
+    "end": 39,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[]",
+    "reason": "индекс всегда в массиве: запасная точка только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const after = points[(index + 1) % points.length] ?? [0, 0];",
+    "column": 58,
+    "end": 64,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[]",
+    "reason": "индекс по модулю длины всегда в массиве: запасная точка только для типа"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "const cross = (at[0] - before[0]) * (after[1] - at[1]) - (at[1] - before[1]) * (after[0] - at[0]);",
+    "column": 19,
+    "end": 102,
+    "mutator": "ArithmeticOperator",
+    "replacement": "(at[0] - before[0]) * (after[1] - at[1]) + (at[1] - before[1]) * (after[0] - at[0])",
+    "reason": "соседние рёбра контура не бывают оба диагональными: у пары ось — срез второе слагаемое 0, на прямой оба 0"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;",
+    "column": 32,
+    "end": 75,
+    "mutator": "EqualityOperator",
+    "replacement": "x <= (bx - ax) * (y - ay) / (by - ay) + ax",
+    "reason": "<= отличается только для точки на самом ребре; >= считает пересечения слева — чётность у замкнутого контура та же"
+  },
+  {
+    "file": "src/core/presentation/contour.ts",
+    "code": "if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;",
+    "column": 32,
+    "end": 75,
+    "mutator": "EqualityOperator",
+    "replacement": "x >= (bx - ax) * (y - ay) / (by - ay) + ax",
+    "reason": "<= отличается только для точки на самом ребре; >= считает пересечения слева — чётность у замкнутого контура та же"
+  },
+  {
+    "file": "src/core/presentation/fall.ts",
+    "code": "if (tMs <= 0) return distance;",
+    "column": 7,
+    "end": 15,
+    "mutator": "EqualityOperator",
+    "replacement": "tMs < 0",
+    "reason": "в t = 0 высота и так d: падение ещё не началось"
+  },
+  {
+    "file": "src/core/presentation/fall.ts",
+    "code": "if (tMs < touch) {",
+    "column": 7,
+    "end": 18,
+    "mutator": "EqualityOperator",
+    "replacement": "tMs <= touch",
+    "reason": "на касании падение даёт 0 (d − ½·g·t² при g = 2d/t²) — как и начало отскока"
+  },
+  {
+    "file": "src/core/presentation/fall.ts",
+    "code": "if (tau < duration) return Math.max(0, tau * (speed - 0.5 * gravity * tau));",
+    "column": 9,
+    "end": 23,
+    "mutator": "EqualityOperator",
+    "replacement": "tau <= duration",
+    "reason": "в конце отскока его высота 0 — как и начало следующего"
+  },
+  {
+    "file": "src/core/presentation/fall.ts",
+    "code": "for (let column = 0; column < GRID_SIDE; column++) out[column] = fallHeight(profile, 1, localMs - columnStartMs(profile, column));",
+    "column": 24,
+    "end": 42,
+    "mutator": "EqualityOperator",
+    "replacement": "column <= GRID_SIDE",
+    "reason": "колонка 7 за буфером: запись в типизированный массив не происходит"
+  },
+  {
+    "file": "src/core/presentation/final-grid.ts",
+    "code": "default:",
+    "column": 7,
+    "end": 15,
+    "mutator": "ConditionalExpression",
+    "replacement": "default:",
+    "reason": "ветка default пуста: без неё неизвестное событие так же ничего не меняет"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if ((groups[middle]?.startMs ?? 0) <= tMs) low = middle;",
+    "column": 10,
+    "end": 33,
+    "mutator": "OptionalChaining",
+    "replacement": "groups[middle].startMs",
+    "reason": "middle всегда в пределах групп: бинарный поиск по 0…length − 1"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let s = group.firstSegment; s < group.segmentEnd; s++) {",
+    "column": 36,
+    "end": 56,
+    "mutator": "EqualityOperator",
+    "replacement": "s <= group.segmentEnd",
+    "reason": "сегмент за группой — первый следующей группы: он начинается позже t (иначе t лежал бы в ней) — break"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (segment === undefined || segment.startMs > t) break;",
+    "column": 9,
+    "end": 30,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "сегмент в пределах группы всегда есть"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "case 'pause':",
+    "column": 5,
+    "end": 13,
+    "mutator": "ConditionalExpression",
+    "replacement": "case 'pause':",
+    "reason": "пауза ничего не рисует: без своей ветки — тоже ничего"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "case 'pause':",
+    "column": 10,
+    "end": 17,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "пауза ничего не рисует: без своей ветки — тоже ничего"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (fill === undefined) return;",
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "данные сегмента всегда есть: data — индекс в своём массиве расписания"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) {",
+    "nth": 2,
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "падение: клетка 49 — колонка 0, высота та же, что у клетки 0, — признак покоя уже снят ею; запись за буфером offsetY не происходит"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) {",
+    "nth": 3,
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "взрыв: exploded[49] — undefined ≠ 1, клетка пропускается"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) {",
+    "nth": 4,
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "точки: spotAfter[49] — undefined → запасное −1, клетка пропускается"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) {",
+    "nth": 5,
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "досыпка: fallFrom[49] — undefined → запасной 0, клетка пропускается"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (height !== 0) out.settled = false;",
+    "nth": 1,
+    "column": 9,
+    "end": 21,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "до конца падения последняя колонка в воздухе: кадр и так не в покое"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) if (step.won[cell] === 1) out.highlight[cell] = rise;",
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "клетка 49 — за буферами: чтение — undefined, запись в типизированный массив не происходит"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (step === undefined) return;",
+    "nth": 1,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "взрыв: data — индекс шага в schedule.steps, шаг есть всегда"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (step === undefined) return;",
+    "nth": 2,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "точки: data — индекс шага в schedule.steps, шаг есть всегда"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (step === undefined) return;",
+    "nth": 3,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "досыпка: data — индекс шага в schedule.steps, шаг есть всегда"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "const level = step.spotAfter[cell] ?? -1;",
+    "column": 43,
+    "end": 45,
+    "mutator": "UnaryOperator",
+    "replacement": "+1",
+    "reason": "spotAfter — 49 клеток: запасное значение недостижимо"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (level < 0) continue;",
+    "column": 9,
+    "end": 18,
+    "mutator": "EqualityOperator",
+    "replacement": "level <= 0",
+    "reason": "уровня 0 в событии точек не бывает: уровни 1…8, сброс точек — на старте фичи, не событием"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (t >= segment.endMs) return;",
+    "nth": 3,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "на конце досыпки и после неё колонки в покое: высоты 0, как и без расчёта"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (t >= segment.endMs) return;",
+    "nth": 3,
+    "column": 7,
+    "end": 25,
+    "mutator": "EqualityOperator",
+    "replacement": "t > segment.endMs",
+    "reason": "на конце досыпки колонки в покое: высоты 0, как и без расчёта"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (from === 0) continue;",
+    "column": 9,
+    "end": 19,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "клетка без падения: высота 0 × ход колонки — 0"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 1,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "кап: data — индекс плашки в schedule.plaques, плашка есть всегда"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 2,
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "плашка фичи: data — индекс плашки в schedule.plaques, плашка есть всегда"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (range === undefined) return;",
+    "column": 7,
+    "end": 26,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "данные сегмента всегда есть: data — индекс в своём массиве расписания"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (set === undefined || t >= segment.endMs || !segment.celebrate) return;",
+    "column": 7,
+    "end": 24,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "данные сегмента всегда есть: data — индекс в своём массиве расписания"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) if (set[cell] === 1) out.highlight[cell] = rise;",
+    "column": 22,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "клетка 49 — за буферами: чтение — undefined, запись в типизированный массив не происходит"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 2,
+    "column": 7,
+    "end": 47,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "плашку перезаписывает следующий сегмент той же группы (вид, число, альфа); на границе групп кадр — уже следующая группа"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 2,
+    "column": 29,
+    "end": 47,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "плашку перезаписывает следующий сегмент той же группы (вид, число, альфа); на границе групп кадр — уже следующая группа"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 2,
+    "column": 7,
+    "end": 47,
+    "mutator": "LogicalOperator",
+    "replacement": "item === undefined && t >= segment.endMs",
+    "reason": "плашку перезаписывает следующий сегмент той же группы (вид, число, альфа)"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (item === undefined || t >= segment.endMs) return;",
+    "nth": 2,
+    "column": 29,
+    "end": 47,
+    "mutator": "EqualityOperator",
+    "replacement": "t > segment.endMs",
+    "reason": "на конце сегмента плашки начинается следующий её сегмент (в той же группе — с той же альфой 1) или следующая группа"
+  },
+  {
+    "file": "src/core/presentation/scene-state.ts",
+    "code": "contourStep = -1;",
+    "column": 17,
+    "end": 19,
+    "mutator": "UnaryOperator",
+    "replacement": "+1",
+    "reason": "конструктор вызывает clear(), и clear() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/presentation/scene-state.ts",
+    "code": "freeSpinsLeft = -1;",
+    "column": 19,
+    "end": 21,
+    "mutator": "UnaryOperator",
+    "replacement": "+1",
+    "reason": "конструктор вызывает clear(), и clear() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/presentation/scene-state.ts",
+    "code": "segment = -1;",
+    "column": 13,
+    "end": 15,
+    "mutator": "UnaryOperator",
+    "replacement": "+1",
+    "reason": "конструктор вызывает clear(), и clear() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/presentation/scene-state.ts",
+    "code": "settled = true;",
+    "column": 13,
+    "end": 17,
+    "mutator": "BooleanLiteral",
+    "replacement": "false",
+    "reason": "конструктор вызывает clear(), и clear() задаёт поле до первого чтения"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) this.#grid[cell] = round.previousGrid[cell] ?? EMPTY_CELL;",
+    "column": 26,
+    "end": 43,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "клетка 49 — за буфером: чтение — undefined → пусто, запись не происходит"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "for (let index = 0; index < events.length; index++) {",
+    "column": 25,
+    "end": 46,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= events.length",
+    "reason": "событие за концом — undefined, его пропускает следующая строка"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "if (event === undefined) continue;",
+    "column": 11,
+    "end": 30,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "событие в пределах массива всегда есть"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "this.#scatters(event.cells, index, next?.t === 'fsRetrigger' ? 'retrigger' : 'feature');",
+    "column": 44,
+    "end": 51,
+    "mutator": "OptionalChaining",
+    "replacement": "next.t",
+    "reason": "за ядрами всегда есть событие: fsStart или fsRetrigger"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "for (let cell = 0; cell < CELL_COUNT; cell++) fill[cell] = grid[cell] ?? EMPTY_CELL;",
+    "column": 24,
+    "end": 41,
+    "mutator": "EqualityOperator",
+    "replacement": "cell <= CELL_COUNT",
+    "reason": "клетка 49 — за буфером: чтение — undefined → пусто, запись не происходит"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "if (group === undefined) return;",
+    "column": 9,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "выигрыш спина без группы невозможен: группу каскада открывает win"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "if (last !== undefined) last.toEvent = index + 1;",
+    "column": 9,
+    "end": 27,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "end без групп — раунд без fill: такого раунда нет"
+  },
+  {
+    "file": "src/core/presentation/schedule.ts",
+    "code": "const unitEnds: number[] = [];",
+    "column": 32,
+    "end": 34,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "единица 0 — первая группа: unitEnds[0] перезаписывается"
+  },
+  {
+    "file": "src/core/presentation/sample-scene.ts",
+    "code": "if (step === undefined || t >= segment.endMs) return;",
+    "column": 7,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "данные сегмента всегда есть: data — индекс в своём массиве расписания"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "override readonly name = 'WriteConflict';",
+    "column": 28,
+    "end": 43,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "имя видно только в отладке: WriteConflict ловит #serve по классу, исчерпанные попытки уходят наружу текстом в INTERNAL"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "return { op: 'add', store: 'quarantine', value: { store, raw, reason, at } satisfies QuarantineRecord };",
+    "column": 16,
+    "end": 21,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "оба адаптера хранилища (память и IndexedDB) читают всё, что не put и не delete, как add"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "const revision = read.kind === 'ok' ? read.value.revision : read.kind === 'damaged' && isRecord(read.raw) ? read.raw['revision'] : 0;",
+    "column": 63,
+    "end": 86,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у absent нет raw: isRecord(undefined) — нет, ревизия 0, как и без проверки вида"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (this.#book !== null) return null;",
+    "column": 9,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "загруженная книга — то же разрешённое обещание #bookLoading: ждать его — тот же Book"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (this.#book === null) throw new Error('книга исходов не загружена');",
+    "column": 9,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "недостижимо: #loadedBook зовут только после #ensureBook — книга уже есть; проверка сужает тип для TypeScript"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (this.#book === null) throw new Error('книга исходов не загружена');",
+    "column": 46,
+    "end": 74,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "недостижимо: #loadedBook зовут только после #ensureBook — книга уже есть"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "draw.fairness.source === 'book' && fairness !== null ? [{ op: 'put', store: 'fairness', value: { ...fairness.record, nonce: fairness.record.nonce + 1 } }] : [];",
+    "column": 42,
+    "end": 59,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у раунда книги честность есть всегда: без неё BookRoundSource бросает; проверка сужает тип для TypeScript"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": ": [{ op: 'add', store: 'keys', value: keyRecord }];",
+    "column": 18,
+    "end": 23,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "оба адаптера хранилища (память и IndexedDB) читают всё, что не put и не delete, как add"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "{ op: 'add', store: 'rounds', value: round },",
+    "column": 15,
+    "end": 20,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "оба адаптера хранилища (память и IndexedDB) читают всё, что не put и не delete, как add"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "const core = read.kind === 'ok' ? read.value : read.kind === 'damaged' ? read.core : null;",
+    "nth": 1,
+    "column": 54,
+    "end": 77,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "latest отдаёт только лежащие записи: вид — ok или damaged, absent там не бывает"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "const core = read.kind === 'ok' ? read.value : read.kind === 'damaged' ? read.core : null;",
+    "nth": 2,
+    "column": 52,
+    "end": 75,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у absent нет core: undefined, как и null, — ROUND_NOT_FOUND"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (core?.status === 'closed' && core.balanceAfterEnd !== null) {",
+    "column": 38,
+    "end": 67,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у закрытого раунда, прошедшего гард, balanceAfterEnd — целое; проверка сужает тип для TypeScript"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "{ op: 'add', store: 'secrets', value: fresh },",
+    "column": 13,
+    "end": 18,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "оба адаптера хранилища (память и IndexedDB) читают всё, что не put и не delete, как add"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (read.kind === 'ok' && secretRead?.kind === 'ok') {",
+    "column": 9,
+    "end": 27,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "secretRead есть только при read ok — без него вторая половина ложна; проверка сужает тип для TypeScript read.value"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (read.kind === 'ok' && secretRead?.kind === 'ok') {",
+    "column": 31,
+    "end": 47,
+    "mutator": "OptionalChaining",
+    "replacement": "secretRead.kind",
+    "reason": "secretRead null только при read не ok — до него && не доходит"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "const activeRead: RoundRead = activeId === null ? { kind: 'absent' } : await this.#rounds.read(activeId);",
+    "column": 55,
+    "end": 73,
+    "mutator": "ObjectLiteral",
+    "replacement": "{}",
+    "reason": "без активного раунда activeRead не читается: дальше путь без него"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "const activeRead: RoundRead = activeId === null ? { kind: 'absent' } : await this.#rounds.read(activeId);",
+    "column": 63,
+    "end": 71,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "без активного раунда activeRead не читается: дальше путь без него"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "removed.push({ key: drop.key, raw: drop.read.kind === 'ok' ? drop.read.value : drop.read.kind === 'damaged' ? drop.read.raw : undefined });",
+    "column": 86,
+    "end": 114,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "у absent нет raw: undefined, как и запасное значение"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "? unchanged({ wallet: walletRead.value, stored: true, active: null, repaired: false })",
+    "column": 87,
+    "end": 92,
+    "mutator": "BooleanLiteral",
+    "replacement": "true",
+    "reason": "unchanged читает только stored и revision; repaired — поле типа"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (error instanceof WatchdogError) return null;",
+    "column": 11,
+    "end": 41,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "движок по сиду из цельной части бросает только WatchdogError: сид — u32 по гарду"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "} catch (error) {",
+    "nth": 5,
+    "column": 21,
+    "end": 6,
+    "mutator": "BlockStatement",
+    "replacement": "{}",
+    "reason": "пустой catch возвращает undefined — для вызывающих то же, что false"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (error instanceof RangeError) return false;",
+    "column": 11,
+    "end": 38,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "winMinor бросает только RangeError"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (first?.t !== 'fill') throw new Error('заставка: раунд начинается не с fill');",
+    "column": 9,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "раунд сида заставки начинается с fill — грамматика движка; проверка сужает тип для TypeScript first.grid"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (first?.t !== 'fill') throw new Error('заставка: раунд начинается не с fill');",
+    "column": 9,
+    "end": 17,
+    "mutator": "OptionalChaining",
+    "replacement": "first.t",
+    "reason": "у раунда сида заставки события есть всегда"
+  },
+  {
+    "file": "src/server/rgs-server.ts",
+    "code": "if (first?.t !== 'fill') throw new Error('заставка: раунд начинается не с fill');",
+    "column": 46,
+    "end": 84,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "недостижимо: раунд сида заставки начинается с fill"
+  },
+  {
+    "file": "src/server/records.ts",
+    "code": "return end?.t === 'end' && end.payX100 === payX100 ? null : 'раунд: payX100 не равен итогу end';",
+    "column": 10,
+    "end": 26,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "checkRoundEvents пропустил — последнее событие end по грамматике; проверка сужает тип для TypeScript end.payX100"
+  },
+  {
+    "file": "src/server/records.ts",
+    "code": "return end?.t === 'end' && end.payX100 === payX100 ? null : 'раунд: payX100 не равен итогу end';",
+    "column": 10,
+    "end": 16,
+    "mutator": "OptionalChaining",
+    "replacement": "end.t",
+    "reason": "checkRoundEvents пропустил — события непустые"
+  },
+  {
+    "file": "src/server/memory-storage.ts",
+    "code": "if (key === null) throw new StorageError(`${this.#name}: у записи нет ключа ${keyPath ?? ''}`);",
+    "column": 94,
+    "end": 96,
+    "mutator": "StringLiteral",
+    "replacement": "\"Stryker was here!\"",
+    "reason": "keyPath null только у карантина с автоключом: ключ там есть всегда, и сообщения без пути не бывает"
+  },
+  {
+    "file": "src/server/memory-storage.ts",
+    "code": "if (keyPath === null) this.#nextKey += 1;",
+    "column": 9,
+    "end": 25,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "счётчик автоключа читают только хранилища без keyPath"
+  },
+  {
+    "file": "src/server/memory-storage.ts",
+    "code": "if (found === undefined) throw new StorageError(`миграция: индекс ${index} на несозданном ${store}`);",
+    "column": 13,
+    "end": 32,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "миграции — данные модуля: индекс создаётся после своего хранилища (порядок шагов держит schema.test), подставить миграцию нельзя"
+  },
+  {
+    "file": "src/server/memory-storage.ts",
+    "code": "if (found === undefined) throw new StorageError(`миграция: индекс ${index} на несозданном ${store}`);",
+    "column": 57,
+    "end": 108,
+    "mutator": "StringLiteral",
+    "replacement": "``",
+    "reason": "недостижимо: индекс создаётся после своего хранилища"
+  },
+  {
+    "file": "src/server/book.ts",
+    "code": "for (let index = 0; index < this.size; index++) {",
+    "column": 25,
+    "end": 42,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= this.size",
+    "reason": "вес за длиной — undefined → 0, запись накопленного за длиной не происходит"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof value !== 'object' || value === null || seen.has(value)) return null;",
+    "column": 7,
+    "end": 50,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "не объект и null отсекает и проверка даты в конце — не дата → null; проверка сужает тип для TypeScript seen.has"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof value !== 'object' || value === null || seen.has(value)) return null;",
+    "column": 7,
+    "end": 50,
+    "mutator": "LogicalOperator",
+    "replacement": "typeof value !== 'object' && value === null",
+    "reason": "не объект и null отсекает и проверка даты в конце — не дата → null; проверка сужает тип для TypeScript seen.has"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof value !== 'object' || value === null || seen.has(value)) return null;",
+    "column": 7,
+    "end": 32,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "не объект отсекает и проверка даты в конце: Object.prototype.toString примитива — не Date"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof value !== 'object' || value === null || seen.has(value)) return null;",
+    "column": 36,
+    "end": 50,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "null отсекает и проверка даты в конце: [object Null] — не Date"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (order !== 0) return order < 0 ? -1 : 1;",
+    "column": 27,
+    "end": 36,
+    "mutator": "EqualityOperator",
+    "replacement": "order <= 0",
+    "reason": "order здесь не 0: < и <= совпадают"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof a === 'number' || typeof a === 'string') return compareValues(a, b as number | string);",
+    "column": 7,
+    "end": 28,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "числа одного ранга сравнивает и последняя ветка: Number(a) — само число"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (typeof a === 'number' || typeof a === 'string') return compareValues(a, b as number | string);",
+    "column": 20,
+    "end": 28,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "числа одного ранга сравнивает и последняя ветка: Number(a) — само число"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (Array.isArray(a) && Array.isArray(b)) {",
+    "column": 7,
+    "end": 43,
+    "mutator": "LogicalOperator",
+    "replacement": "Array.isArray(a) || Array.isArray(b)",
+    "reason": "ранги равны: массивы оба или ни один"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (left !== null && right !== null) {",
+    "column": 7,
+    "end": 38,
+    "mutator": "LogicalOperator",
+    "replacement": "left !== null || right !== null",
+    "reason": "ранги равны: у двоичных bytesOf обоих не null, у дат — оба null"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (left !== null && right !== null) {",
+    "column": 7,
+    "end": 20,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "ранги равны: у двоичных bytesOf обоих не null, у дат — оба null"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "if (left !== null && right !== null) {",
+    "column": 24,
+    "end": 38,
+    "mutator": "ConditionalExpression",
+    "replacement": "true",
+    "reason": "ранги равны: у двоичных bytesOf обоих не null, у дат — оба null"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "const shared = Math.min(left.length, right.length);",
+    "column": 20,
+    "end": 55,
+    "mutator": "MethodExpression",
+    "replacement": "Math.max(left.length, right.length)",
+    "reason": "за коротким ключом — 0, а байт не меньше 0: короткий не больше, дальше решает длина — как с min"
+  },
+  {
+    "file": "src/server/key-order.ts",
+    "code": "for (let index = 0; index < shared; index++) {",
+    "nth": 2,
+    "column": 25,
+    "end": 39,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= shared",
+    "reason": "на индексе shared у короткого 0, а байт не меньше 0: дальше решает длина"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "if (raw === undefined) return { kind: 'absent' };",
+    "nth": 1,
+    "column": 7,
+    "end": 24,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "undefined приходит только из read(roundId): «испорчен без цельной части» ведёт как absent — null, ROUND_NOT_FOUND; причина в карантин не попадает"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "return upper < 1 ? Promise.resolve([]) : this.#storage.keysByIndex('rounds', 'seq', { lower: 1, upper });",
+    "column": 40,
+    "end": 42,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "снять несуществующий раунд — пустая операция и в памяти, и в IndexedDB"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "if (raw === undefined) return { kind: 'absent' };",
+    "nth": 3,
+    "column": 35,
+    "end": 53,
+    "mutator": "ObjectLiteral",
+    "replacement": "{}",
+    "reason": "вызывающие отличают только ok и damaged: запись без вида — как absent"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "if (raw === undefined) return { kind: 'absent' };",
+    "nth": 3,
+    "column": 43,
+    "end": 51,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "вызывающие отличают только ok и damaged: запись без вида — как absent"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "if (raw === undefined) return { kind: 'absent' };",
+    "nth": 4,
+    "column": 33,
+    "end": 51,
+    "mutator": "ObjectLiteral",
+    "replacement": "{}",
+    "reason": "вызывающие отличают только ok и damaged: запись без вида — как absent"
+  },
+  {
+    "file": "src/server/repositories.ts",
+    "code": "if (raw === undefined) return { kind: 'absent' };",
+    "nth": 4,
+    "column": 41,
+    "end": 49,
+    "mutator": "StringLiteral",
+    "replacement": "\"\"",
+    "reason": "вызывающие отличают только ok и damaged: запись без вида — как absent"
+  },
+  {
+    "file": "src/server/fairness.ts",
+    "code": "for (let index = 0; index < bytes.length; index++) bytes[index] = Number.parseInt(hex.slice(2 * index, 2 * index + 2), 16);",
+    "column": 23,
+    "end": 43,
+    "mutator": "EqualityOperator",
+    "replacement": "index <= bytes.length",
+    "reason": "байт за длиной: parseInt пустой строки — NaN, запись за длиной не происходит"
+  },
+  {
+    "file": "src/server/forced-round-source.ts",
+    "code": "readonly #leaked: number[][] = [];",
+    "column": 34,
+    "end": 36,
+    "mutator": "ArrayDeclaration",
+    "replacement": "[\"Stryker was here\"]",
+    "reason": "контроль утечки виден только кучей воркера: держит npm run measure (контроль ?memleak=1 обязан покраснеть)"
+  },
+  {
+    "file": "src/server/forced-round-source.ts",
+    "code": "leak(): void {",
+    "column": 16,
+    "end": 4,
+    "mutator": "BlockStatement",
+    "replacement": "{}",
+    "reason": "контроль утечки виден только кучей воркера: держит npm run measure (контроль ?memleak=1 обязан покраснеть)"
+  },
+  {
+    "file": "src/server/forced-round-source.ts",
+    "code": "this.#leaked.push(new Array<number>(LEAK_DOUBLES).fill(0.5));",
+    "column": 5,
+    "end": 66,
+    "mutator": "CallExpression",
+    "replacement": ";",
+    "reason": "контроль утечки виден только кучей воркера: держит npm run measure (контроль ?memleak=1 обязан покраснеть)"
+  },
+  {
+    "file": "src/server/forced-round-source.ts",
+    "code": "this.#leaked.push(new Array<number>(LEAK_DOUBLES).fill(0.5));",
+    "column": 23,
+    "end": 54,
+    "mutator": "ArrayDeclaration",
+    "replacement": "new Array()",
+    "reason": "контроль утечки виден только кучей воркера: держит npm run measure (контроль ?memleak=1 обязан покраснеть)"
+  },
+  {
+    "file": "src/server/memory-lock.ts",
+    "code": "void tail.then(() => {",
+    "column": 26,
+    "end": 6,
+    "mutator": "BlockStatement",
+    "replacement": "{}",
+    "reason": "очистка карты хвостов — память: следующая задача ждёт разрешённого хвоста так же, как Promise.resolve()"
+  },
+  {
+    "file": "src/server/memory-lock.ts",
+    "code": "if (this.#tails.get(name) === tail) this.#tails.delete(name);",
+    "column": 11,
+    "end": 41,
+    "mutator": "ConditionalExpression",
+    "replacement": "false",
+    "reason": "очистка карты хвостов — память: следующая задача ждёт разрешённого хвоста так же, как Promise.resolve()"
+  },
+  {
+    "file": "src/server/memory-lock.ts",
+    "code": "if (this.#tails.get(name) === tail) this.#tails.delete(name);",
+    "column": 43,
+    "end": 68,
+    "mutator": "CallExpression",
+    "replacement": ";",
+    "reason": "очистка карты хвостов — память: следующая задача ждёт разрешённого хвоста так же, как Promise.resolve()"
+  }
+]

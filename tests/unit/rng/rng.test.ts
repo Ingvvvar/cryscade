@@ -115,6 +115,7 @@ describe('сид — только целое от 0 до 2^32 − 1', () => {
 
   it.each(BAD)('SplitMix32(%s) бросает', (seed) => {
     expect(() => new SplitMix32(seed)).toThrow(RangeError);
+    expect(() => new SplitMix32(seed)).toThrow(`seed: ожидается целое от 0 до 2^32 − 1, получено ${String(seed)}`);
   });
 
   it.each(BAD)('Xoshiro128ss и reseed с сидом %s бросают', (seed) => {

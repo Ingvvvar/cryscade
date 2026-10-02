@@ -4,7 +4,7 @@ import type { ShownRound } from '../../src/client/index.ts';
 import type { SceneLabels } from '../../src/render/renderer.ts';
 import { FORCED_SEEDS } from '../../src/ui/forced-rounds.ts';
 import { MoneyFormat } from '../../src/ui/money-format.ts';
-import { gameSnapshot, readStorage, waitForState, type StoredState } from '../support/game-page.ts';
+import { dialogClosed, gameSnapshot, readStorage, waitForState, type StoredState } from '../support/game-page.ts';
 import { decodePng } from '../support/png.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 import { fixtureShown, seedShown } from '../support/shown-rounds.ts';
@@ -82,7 +82,7 @@ test('настройки: английский — панель, суммы и �
   await expect(page.getByTestId('balance')).toHaveText('1,000.00');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dialogClosed(page);
   await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
   // Кадр большого выигрыша стоит с украинского: после смены языка — английская надпись и точка в той же сумме.
   const same = await redraw(page);
@@ -256,7 +256,7 @@ test('ставка с клавиатуры и из списка: + и − по �
   await page.getByRole('button', { name: 'Закрити' }).focus();
   await page.keyboard.press('+');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dialogClosed(page);
   await expect(bet).toHaveText('1,00');
   await bet.click();
   const levels = page.getByTestId('bet-levels');

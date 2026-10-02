@@ -61,6 +61,7 @@ describe('HMAC-SHA256: RFC 4231', () => {
 
   it('порт сервера на node:crypto даёт все семь; случай 5 — первые 128 бит', async () => {
     const crypto = new NodeCrypto();
+    expect(vectors).toHaveLength(7);
     for (const vector of vectors) {
       const mac = toHex(await crypto.hmacSha256(fromHex(vector.key), fromHex(vector.data)));
       expect(mac.slice(0, vector.mac.length), vector.name).toBe(vector.mac);
@@ -82,8 +83,8 @@ describe('выбор по байтам', () => {
   it('hex туда и обратно; не hex — ошибка', () => {
     expect(toHex(Uint8Array.from([0, 15, 16, 255]))).toBe('000f10ff');
     expect(fromHex('000f10ff')).toStrictEqual(Uint8Array.from([0, 15, 16, 255]));
-    expect(() => fromHex('abc')).toThrow(RangeError);
-    expect(() => fromHex('AB')).toThrow(RangeError);
+    expect(() => fromHex('abc')).toThrow(new RangeError('не hex'));
+    expect(() => fromHex('AB')).toThrow(new RangeError('не hex'));
   });
 
   // W = 10: 2^64 mod 10 = 6, граница — 2^64 − 6. Значение 2^64 − 7 даёт (6 − 7) mod 10 = 9, 2^64 − 6 и выше — отброс.
@@ -105,10 +106,18 @@ describe('выбор по байтам', () => {
     expect(pickValue(digest(value), total)).toBe(expected);
   });
 
-  it('сумма весов не целое от 1 и дайджест короче 8 байт — ошибка', () => {
-    expect(() => pickValue(new Uint8Array(32), 0)).toThrow(RangeError);
-    expect(() => pickValue(new Uint8Array(32), 1.5)).toThrow(RangeError);
-    expect(() => pickValue(new Uint8Array(7), 10)).toThrow(RangeError);
+  it('сумма весов не целое от 1 и дайджест короче 8 байт — ошибка с причиной; ровно 8 байт — годно', () => {
+    const problem = (bytes: Uint8Array, total: number): string => {
+      try {
+        pickValue(bytes, total);
+      } catch (error) {
+        return error instanceof RangeError ? error.message : `не RangeError: ${String(error)}`;
+      }
+      return 'не бросило';
+    };
+    expect([0, -1, 1.5].map((total) => problem(new Uint8Array(32), total))).toStrictEqual(['сумма весов 0', 'сумма весов -1', 'сумма весов 1.5']);
+    expect(problem(new Uint8Array(7), 10)).toBe('дайджест короче 8 байт');
+    expect(pickValue(digest(0x0102_0304_0506_0708n).subarray(0, 8), 10)).toBe(Number(0x0102_0304_0506_0708n % 10n));
   });
 
   const book = (): Book => {

@@ -56,19 +56,25 @@ describe('схема IndexedDB', () => {
     expect(fromLatest.calls).toStrictEqual([]);
   });
 
+  it('до версии 1 — только её шаг: шагов выше целевой нет', () => {
+    const target = new RecordingTarget();
+    migrate(target, 0, 1);
+    expect(target.calls).toStrictEqual(V1);
+  });
+
   it.each([
-    ['версия выше нашей — игрок откатился на старую сборку', 3],
-    ['отрицательная', -1],
-    ['дробная', 0.5],
-  ])('%s: RangeError', (_what, from) => {
+    ['версия выше нашей — игрок откатился на старую сборку', 3, 'миграция: нет пути с версии 3 на 2'],
+    ['отрицательная', -1, 'миграция: нет пути с версии -1 на 2'],
+    ['дробная', 0.5, 'миграция: нет пути с версии 0.5 на 2'],
+  ])('%s: RangeError', (_what, from, message) => {
     expect(() => {
       migrate(new RecordingTarget(), from);
-    }).toThrow(RangeError);
+    }).toThrow(new RangeError(message));
   });
 
   it('целевая версия выше нашей — RangeError', () => {
     expect(() => {
       migrate(new RecordingTarget(), 0, DB_VERSION + 1);
-    }).toThrow(RangeError);
+    }).toThrow(new RangeError('миграция: нет пути с версии 0 на 3'));
   });
 });

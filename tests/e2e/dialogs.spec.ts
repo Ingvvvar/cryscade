@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
-import { labCall, readStorage, sentBodies, waitForState } from '../support/game-page.ts';
+import { dialogClosed, labCall, readStorage, sentBodies, waitForState } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 
 // Диалоги фазы 7 (§7, §11): правила и выплаты — из конфига модели, таблица 7 × 6 сверяется с литералами варианта 4 (§4.4);
@@ -113,7 +113,7 @@ async function open(page: Page, item: string): Promise<void> {
 
 async function close(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dialogClosed(page);
   await expect(page.getByRole('button', { name: 'Меню' })).toBeFocused();
 }
 

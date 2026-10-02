@@ -681,3 +681,155 @@ describe('запас до границы записей (2^52)', () => {
   });
 });
 
+
+describe('починка: границы, гонка и владелец ключа', () => {
+  const idle = wallet({ activeRoundId: null, balanceMinor: 100_000 });
+
+  it('nextSeq кошелька равен seq раунда — уже столкновение: починка, раунд в карантин с причиной', async () => {
+    const storage = await planted({ wallet: wallet({ nextSeq: 7 }) });
+    const rig = new Rig({ storage });
+    expect((await authenticated(rig))['notice']).toBe('reset');
+    expect(storage.snapshot()).toStrictEqual({
+      wallet: [['main', REPAIRED(13, 8)]],
+      rounds: [['r6', closed()]],
+      keys: [['k6', key('k6', 'r6')]],
+      quarantine: [[1, { store: 'rounds', raw: active(), reason: 'nextSeq кошелька не впереди раундов', at: T0 }]],
+      fairness: [],
+      secrets: [],
+    });
+  });
+
+  it('ревизия на 2^52 при активном раунде — закрытие раунда её перешло бы: починка', async () => {
+    const storage = await storageOf(wallet({ revision: RECORD_LIMIT }), [OLD6, active()], [key('k7', 'r7')]);
+    const rig = new Rig({ storage, seeds: LOSSES });
+    const result = await authenticated(rig);
+    expect([result['activeRound'], result['wallet']]).toStrictEqual([null, { balanceMinor: 100_000, revision: 1, notice: 'reset' }]);
+    expect(storage.snapshot().quarantine).toStrictEqual([
+      [1, { store: 'rounds', raw: active(), reason: 'кошельку не хватает запаса до границы записей', at: T0 }],
+    ]);
+  });
+
+  it('мусор выше годного и активный раунд кошелька — разные записи: в карантин уходят обе', async () => {
+    const stray = closed({ roundId: 'stray', idempotencyKey: 'qs', seq: RESUME_LIMIT + 1 });
+    const storage = await storageOf(wallet(), [OLD6, active(), stray], [key('k7', 'r7')]);
+    const rig = new Rig({ storage, seeds: LOSSES });
+    await authenticated(rig);
+    const snapshot = storage.snapshot();
+    expect(snapshot.rounds.map(([id]) => id)).toStrictEqual(['old6']);
+    expect(snapshot.keys).toStrictEqual([]);
+    expect(snapshot.quarantine.map(([, entry]) => (entry as { raw: { roundId: string } }).raw.roundId)).toStrictEqual(['stray', 'r7']);
+    expect(snapshot.wallet).toStrictEqual([['main', REPAIRED(13, 8)]]);
+  });
+
+  it('кошелька нет, а между чтением и починкой другая запись положила испорченный: конфликт, повтор чинит его с карантином', async () => {
+    const broken = wallet({ activeRoundId: null, balanceMinor: -1, revision: 3 });
+    const storage = await storageOf(null, [closed()], [key('k6', 'r6')]);
+    const rig = new Rig({ storage, wrap: (inner) => new PlantBeforeFirstCommit(inner, [{ op: 'put', store: 'wallet', value: broken }]) });
+    expect((await authenticated(rig))['notice']).toBe('reset');
+    expect(storage.snapshot().quarantine).toStrictEqual([[1, { store: 'wallet', raw: broken, reason: 'кошелёк: balanceMinor — не целое до 2^52', at: T0 }]]);
+    expect(storage.snapshot().wallet).toStrictEqual([['main', REPAIRED(4, 7)]]);
+  });
+
+  it('кошелёк-массив испорчен: ревизия починки — с нуля, из не-объекта поле не читается', async () => {
+    const storage = await storageOf(Object.assign([], { id: 'main', revision: 7 }) as unknown as Fields, [OLD6]);
+    const rig = new Rig({ storage, seeds: LOSSES });
+    expect((await authenticated(rig))['wallet']).toStrictEqual({ balanceMinor: 100_000, revision: 1, notice: 'reset' });
+  });
+
+  it('испорчены и запись ключа, и события его раунда — владелец находится по цельной части, события пересчитаны', async () => {
+    const storage = await planted({ wallet: idle, active: null, closed: closed({ events: null }), keys: [{ key: 'k6', roundId: 6 }] });
+    const rig = new Rig({ storage, seeds: LOSSES });
+    expect(await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k6' })).toStrictEqual({
+      ok: true,
+      result: {
+        round: { roundId: 'r6', betMinor: 100, payX100: 190, winMinor: 190, events: BASE.events, source: 'live', bookIndex: null, nonce: null },
+        balanceMinor: 99_810,
+        wallet: { balanceMinor: 100_000, revision: 12, notice: null },
+      },
+    });
+    expect(rig.entropy.used).toBe(0);
+  });
+
+  it('записи ключа нет, а раунд с этим ключом есть — раунды не ищутся: ставка новая', async () => {
+    const storage = await planted({ wallet: idle, active: null, keys: [] });
+    const rig = new Rig({ storage, seeds: LOSSES });
+    const played = await rig.send({ type: 'play', betMinor: 100, idempotencyKey: 'k6' });
+    expect(played.ok ? (played.result as { round: { roundId: string } }).round.roundId : played.error).toBe('r1');
+    expect(rig.entropy.used).toBe(1);
+  });
+
+  it('история пропускает испорченный раунд, а не падает на нём', async () => {
+    const storage = await planted({ wallet: idle, active: { ...closed({ roundId: 'r7', seq: 7, idempotencyKey: 'k7' }), seed: 'x' } });
+    const rig = new Rig({ storage });
+    expect(await rig.send({ type: 'history', limit: 10 })).toStrictEqual({
+      ok: true,
+      result: {
+        rounds: [
+          {
+            roundId: 'r6',
+            createdAt: EARLIER,
+            betMinor: 100,
+            payX100: 190,
+            winMinor: 190,
+            status: 'closed',
+            source: 'live',
+            bookIndex: null,
+            nonce: null,
+            commitment: null,
+            clientSeed: null,
+            secret: null,
+          },
+        ],
+      },
+    });
+  });
+
+  it('повтор раунда, чьи события не пересчитать (сторож сработал), — ROUND_NOT_FOUND, а не INTERNAL', async () => {
+    const storage = await planted({ wallet: idle, active: null, closed: closed({ events: null }) });
+    const rig = new Rig({ storage, maxRequests: 10 });
+    expect(await rig.send({ type: 'replay', round: 'r6' })).toStrictEqual({ ok: false, error: { code: 'ROUND_NOT_FOUND', roundId: 'r6' } });
+  });
+
+  it('повтор раунда, чью ставку × итог не посчитать точно, — ROUND_NOT_FOUND: раунд испорчен', async () => {
+    const storage = await planted({ wallet: idle, active: { ...closed({ roundId: 'r7', seq: 7, idempotencyKey: 'k7' }), betMinor: 47_406_311_867_058 } });
+    const rig = new Rig({ storage });
+    expect(await rig.send({ type: 'replay', round: 'r7' })).toStrictEqual({ ok: false, error: { code: 'ROUND_NOT_FOUND', roundId: 'r7' } });
+  });
+});
+
+/** Перед первой записью сервера другая вкладка успевает записать своё. */
+class PlantBeforeFirstCommit implements Storage {
+  readonly durable = true;
+  readonly #inner: MemoryStorage;
+  readonly #ops: readonly WriteOp[];
+  #done = false;
+
+  constructor(inner: MemoryStorage, ops: readonly WriteOp[]) {
+    this.#inner = inner;
+    this.#ops = ops;
+  }
+
+  get(...args: Parameters<Storage['get']>): ReturnType<Storage['get']> {
+    return this.#inner.get(...args);
+  }
+
+  keysByIndex(...args: Parameters<Storage['keysByIndex']>): ReturnType<Storage['keysByIndex']> {
+    return this.#inner.keysByIndex(...args);
+  }
+
+  lastByIndex(...args: Parameters<Storage['lastByIndex']>): ReturnType<Storage['lastByIndex']> {
+    return this.#inner.lastByIndex(...args);
+  }
+
+  descend(...args: Parameters<Storage['descend']>): ReturnType<Storage['descend']> {
+    return this.#inner.descend(...args);
+  }
+
+  async commit(batch: CommitBatch): Promise<CommitOutcome> {
+    if (!this.#done) {
+      this.#done = true;
+      await plant(this.#inner, this.#ops);
+    }
+    return this.#inner.commit(batch);
+  }
+}

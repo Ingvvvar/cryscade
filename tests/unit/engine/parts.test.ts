@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Board } from '../../../src/core/engine/board.ts';
 import { CellList } from '../../../src/core/engine/cell-list.ts';
 import { ClusterFinder, ClusterTable } from '../../../src/core/engine/clusters.ts';
 import { EventRecorder, RngSymbolSource, RoundEngine, SeededEngine, WeightedPicker, type SymbolSource } from '../../../src/core/engine/index.ts';
@@ -8,6 +9,27 @@ import { DEFAULT_CONFIG, type GameConfig } from '../../../src/core/model/config.
 import { Xoshiro128ss, type Random } from '../../../src/core/rng/index.ts';
 import { TEST_CONFIG } from '../../support/configs.ts';
 import { BACKGROUND, grid } from '../../support/scenario.ts';
+
+/** Проверки на входе бросают RangeError с текстом, по которому видно, какая проверка сработала. */
+function expectRangeError(action: () => unknown, message: string): void {
+  let caught: unknown = null;
+  try {
+    action();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(RangeError);
+  expect(caught instanceof Error ? caught.message : String(caught)).toBe(message);
+}
+
+/** Тот же массив с дырой на месте index: длина та же, элемента нет — код подставляет запасное значение. */
+function holey<T>(items: readonly T[], index: number): T[] {
+  const out = new Array<T>(items.length);
+  items.forEach((item, at) => {
+    if (at !== index) out[at] = item;
+  });
+  return out;
+}
 
 /** Отдаёт заданные слова по порядку и считает, сколько взято. Лишнее слово — ошибка. */
 class ScriptedRandom implements Random {
@@ -66,15 +88,16 @@ describe('WeightedPicker', () => {
   });
 
   it.each([
-    ['7 весов', [1, 1, 1, 1, 1, 1, 1]],
-    ['9 весов', [1, 1, 1, 1, 1, 1, 1, 1, 1]],
-    ['отрицательный', [1, 1, 1, -1, 1, 1, 1, 1]],
-    ['дробный', [1, 1, 1, 1.5, 1, 1, 1, 1]],
-    ['NaN', [1, 1, 1, Number.NaN, 1, 1, 1, 1]],
-    ['все нули', [0, 0, 0, 0, 0, 0, 0, 0]],
-    ['сумма больше 2^32', [2 ** 32, 1, 0, 0, 0, 0, 0, 0]],
-  ])('%s — RangeError', (_name, weights) => {
-    expect(() => new WeightedPicker(weights)).toThrow(RangeError);
+    ['7 весов', [1, 1, 1, 1, 1, 1, 1], 'веса: ожидается 8, получено 7'],
+    ['9 весов', [1, 1, 1, 1, 1, 1, 1, 1, 1], 'веса: ожидается 8, получено 9'],
+    ['отрицательный', [1, 1, 1, -1, 1, 1, 1, 1], 'вес символа 3: ожидается неотрицательное целое, получено -1'],
+    ['дробный', [1, 1, 1, 1.5, 1, 1, 1, 1], 'вес символа 3: ожидается неотрицательное целое, получено 1.5'],
+    ['NaN', [1, 1, 1, Number.NaN, 1, 1, 1, 1], 'вес символа 3: ожидается неотрицательное целое, получено NaN'],
+    ['дыра в массиве', holey([1, 1, 1, 1, 1, 1, 1, 1], 3), 'вес символа 3: ожидается неотрицательное целое, получено -1'],
+    ['все нули', [0, 0, 0, 0, 0, 0, 0, 0], 'сумма весов: ожидается от 1 до 2^32, получено 0'],
+    ['сумма больше 2^32', [2 ** 32, 1, 0, 0, 0, 0, 0, 0], 'сумма весов: ожидается от 1 до 2^32, получено 4294967297'],
+  ])('%s — RangeError', (_name, weights, message) => {
+    expectRangeError(() => new WeightedPicker(weights), message);
   });
 });
 
@@ -146,20 +169,36 @@ describe('Paytable', () => {
 
   const broken = (patch: Partial<GameConfig>): GameConfig => ({ ...TEST_CONFIG, ...patch });
   const rows = TEST_CONFIG.paytableX100;
+  const CLUSTER_MIN = 'clusterMin: ожидается целое от 2 до 49, получено';
+  const BANDS = 'полосы — целые по возрастанию до 49';
+  const VALUE = 'ожидается целое от 0 до 2^32 − 1';
   it.each([
-    ['clusterMin 1', broken({ clusterMin: 1, sizeBands: [1, 7, 9, 11, 13, 15] })],
-    ['clusterMin 50', broken({ clusterMin: 50 })],
-    ['clusterMin 4.5', broken({ clusterMin: 4.5 })],
-    ['полосы не с clusterMin', broken({ sizeBands: [6, 7, 9, 11, 13, 15] })],
-    ['полосы не по возрастанию', broken({ sizeBands: [5, 7, 7, 11, 13, 15] })],
-    ['полоса за 49', broken({ sizeBands: [5, 7, 9, 11, 13, 50] })],
-    ['6 строк таблицы', broken({ paytableX100: rows.slice(0, 6) })],
-    ['строка из 5 значений', broken({ paytableX100: [rows[0]?.slice(0, 5) ?? [], ...rows.slice(1)] })],
-    ['отрицательная выплата', broken({ paytableX100: [[-20, 40, 80, 150, 300, 600], ...rows.slice(1)] })],
-    ['дробная выплата', broken({ paytableX100: [[20.5, 40, 80, 150, 300, 600], ...rows.slice(1)] })],
-    ['выплата больше u32', broken({ paytableX100: [[2 ** 32, 40, 80, 150, 300, 600], ...rows.slice(1)] })],
-  ])('%s — RangeError', (_name, config) => {
-    expect(() => new Paytable(config)).toThrow(RangeError);
+    ['clusterMin 1', broken({ clusterMin: 1, sizeBands: [1, 7, 9, 11, 13, 15] }), `${CLUSTER_MIN} 1`],
+    ['clusterMin 50', broken({ clusterMin: 50 }), `${CLUSTER_MIN} 50`],
+    ['clusterMin 4.5', broken({ clusterMin: 4.5 }), `${CLUSTER_MIN} 4.5`],
+    ['полосы не с clusterMin', broken({ sizeBands: [6, 7, 9, 11, 13, 15] }), 'sizeBands: первая полоса должна начинаться с clusterMin = 5'],
+    ['полосы не по возрастанию', broken({ sizeBands: [5, 7, 7, 11, 13, 15] }), `sizeBands[2]: ${BANDS}`],
+    ['полоса за 49', broken({ sizeBands: [5, 7, 9, 11, 13, 50] }), `sizeBands[5]: ${BANDS}`],
+    ['6 строк таблицы', broken({ paytableX100: rows.slice(0, 6) }), 'paytableX100: ожидается 7 строк, получено 6'],
+    ['8 строк таблицы', broken({ paytableX100: [...rows, rows[0] ?? []] }), 'paytableX100: ожидается 7 строк, получено 8'],
+    ['дыра в таблице', broken({ paytableX100: holey(rows, 0) }), 'paytableX100[0]: ожидается 6 значений'],
+    ['строка из 5 значений', broken({ paytableX100: [rows[0]?.slice(0, 5) ?? [], ...rows.slice(1)] }), 'paytableX100[0]: ожидается 6 значений'],
+    ['отрицательная выплата', broken({ paytableX100: [[-20, 40, 80, 150, 300, 600], ...rows.slice(1)] }), `paytableX100[0][0]: ${VALUE}`],
+    ['дробная выплата', broken({ paytableX100: [[20.5, 40, 80, 150, 300, 600], ...rows.slice(1)] }), `paytableX100[0][0]: ${VALUE}`],
+    ['выплата больше u32', broken({ paytableX100: [[2 ** 32, 40, 80, 150, 300, 600], ...rows.slice(1)] }), `paytableX100[0][0]: ${VALUE}`],
+    ['дыра в строке', broken({ paytableX100: [holey([20, 40, 80, 150, 300, 600], 0), ...rows.slice(1)] }), `paytableX100[0][0]: ${VALUE}`],
+  ])('%s — RangeError', (_name, config, message) => {
+    expectRangeError(() => new Paytable(config), message);
+  });
+
+  // Границы допустимого: кластер от 2 до 49 клеток, полоса может начинаться с 49, выплата — до 2^32 − 1.
+  it.each([
+    ['clusterMin 2', broken({ clusterMin: 2, sizeBands: [2, 7, 9, 11, 13, 15] }), 0, 2, 20],
+    ['clusterMin 49, одна полоса', broken({ clusterMin: 49, sizeBands: [49], paytableX100: rows.map((row) => row.slice(0, 1)) }), 0, 49, 20],
+    ['полоса с 49', broken({ sizeBands: [5, 7, 9, 11, 13, 49] }), 0, 49, 600],
+    ['выплата 2^32 − 1', broken({ paytableX100: [[2 ** 32 - 1, 40, 80, 150, 300, 600], ...rows.slice(1)] }), 0, 5, 2 ** 32 - 1],
+  ])('%s — допустимо', (_name, config, symbol, size, payX100) => {
+    expect(new Paytable(config).payX100(symbol, size)).toBe(payX100);
   });
 });
 
@@ -208,7 +247,16 @@ describe('ClusterFinder', () => {
   });
 
   it.each([1, 50, 2.5])('clusterMin %s — RangeError', (clusterMin) => {
-    expect(() => new ClusterFinder(clusterMin)).toThrow(RangeError);
+    expectRangeError(() => new ClusterFinder(clusterMin), `clusterMin: ожидается целое от 2 до 49, получено ${String(clusterMin)}`);
+  });
+
+  it('clusterMin 2 и 49 допустимы: пара — кластер при 2, вся сетка — при 49', () => {
+    const pair = grid(['DDCESRQ', ...BACKGROUND.slice(1)]);
+    const table = new ClusterTable();
+    expect(new ClusterFinder(2).find({ symbolAt: (cell) => pair[cell] ?? -1 }, table)).toBe(1);
+    expect([table.symbol(0), table.size(0)]).toStrictEqual([6, 2]);
+    expect(new ClusterFinder(49).find({ symbolAt: () => 4 }, table)).toBe(1);
+    expect(table.size(0)).toBe(49);
   });
 });
 
@@ -262,12 +310,12 @@ describe('SpotField', () => {
 describe('CellList', () => {
   it('сверх ёмкости — RangeError, а не молчаливая запись мимо', () => {
     const list = cellsOf(1, 2);
-    expect(() => {
+    expectRangeError(() => {
       const small = new CellList(2);
       small.push(1);
       small.push(2);
       small.push(3);
-    }).toThrow(RangeError);
+    }, 'CellList: ёмкость 2 исчерпана');
     list.clear();
     expect(list.count).toBe(0);
   });
@@ -282,15 +330,20 @@ describe('RoundEngine: проверки на входе', () => {
   const broken = (patch: Partial<GameConfig>): GameConfig => ({ ...TEST_CONFIG, ...patch });
 
   it.each([
-    ['пустая таблица фриспинов', broken({ freeSpinsByScatters: [] })],
-    ['отрицательные фриспины', broken({ freeSpinsByScatters: [0, 0, 0, -10] })],
-    ['дробные фриспины', broken({ freeSpinsByScatters: [0, 0, 0, 10.5] })],
-    ['ретриггер от 0 ядер', broken({ retrigger: { min: 0, add: 5 } })],
-    ['ретриггер +0', broken({ retrigger: { min: 3, add: 0 } })],
-    ['кап 0', broken({ capX100: 0 })],
-    ['дробный кап', broken({ capX100: 1.5 })],
-  ])('%s — RangeError', (_name, config) => {
-    expect(() => new RoundEngine(config, never, new EventRecorder())).toThrow(RangeError);
+    ['пустая таблица фриспинов', broken({ freeSpinsByScatters: [] }), 'freeSpinsByScatters: пустая таблица'],
+    ['отрицательные фриспины', broken({ freeSpinsByScatters: [0, 0, 0, -10] }), 'freeSpinsByScatters[3]: ожидается неотрицательное целое, получено -10'],
+    ['дробные фриспины', broken({ freeSpinsByScatters: [0, 0, 0, 10.5] }), 'freeSpinsByScatters[3]: ожидается неотрицательное целое, получено 10.5'],
+    ['дыра в таблице фриспинов', broken({ freeSpinsByScatters: holey([0, 0, 0, 10], 3) }), 'freeSpinsByScatters[3]: ожидается неотрицательное целое, получено -1'],
+    ['ретриггер от 0 ядер', broken({ retrigger: { min: 0, add: 5 } }), 'retrigger: min и add — целые от 1, получено 0 и 5'],
+    ['ретриггер +0', broken({ retrigger: { min: 3, add: 0 } }), 'retrigger: min и add — целые от 1, получено 3 и 0'],
+    ['кап 0', broken({ capX100: 0 }), 'capX100: ожидается целое от 1, получено 0'],
+    ['дробный кап', broken({ capX100: 1.5 }), 'capX100: ожидается целое от 1, получено 1.5'],
+  ])('%s — RangeError', (_name, config, message) => {
+    expectRangeError(() => new RoundEngine(config, never, new EventRecorder()), message);
+  });
+
+  it('границы допустимого: ретриггер от 1 ядра на +1 спин, кап 1', () => {
+    expect(() => new RoundEngine(broken({ retrigger: { min: 1, add: 1 }, capX100: 1 }), never, new EventRecorder())).not.toThrow();
   });
 
   // Плохой символ — в одной клетке мёртвой сетки: без проверки раунд закончился бы молча, а не бесконечным каскадом.
@@ -298,7 +351,33 @@ describe('RoundEngine: проверки на входе', () => {
     const cells = grid(BACKGROUND);
     const source: SymbolSource = { next: (_mode, cell) => (cell === 24 ? bad : (cells[cell] ?? 0)) };
     const engine = new RoundEngine(TEST_CONFIG, source, new EventRecorder());
-    expect(() => engine.play()).toThrow(RangeError);
+    expectRangeError(() => engine.play(), `источник вернул не символ для клетки 24: ${String(bad)}`);
+  });
+});
+
+describe('Board', () => {
+  // Столбец из пяти бриллиантов: клетки 17, 24, 31, 38, 45.
+  const COLUMN = grid(['QACESRQ', 'CESRQAC', 'SRQDCES', 'QACDSRQ', 'CESDQAC', 'SRQDCES', 'QACDSRQ']);
+  const QUIET = grid(BACKGROUND);
+  const from = (cells: readonly number[]): SymbolSource => ({ next: (_mode, cell) => cells[cell] ?? 0 });
+
+  it('новый спин — с чистого листа: взрыв без падения не переживает fill', () => {
+    const board = new Board();
+    board.fill(from(COLUMN), 'base');
+    const table = new ClusterTable();
+    new ClusterFinder(5).find(board, table);
+    board.explode(table);
+    expect(Array.from({ length: board.exploded.count }, (_, index) => board.exploded.cellAt(index))).toStrictEqual([17, 24, 31, 38, 45]);
+    board.fill(from(QUIET), 'base');
+    expect(board.exploded.count).toBe(0);
+    board.collapse(from(QUIET), 'base');
+    expect([board.moveCount, board.dropCount]).toStrictEqual([0, 0]);
+  });
+});
+
+describe('EventRecorder', () => {
+  it('до первого раунда событий нет', () => {
+    expect(new EventRecorder().events).toStrictEqual([]);
   });
 });
 

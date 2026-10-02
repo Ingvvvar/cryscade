@@ -23,6 +23,7 @@ describe('книга: выборки корзин', () => {
     expect(plain.counts.slice(0, 3)).toStrictEqual([17, 33, 0]);
     expect(plain.samples[0]?.map((item) => item.seed)).toStrictEqual(lowest(lossSeeds));
     expect(plain.samples[1]?.map((item) => item.seed)).toStrictEqual(lowest(winSeeds));
+    expect(plain.samples[1]).toHaveLength(4);
     expect(plain.samples[1]?.every((item) => item.payX100 === 95 && item.hash === seedHash(item.seed))).toBe(true);
   });
 

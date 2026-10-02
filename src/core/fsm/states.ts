@@ -76,6 +76,8 @@ export class BootingState implements ClientState {
         return to(new AuthenticatingState(false), AUTHENTICATE);
       case 'replayStart':
         return to(new ReplayingState('loading', null), REPLAY);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'spin':
       case 'retry':
       case 'takeOver':
@@ -95,6 +97,7 @@ export class BootingState implements ClientState {
       case 'tap':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -122,6 +125,8 @@ export class AuthenticatingState implements ClientState {
         return failed({ call: 'authenticate' }, this.holdsLock, event);
       case 'lockLost':
         return this.holdsLock ? displaced() : stay(this);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -138,6 +143,7 @@ export class AuthenticatingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -168,6 +174,8 @@ export class IdleState implements ClientState {
         return to(new RequestingState('lock', event.key, event.betMinor), TAKE_LOCK);
       case 'refill':
         return to(new RefillingState(), RESET_BALANCE);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'retry':
       case 'takeOver':
@@ -187,6 +195,7 @@ export class IdleState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -220,6 +229,8 @@ export class RequestingState implements ClientState {
         return to(new RequestingState('play', this.#key, this.#betMinor), { type: 'callPlay', key: this.#key, betMinor: this.#betMinor });
       case 'lockBusy':
         return to(new WaitingForTabState(false), QUEUE);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -239,6 +250,7 @@ export class RequestingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -256,6 +268,8 @@ export class RequestingState implements ClientState {
         return failed(this.#retry(), true, event);
       case 'lockLost':
         return displaced();
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -272,6 +286,7 @@ export class RequestingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -322,6 +337,8 @@ export class PresentingState implements ClientState {
         return to(this, SKIP);
       case 'lockLost':
         return displaced();
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -339,6 +356,7 @@ export class PresentingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -366,6 +384,8 @@ export class FeatureIntroState implements ClientState {
         return to(this.#back, RESUME);
       case 'lockLost':
         return displaced();
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -385,6 +405,7 @@ export class FeatureIntroState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -416,6 +437,8 @@ export class EndingState implements ClientState {
         return failed(this.#retry(), true, event);
       case 'lockLost':
         return displaced();
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -432,6 +455,7 @@ export class EndingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -473,6 +497,8 @@ export class RestoringState implements ClientState {
         return round === null ? stay(this) : to(this, SKIP);
       case 'lockLost':
         return round === null ? stay(this) : displaced();
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -488,6 +514,7 @@ export class RestoringState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -515,6 +542,8 @@ export class WaitingForTabState implements ClientState {
         return to(new AuthenticatingState(true), AUTHENTICATE);
       case 'takeOver':
         return this.#stealing ? stay(this) : to(new WaitingForTabState(true), STEAL);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -534,6 +563,7 @@ export class WaitingForTabState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -558,6 +588,8 @@ export class RefillingState implements ClientState {
       case 'unreachable':
       case 'unusable':
         return failed(REFILL, false, event);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'retry':
@@ -575,6 +607,7 @@ export class RefillingState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -605,6 +638,8 @@ export class ErrorState implements ClientState {
         return this.#again();
       case 'lockLost':
         return this.holdsLock ? to(new WaitingForTabState(false), QUEUE) : stay(this);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'spin':
       case 'takeOver':
@@ -624,6 +659,7 @@ export class ErrorState implements ClientState {
       case 'replayStart':
       case 'replayLoaded':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);
@@ -686,6 +722,8 @@ export class ReplayingState implements ClientState {
         return this.#stage === 'showing' ? to(new ReplayingState('held', this.#roundId)) : stay(this);
       case 'presented':
         return this.#stage === 'showing' ? to(new ReplayingState('done', this.#roundId)) : stay(this);
+      // Stryker disable StringLiteral,ConditionalExpression: эквивалентные мутанты — без метки событие уходит в default с
+      // тем же stay; список держит проверку never при компиляции, а не поведение
       case 'start':
       case 'replayStart':
       case 'spin':
@@ -700,6 +738,7 @@ export class ReplayingState implements ClientState {
       case 'refill':
       case 'refilled':
         return stay(this);
+      // Stryker restore StringLiteral,ConditionalExpression
       default:
         event satisfies never;
         return stay(this);

@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
-import { readStorage, waitForState } from '../support/game-page.ts';
+import { dialogClosed, readStorage, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 
 // Клавиатура (§11, решения 7, 9 и 10 фазы 7) — только Chromium: WebKit на macOS по Tab кнопки не обходит (настройка
@@ -86,7 +86,7 @@ test('строгий пресет только с клавиатуры: проб
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('radio', { name: 'English' })).toBeChecked();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dialogClosed(page);
   await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
   await expect(page.locator('.session-top [data-testid="session-net"]')).toBeVisible();
   expect(problems).toEqual([]);
@@ -107,7 +107,7 @@ test('каждый диалог с клавиатуры: Enter открывае�
     await expect(dialog).toBeVisible();
     await expect.poll(() => dialog.evaluate((node) => node.contains(document.activeElement)), { message: `${item}: фокус внутри` }).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await dialogClosed(page);
     await expect(page.getByRole('button', { name: 'Меню' })).toBeFocused();
   }
   expect(problems).toEqual([]);

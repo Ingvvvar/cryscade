@@ -18,6 +18,15 @@ export async function gameSnapshot(page: Page): Promise<ControllerSnapshot> {
   return snapshot;
 }
 
+/**
+ * Диалог закрыт до конца: элемента <dialog> больше нет. Роль dialog пропадает сразу по close(), а событие close — возврат
+ * фокуса на кнопку меню и снятие диалога — отдельная задача, и Chromium пускает ввод раньше неё: клавиши, нажатые сразу,
+ * доходили до игры, пока возврат фокуса ещё стоял в очереди, и он уводил фокус с того, куда их привели.
+ */
+export async function dialogClosed(page: Page): Promise<void> {
+  await expect(page.locator('dialog')).toHaveCount(0);
+}
+
 /** Ждать состояния машины по имени. */
 export async function waitForState(page: Page, name: ControllerSnapshot['state']['name'], timeout = 15_000): Promise<ControllerSnapshot> {
   await expect

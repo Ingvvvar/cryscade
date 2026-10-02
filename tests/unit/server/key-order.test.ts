@@ -44,6 +44,13 @@ describe('toKey', () => {
     const view = new Uint8Array([7, 8, 9, 10]).subarray(1, 3);
     expect(describeKey(toKey(view))).toStrictEqual({ binary: [8, 9], as: 'buffer' });
   });
+
+  it('отсоединённый буфер — не ключ: его байтов больше нет', () => {
+    const buffer = new ArrayBuffer(4);
+    buffer.transfer();
+    expect(buffer.detached).toBe(true);
+    expect(toKey(buffer)).toBeNull();
+  });
 });
 
 describe('compareKeys', () => {
@@ -83,5 +90,11 @@ describe('keyId', () => {
 
   it('строка с запятой и скобкой внутри массива не сливается с двумя строками', () => {
     expect(keyId(['a","b'])).not.toBe(keyId(['a', 'b']));
+  });
+
+  it('байт — две цифры hex, элементы массива — через запятую: соседние ключи не склеиваются', () => {
+    const bytes = (...values: number[]): ArrayBuffer => Uint8Array.from(values).buffer;
+    expect([keyId(bytes(0x01, 0x23)), keyId(bytes(0x12, 0x03))]).toStrictEqual(['b0123', 'b1203']);
+    expect([keyId([bytes(0xab), new Date(5)]), keyId([bytes(0xab, 0xd5)])]).toStrictEqual(['a[bab,d5]', 'a[babd5]']);
   });
 });

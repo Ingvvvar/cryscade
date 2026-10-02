@@ -275,6 +275,29 @@ describe('отказы', () => {
     expect((await rig.send(play(20, 'k2'))).ok).toBe(true);
   });
 
+  it('баланс ровно в ставку — хватает: после ставки ноль', async () => {
+    const storage = new MemoryStorage({ durable: true });
+    await plant(storage, [
+      { op: 'put', store: 'wallet', value: { id: 'main', balanceMinor: 100, activeRoundId: null, nextSeq: 1, revision: 4, resetSeq: 1 } },
+    ]);
+    const rig = new Rig({ storage, seeds: [1] });
+    expect(await rig.send(play(100, 'k1'))).toMatchObject({ ok: true, result: { balanceMinor: 0, wallet: { balanceMinor: 0, revision: 5 } } });
+  });
+
+  it('каждый запрос — под замком кошелька cryscade-wallet: по этому имени вкладки делят одного писателя (§6.3)', async () => {
+    const names: string[] = [];
+    const lock: Lock = {
+      withLock: (name, task) => {
+        names.push(name);
+        return task();
+      },
+    };
+    const rig = new Rig({ seeds: [1], lock });
+    await rig.send(AUTHENTICATE);
+    await rig.send(play(100, 'k1'));
+    expect(names).toStrictEqual(['cryscade-wallet', 'cryscade-wallet']);
+  });
+
   it('endRound неизвестного раунда — ROUND_NOT_FOUND', async () => {
     const rig = new Rig();
     expect(await rig.send(endRound('r9'))).toStrictEqual({ ok: false, error: { code: 'ROUND_NOT_FOUND', roundId: 'r9' } });

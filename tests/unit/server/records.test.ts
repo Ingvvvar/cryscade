@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RECORD_LIMIT, RESUME_LIMIT, checkKey, checkRound, checkRoundCore, checkWallet, isResumableSeq, isSeq } from '../../../src/server/records.ts';
+import { RECORD_LIMIT, RESUME_LIMIT, checkFairness, checkKey, checkRound, checkRoundCore, checkSecret, checkWallet, isResumableSeq, isSeq } from '../../../src/server/records.ts';
 import { fixtureRound } from '../../support/fixture-rounds.ts';
 
 // Гарды записей IndexedDB: каждое правило — своя литеральная поломка с точным текстом проблемы.
@@ -23,6 +23,11 @@ const ROUND = {
 };
 const CLOSED = { ...ROUND, status: 'closed', balanceAfterEnd: 99_995 };
 const KEY = { key: 'k7', roundId: 'r7', betMinor: 100 };
+const COMMITMENT = 'ab'.repeat(32);
+const BOOK = { ...ROUND, source: 'book', bookIndex: 79_999, nonce: 0, commitment: COMMITMENT, clientSeed: 'player1' };
+const FORCED = { ...ROUND, source: 'forced', bookIndex: null, nonce: null, commitment: null, clientSeed: null };
+const FAIRNESS = { id: 'main', commitment: COMMITMENT, clientSeed: 'player1', nonce: 3 };
+const SECRET = { commitment: COMMITMENT, secret: 'cd'.repeat(32), createdAt: 1, revealedAt: null };
 
 describe('граница записей', () => {
   it('2^52 — независимо от кода: 4 503 599 627 370 496', () => {
@@ -115,6 +120,60 @@ describe('checkRoundCore и checkRound', () => {
     [{ ...ROUND, seed: 'x' }, 'раунд: сид — не u32'],
   ])('checkRound %#', (round, problem) => {
     expect(checkRound(round)).toBe(problem);
+  });
+});
+
+describe('поля честности раунда v2', () => {
+  it.each([
+    [BOOK, null],
+    [{ ...BOOK, bookIndex: 0, nonce: 2 ** 52 }, null],
+    [FORCED, null],
+    [{ ...FORCED, source: 'live' }, null],
+    [{ ...ROUND, bookIndex: null }, 'раунд: поля честности без source'],
+    [{ ...ROUND, nonce: null }, 'раунд: поля честности без source'],
+    [{ ...ROUND, commitment: null }, 'раунд: поля честности без source'],
+    [{ ...ROUND, clientSeed: null }, 'раунд: поля честности без source'],
+    [{ ...BOOK, bookIndex: -1 }, 'раунд: bookIndex — не индекс книги'],
+    [{ ...BOOK, bookIndex: 80_000 }, 'раунд: bookIndex — не индекс книги'],
+    [{ ...BOOK, nonce: -1 }, 'раунд: nonce — не целое до 2^52'],
+    [{ ...BOOK, nonce: 2 ** 52 + 1 }, 'раунд: nonce — не целое до 2^52'],
+    [{ ...BOOK, commitment: 'AB'.repeat(32) }, 'раунд: обязательство или сид игрока не по формату'],
+    [{ ...BOOK, clientSeed: 'a:b' }, 'раунд: обязательство или сид игрока не по формату'],
+    [{ ...FORCED, source: 'magic' }, 'раунд: source — не book, forced или live'],
+    [{ ...FORCED, bookIndex: 3 }, 'раунд: у раунда не из книги есть поля честности'],
+    [{ ...FORCED, nonce: 0 }, 'раунд: у раунда не из книги есть поля честности'],
+    [{ ...FORCED, commitment: COMMITMENT }, 'раунд: у раунда не из книги есть поля честности'],
+    [{ ...FORCED, clientSeed: 'player1' }, 'раунд: у раунда не из книги есть поля честности'],
+  ])('checkRoundCore %#', (round, problem) => {
+    expect(checkRoundCore(round)).toBe(problem);
+  });
+});
+
+describe('checkFairness и checkSecret', () => {
+  it.each([
+    [FAIRNESS, null],
+    [{ ...FAIRNESS, nonce: 2 ** 52 }, null],
+    [[], 'честность — не объект'],
+    [{ ...FAIRNESS, id: 'other' }, 'честность: чужой id'],
+    [{ ...FAIRNESS, commitment: 'ab' }, 'честность: обязательство — не 64 знака hex'],
+    [{ ...FAIRNESS, clientSeed: '' }, 'честность: сид игрока не по формату'],
+    [{ ...FAIRNESS, nonce: -1 }, 'честность: nonce — не целое до 2^52'],
+    [{ ...FAIRNESS, nonce: 2 ** 52 + 1 }, 'честность: nonce — не целое до 2^52'],
+  ])('checkFairness %#', (fairness, problem) => {
+    expect(checkFairness(fairness)).toBe(problem);
+  });
+
+  it.each([
+    [SECRET, null],
+    [{ ...SECRET, createdAt: 0, revealedAt: 0 }, null],
+    ['секрет', 'секрет — не объект'],
+    [{ ...SECRET, commitment: 'ab' }, 'секрет: обязательство или секрет — не 64 знака hex'],
+    [{ ...SECRET, secret: 'CD'.repeat(32) }, 'секрет: обязательство или секрет — не 64 знака hex'],
+    [{ ...SECRET, createdAt: -1 }, 'секрет: createdAt — не целое'],
+    [{ ...SECRET, revealedAt: -1 }, 'секрет: revealedAt — не целое и не null'],
+    [{ ...SECRET, revealedAt: '5' }, 'секрет: revealedAt — не целое и не null'],
+  ])('checkSecret %#', (secret, problem) => {
+    expect(checkSecret(secret)).toBe(problem);
   });
 });
 

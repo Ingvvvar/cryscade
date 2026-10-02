@@ -17,3 +17,6 @@ playwright/.cache/
 # Отчёты
 coverage/
 reports/
+
+# Песочница StrykerJS (npm run mutation)
+.stryker-tmp/

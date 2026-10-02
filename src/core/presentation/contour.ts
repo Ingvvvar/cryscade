@@ -97,14 +97,13 @@ export function clusterContour(cells: readonly number[]): ContourRing[] {
   for (const start of links.keys()) {
     if (visited.has(start)) continue;
     const loop: number[] = [];
-    let previous = -1;
     let current = start;
     while (!visited.has(current)) {
       visited.add(current);
       loop.push(current);
-      const next = (links.get(current) ?? []).find((candidate) => candidate !== previous && !visited.has(candidate));
+      // Предыдущая точка уже посещена: шаг назад отсекает то же условие.
+      const next = (links.get(current) ?? []).find((candidate) => !visited.has(candidate));
       if (next === undefined) break;
-      previous = current;
       current = next;
     }
     rings.push(simplified(loop.map((k) => coords.get(k) ?? [0, 0])));

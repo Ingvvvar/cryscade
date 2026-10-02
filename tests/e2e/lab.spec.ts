@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
-import { readStorage, reconciled } from '../support/game-page.ts';
+import { dialogClosed, readStorage, reconciled } from '../support/game-page.ts';
 import { collectConsole } from '../support/page-probe.ts';
 
 // Лаборатория сети в прод-сборке (§6.5, решение 2 фазы 7): зонда нет — игра видна только через DOM и IndexedDB.
@@ -39,7 +39,7 @@ async function labAction(page: Page, action: string, done: string): Promise<void
   await page.getByRole('button', { name: action }).click();
   await expect(page.getByTestId('lab-status')).toHaveText(done);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await dialogClosed(page);
 }
 
 test('загублена відповідь на play: гра повторює з тим самим ключем — один раунд, одне списання', async ({ page }) => {
@@ -47,12 +47,17 @@ test('загублена відповідь на play: гра повторює �
   const { problems } = collectConsole(page);
   await page.goto('./');
   await idle(page);
-  await labAction(page, 'Загубити наступну відповідь', 'Наступна відповідь сервера загубиться — гра повторить запит з тим самим ключем');
+  // «Загубити» теряет первый ответ с id; книгу страница запрашивает сама после первого кадра, и пока ответ на неё в пути,
+  // потерялся бы он, а не play. Сначала целый раунд: play ждёт ту же книгу и отвечает после неё.
   await page.getByRole('button', { name: 'Спін' }).click();
   await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(1);
   await idle(page);
+  await labAction(page, 'Загубити наступну відповідь', 'Наступна відповідь сервера загубиться — гра повторить запит з тим самим ключем');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await expect.poll(() => closedRounds(page), { timeout: 30_000 }).toBe(2);
+  await idle(page);
   const stored = await readStorage(page);
-  expect([stored.rounds.length, stored.keys]).toStrictEqual([1, 1]);
+  expect([stored.rounds.length, stored.keys]).toStrictEqual([2, 2]);
   expect(stored.wallet?.balanceMinor).toBe(reconciled(stored));
   expect(problems).toEqual([]);
 });
@@ -104,10 +109,26 @@ test('затримка завершення раунду: раунд актив�
   await page.goto('./');
   await idle(page);
   await labAction(page, 'Затримати наступне завершення раунду', 'Наступне завершення раунду чекатиме, доки його не відпустять');
-  await page.getByRole('button', { name: 'Спін' }).click();
+  const spin = page.getByRole('button', { name: 'Спін' });
+  await spin.click();
   await expect.poll(async () => (await readStorage(page)).wallet?.activeRoundId ?? null, { timeout: 30_000 }).not.toBeNull();
+  // «Відпустити» отпускает только уже задержанное: раньше конца показа endRound ещё не ушёл, и его задержат навсегда.
+  // Раунд из книги бывает фичей — её плашку проходит тап. Конец показа — «Спін» снова недоступен (endRound в пути).
+  await expect(spin).toBeEnabled();
+  const size = page.viewportSize();
+  if (size === null) throw new Error('нет размера окна');
+  await expect
+    .poll(
+      async () => {
+        if (await spin.isDisabled()) return true;
+        await page.mouse.click(size.width / 2, size.height / 2);
+        return false;
+      },
+      { timeout: 30_000, intervals: [500], message: 'показ не кончился' },
+    )
+    .toBe(true);
   // Показ кончился, endRound держит лаборатория: раунд активен, спин занят.
-  await expect(page.getByRole('button', { name: 'Спін' })).toHaveAttribute('aria-busy', 'true');
+  await expect(spin).toHaveAttribute('aria-busy', 'true');
   await page.waitForTimeout(1500);
   expect([await closedRounds(page), (await readStorage(page)).wallet?.activeRoundId === null]).toStrictEqual([0, false]);
   await labAction(page, 'Відпустити затримане', 'Затримане відпущено');

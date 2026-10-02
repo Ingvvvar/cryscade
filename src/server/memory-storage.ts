@@ -109,9 +109,13 @@ class MemoryStore {
     return entries.sort((a, b) => compareKeys(a.indexKey, b.indexKey) || compareKeys(a.key, b.key));
   }
 
-  /** Записи со значением индекса в диапазоне, по возрастанию. Значения и ключи — копии. */
+  /**
+   * Записи со значением индекса в диапазоне, по возрастанию. Значения и ключи — копии. Нижняя граница выше верхней —
+   * ошибка, как DataError у IDBKeyRange.bound: в IndexedDB такой запрос не дойдёт до хранилища.
+   */
   byIndex(index: IndexName, range: KeyRange): IndexedRecord[] {
     const bounds = { lower: keyOf(range.lower, 'нижняя граница'), upper: keyOf(range.upper, 'верхняя граница') };
+    if (compareKeys(bounds.lower, bounds.upper) > 0) throw new StorageError(`${this.#name}: нижняя граница диапазона выше верхней`);
     return this.#indexed(index)
       .filter((entry) => inRange(entry.indexKey, bounds))
       .map(copied);

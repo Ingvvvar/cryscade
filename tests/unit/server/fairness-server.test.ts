@@ -1,6 +1,7 @@
 import { createHash, createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../../src/core/model/config.ts';
+import { RECORD_LIMIT } from '../../../src/server/records.ts';
 import { ForcedRoundSource } from '../../../src/server/forced-round-source.ts';
 import { MemoryLock, MemoryStorage, RgsServer } from '../../../src/server/index.ts';
 import { fixtureRound } from '../../support/fixture-rounds.ts';
@@ -38,6 +39,22 @@ const RECORDS = [
   { seed: 0, payX100: 95, fixture: 'small-win' },
   { seed: 2, payX100: 190, fixture: 'base-win' },
 ] as const;
+
+/** Закрытый раунд v1 (живой, без полей честности): small-win, сид 0, ставка 100 → 95. */
+const HISTORY_ROUND = {
+  roundId: 'r6',
+  seq: 6,
+  idempotencyKey: 'k6',
+  betMinor: 100,
+  seed: 0,
+  payX100: 95,
+  winMinor: 95,
+  events: fixtureRound('small-win').events,
+  createdAt: T0,
+  status: 'closed',
+  balanceAfterBet: 99_900,
+  balanceAfterEnd: 99_995,
+};
 
 const AUTHENTICATE = { type: 'authenticate' };
 const play = (betMinor: number, idempotencyKey: string) => ({ type: 'play', betMinor, idempotencyKey });
@@ -316,16 +333,44 @@ describe('загрузка книги', () => {
   it('живой источник — честности нет: authenticate без неё, смена сида, загрузка книги и пересчёт — BAD_REQUEST', async () => {
     const rig = new Rig();
     expect((await result(rig, AUTHENTICATE))['fairness']).toBeNull();
-    for (const body of [
-      { type: 'rotateSeed' },
-      { type: 'setClientSeed', clientSeed: 'a' },
-      { type: 'loadBook' },
-      { type: 'replay', book: 0 },
-      { type: 'verify', secret: X0, clientSeed: 'a', nonce: 0 },
-    ]) {
-      const response = await rig.send(body);
-      expect(response.ok ? null : response.error.code, JSON.stringify(body)).toBe('BAD_REQUEST');
+    const NO_FAIRNESS = 'честности нет: источник раундов — живой';
+    const NO_BOOK = 'книги нет: источник раундов — живой';
+    for (const [body, message] of [
+      [{ type: 'rotateSeed' }, NO_FAIRNESS],
+      [{ type: 'setClientSeed', clientSeed: 'a' }, NO_FAIRNESS],
+      [{ type: 'loadBook' }, NO_BOOK],
+      [{ type: 'replay', book: 0 }, NO_BOOK],
+      [{ type: 'verify', secret: X0, clientSeed: 'a', nonce: 0 }, NO_BOOK],
+    ] as const) {
+      expect(await rig.send(body), JSON.stringify(body)).toStrictEqual({ ok: false, error: { code: 'BAD_REQUEST', message } });
     }
+  });
+
+  it('книгу грузят только те запросы, которым она нужна: loadBook и повтор записи — даже первыми', async () => {
+    const first = new ScriptedBookLoader();
+    expect(await result(bookRig(first), { type: 'loadBook' })).toStrictEqual({ records: 3 });
+    expect(first.calls).toBe(1);
+    const replayed = await result(bookRig(), { type: 'replay', book: 1 });
+    expect([replayed['bookIndex'], replayed['payX100'], replayed['events']]).toStrictEqual([1, 95, fixtureRound('small-win').events]);
+  });
+
+  it('книга не грузится — повтору раунда истории и запросу с чужим полем book это не мешает: их книга не нужна', async () => {
+    const broken = new ScriptedBookLoader(testBook(), 99);
+    const storage = new MemoryStorage({ durable: true });
+    await plant(storage, [{ op: 'put', store: 'rounds', value: HISTORY_ROUND }]);
+    const rig = new Rig({ storage, rounds: { kind: 'book', loader: broken } });
+    expect((await result(rig, { type: 'replay', round: 'r6' }))['events']).toStrictEqual(fixtureRound('small-win').events);
+    expect((await result(rig, { type: 'history', limit: 5, book: 0 }))['rounds']).toHaveLength(1);
+    expect(broken.calls).toBe(0);
+  });
+
+  it('запись книги разошлась с движком — повтор записи INTERNAL с её номером, а не неправда', async () => {
+    const lying = testBook([
+      { seed: 1, payX100: 0, weight: 5 },
+      { seed: 0, payX100: 96, weight: 3 },
+    ]);
+    const rig = bookRig(new ScriptedBookLoader(lying));
+    expect(await rig.send({ type: 'replay', book: 1 })).toStrictEqual({ ok: false, error: { code: 'INTERNAL', message: 'книга и движок разошлись: запись 1' } });
   });
 });
 
@@ -417,4 +462,74 @@ describe('испорченная честность', () => {
       expect((await result(rig, AUTHENTICATE))['fairness']).toStrictEqual({ commitment: C0, clientSeed: 'Mine', nonce: 0 });
     }
   });
+
+  /** Честность с секретом C1 и nonce, секрет X1 цел; раскрыт — если revealedAt задан. */
+  async function fairnessRig(nonce: number, revealedAt: number | null): Promise<Rig> {
+    const storage = new MemoryStorage({ durable: true });
+    await plant(storage, [
+      { op: 'put', store: 'fairness', value: { id: 'main', commitment: C1, clientSeed: 'Mine', nonce } },
+      { op: 'put', store: 'secrets', value: { commitment: C1, secret: X1, createdAt: T0, revealedAt } },
+    ]);
+    return new Rig({ storage, rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+  }
+
+  it('секрет под обязательством уже раскрыт — им не играют: новый секрет, nonce 0', async () => {
+    expect((await result(await fairnessRig(9, T0), AUTHENTICATE))['fairness']).toStrictEqual({ commitment: C0, clientSeed: 'Mine', nonce: 0 });
+  });
+
+  it.each([
+    ['nonce 2^52 — следующий раунд перешёл бы границу записей: новый секрет, nonce 0', RECORD_LIMIT, { commitment: C0, clientSeed: 'Mine', nonce: 0 }],
+    ['nonce 2^52 − 1 — ещё один раунд помещается: честность прежняя', RECORD_LIMIT - 1, { commitment: C1, clientSeed: 'Mine', nonce: RECORD_LIMIT - 1 }],
+  ])('%s', async (_what, nonce, fairness) => {
+    expect((await result(await fairnessRig(nonce, null), AUTHENTICATE))['fairness']).toStrictEqual(fairness);
+  });
+
+  it('секрет испорчен — в карантин; новый секрет с тем же обязательством (сломанная энтропия) пишется поверх, а не вечный INTERNAL', async () => {
+    const broken = { commitment: C0, secret: 'zz', createdAt: T0, revealedAt: null };
+    const storage = new MemoryStorage({ durable: true });
+    await plant(storage, [
+      { op: 'put', store: 'fairness', value: { id: 'main', commitment: C0, clientSeed: 'Mine', nonce: 4 } },
+      { op: 'put', store: 'secrets', value: broken },
+    ]);
+    const rig = new Rig({ storage, rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+    expect((await result(rig, AUTHENTICATE))['fairness']).toStrictEqual({ commitment: C0, clientSeed: 'Mine', nonce: 0 });
+    const snapshot = storage.snapshot();
+    expect(snapshot.quarantine).toStrictEqual([[1, { store: 'secrets', raw: broken, reason: 'секрет: обязательство или секрет — не 64 знака hex', at: T0 }]]);
+    expect(snapshot.secrets).toStrictEqual([[C0, { commitment: C0, secret: X0, createdAt: T0, revealedAt: null }]]);
+  });
+
+  it('энтропия дала секрет короче 32 байт — свой же гард не пускает запись: INTERNAL, ничего не записано', async () => {
+    const storage = new MemoryStorage({ durable: true });
+    const server = new RgsServer(
+      { storage, lock: new MemoryLock(), clock: new FixedClock(T0), entropy: new ShortBytes([]), broadcast: new BroadcastLog(storage), crypto: new NodeCrypto() },
+      { config: DEFAULT_CONFIG, rounds: { kind: 'book', loader: new ScriptedBookLoader() } },
+    );
+    expect((await server.handle({ v: 1, id: 1, body: AUTHENTICATE })).body).toStrictEqual({
+      ok: false,
+      error: { code: 'INTERNAL', message: 'запись отвергнута своим же гардом: секрет: обязательство или секрет — не 64 знака hex' },
+    });
+    expect(storage.snapshot()).toStrictEqual({ wallet: [], rounds: [], keys: [], quarantine: [], fairness: [], secrets: [] });
+  });
+
+  it('у раунда книги испорчены события — пересчёт по сиду; происхождение и поля честности остаются его', async () => {
+    const storage = new MemoryStorage({ durable: true });
+    const bookRound = { ...HISTORY_ROUND, roundId: 'r7', seq: 7, idempotencyKey: 'k7', status: 'active', balanceAfterEnd: null, source: 'book', bookIndex: 1, nonce: 3, commitment: C1, clientSeed: 'Mine' };
+    await plant(storage, [
+      { op: 'put', store: 'wallet', value: { id: 'main', balanceMinor: 99_900, activeRoundId: 'r7', nextSeq: 8, revision: 12, resetSeq: 1 } },
+      { op: 'put', store: 'rounds', value: { ...bookRound, events: null } },
+      { op: 'put', store: 'keys', value: { key: 'k7', roundId: 'r7', betMinor: 100 } },
+    ]);
+    const rig = new Rig({ storage, rounds: { kind: 'book', loader: new ScriptedBookLoader() } });
+    const active = (await result(rig, AUTHENTICATE))['activeRound'] as Record<string, unknown>;
+    expect([active['source'], active['bookIndex'], active['nonce'], active['events']]).toStrictEqual(['book', 1, 3, fixtureRound('small-win').events]);
+    await result(rig, endRound('r7'));
+    expect(storage.snapshot().rounds).toStrictEqual([['r7', { ...bookRound, status: 'closed', balanceAfterEnd: 99_995 }]]);
+  });
 });
+
+/** Энтропия со сломанными байтами: на один меньше, чем просят. */
+class ShortBytes extends ScriptedEntropy {
+  override bytes(length: number): Uint8Array {
+    return super.bytes(length).subarray(0, length - 1);
+  }
+}

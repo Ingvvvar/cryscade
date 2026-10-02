@@ -42,6 +42,7 @@ describe('finalGrid', () => {
     const lastWin = events.findLast((event) => event.t === 'win');
     expect(lastWin?.t).toBe('win');
     if (lastWin?.t !== 'win') return;
+    expect(lastWin.clusters.length).toBeGreaterThan(0);
     for (const cluster of lastWin.clusters) {
       for (const cell of cluster.cells) expect(grid[cell]).toBe(cluster.symbol);
     }
@@ -49,6 +50,14 @@ describe('finalGrid', () => {
 
   it('события без полной сетки — ошибка вызывающего: бросает', () => {
     expect(() => finalGrid([{ t: 'end', payX100: 0 }])).toThrow(RangeError);
+    expect(() => finalGrid([{ t: 'end', payX100: 0 }])).toThrow('finalGrid: по событиям не собирается полная сетка — сначала гард протокола');
+  });
+
+  it('взрыв без досыпки — в сетке дыры: бросает', () => {
+    const { events } = fixtureRound('small-win');
+    const exploded = events.slice(0, events.findIndex((event) => event.t === 'explode') + 1);
+    expect(exploded.map((event) => event.t)).toStrictEqual(['fill', 'win', 'explode']);
+    expect(() => finalGrid(exploded)).toThrow('finalGrid: по событиям не собирается полная сетка — сначала гард протокола');
   });
 
   it('на случайных раундах стресс-конфига совпадает с моделью', () => {

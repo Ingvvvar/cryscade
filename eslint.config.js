@@ -55,7 +55,7 @@ const CORE_LEAVE = leave(['protocol', 'server', 'client', 'render', 'ui', 'audio
 const CORE_PURE = ['src/core/model/**', 'src/core/fsm/**', 'src/core/presentation/**', 'src/core/money.ts', 'src/core/jurisdiction.ts'];
 
 export default defineConfig([
-  globalIgnores(['dist/', 'dist-e2e/', 'playwright-report/', 'test-results/', 'blob-report/', 'coverage/', 'reports/']),
+  globalIgnores(['dist/', 'dist-e2e/', 'playwright-report/', 'test-results/', 'blob-report/', 'coverage/', 'reports/', '.stryker-tmp/']),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {

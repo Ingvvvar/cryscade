@@ -7,13 +7,35 @@ import { guarded } from '../../support/watchdog.ts';
 
 const constant: SymbolSource = { next: () => 0 };
 
+function caught(action: () => unknown): unknown {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  return null;
+}
+
 describe('WatchdogSource', () => {
   it('пропускает limit запросов и роняет следующий с сидом раунда', () => {
     const watchdog = new WatchdogSource(constant, 3);
     watchdog.arm(4242);
     for (let request = 0; request < 3; request++) expect(watchdog.next('base', request)).toBe(0);
-    expect(() => watchdog.next('base', 3)).toThrow(WatchdogError);
-    expect(() => watchdog.next('base', 3)).toThrow(/сидом 4242 сделал больше 3 запросов/);
+    const error = caught(() => watchdog.next('base', 3));
+    expect(error).toBeInstanceOf(WatchdogError);
+    expect(error instanceof Error ? [error.name, error.message] : null).toStrictEqual([
+      'WatchdogError',
+      'сторож: раунд с сидом 4242 сделал больше 3 запросов к источнику — фича надкритична или каскад бесконечен',
+    ]);
+  });
+
+  it('порог 1 — один запрос; до arm сид неизвестен: −1', () => {
+    const watchdog = new WatchdogSource(constant, 1);
+    expect(watchdog.next('base', 0)).toBe(0);
+    const error = caught(() => watchdog.next('base', 1));
+    expect(error instanceof Error ? error.message : null).toBe(
+      'сторож: раунд с сидом -1 сделал больше 1 запросов к источнику — фича надкритична или каскад бесконечен',
+    );
   });
 
   it('arm начинает счёт раунда с нуля', () => {
@@ -33,7 +55,9 @@ describe('WatchdogSource', () => {
   });
 
   it.each([0, -1, 1.5, Number.NaN])('порог %s — RangeError', (limit) => {
-    expect(() => new WatchdogSource(constant, limit)).toThrow(RangeError);
+    const error = caught(() => new WatchdogSource(constant, limit));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(error instanceof Error ? error.message : null).toBe(`порог сторожа: ожидается целое от 1 или ∞, получено ${String(limit)}`);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryStorage, StorageError, type CommitBatch, type WriteOp } from '../../../src/server/index.ts';
+import { MemoryStorage, StorageError, type CommitBatch, type StoreName, type WriteOp } from '../../../src/server/index.ts';
 import { NON_KEYS, ORDERED_KEYS, buildKey, buildNonKey, describeKey, returnedSpec } from '../../support/key-order-table.ts';
 
 // Хранилище в памяти держит семантику IndexedDB, на которую опирается сервер: транзакция «всё или ничего» с условием
@@ -10,6 +10,16 @@ const commit = (storage: MemoryStorage, ops: readonly WriteOp[], precondition: C
   storage.commit({ precondition, ops });
 
 const round = (roundId: string, seq: number): { roundId: string; seq: number } => ({ roundId, seq });
+
+/** Имя и текст ошибки, с которой отклонён промис: StorageError — как DataError и ConstraintError в IndexedDB. */
+async function failure(promise: Promise<unknown>): Promise<[string, string]> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? [error.name, error.message] : ['не Error', String(error)];
+  }
+  return ['не отклонён', ''];
+}
 
 describe('MemoryStorage', () => {
   it('новое хранилище пусто, хранилища — из миграций', () => {
@@ -86,8 +96,50 @@ describe('MemoryStorage', () => {
     await expect(commit(storage, [{ op: 'put', store: 'rounds', value: round('r1', 1) }])).resolves.toBe('committed');
   });
 
-  it('запись без ключа — ошибка', async () => {
+  it('запись без ключа — ошибка; не-объект — тоже она, а не TypeError', async () => {
     await expect(commit(new MemoryStorage(), [{ op: 'put', store: 'rounds', value: { seq: 1 } }])).rejects.toThrow(StorageError);
+    expect(await failure(commit(new MemoryStorage(), [{ op: 'put', store: 'rounds', value: { seq: 1 } }]))).toStrictEqual([
+      'StorageError',
+      'rounds: у записи нет ключа roundId',
+    ]);
+    for (const value of [null, undefined, 7]) {
+      expect(await failure(commit(new MemoryStorage(), [{ op: 'put', store: 'keys', value: value as unknown as object }]))).toStrictEqual([
+        'StorageError',
+        'keys: у записи нет ключа key',
+      ]);
+    }
+  });
+
+  it('не-ключ в get, delete и границах диапазона — ошибка, как DataError: где и в каком хранилище', async () => {
+    const storage = new MemoryStorage();
+    const object = {} as unknown as IDBValidKey;
+    expect(await failure(storage.get('rounds', object))).toStrictEqual(['StorageError', 'rounds: get: не ключ IndexedDB']);
+    expect(await failure(commit(storage, [{ op: 'delete', store: 'keys', key: object }]))).toStrictEqual(['StorageError', 'keys: delete: не ключ IndexedDB']);
+    expect(await failure(storage.keysByIndex('rounds', 'seq', { lower: object, upper: 1 }))).toStrictEqual(['StorageError', 'нижняя граница: не ключ IndexedDB']);
+    expect(await failure(storage.lastByIndex('rounds', 'seq', { lower: 1, upper: object }, 5))).toStrictEqual(['StorageError', 'верхняя граница: не ключ IndexedDB']);
+  });
+
+  it('нижняя граница выше верхней — ошибка, как DataError у IDBKeyRange.bound; равные — годный диапазон', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, [{ op: 'put', store: 'rounds', value: round('r1', 1) }]);
+    expect(await failure(storage.keysByIndex('rounds', 'seq', { lower: 2, upper: 1 }))).toStrictEqual(['StorageError', 'rounds: нижняя граница диапазона выше верхней']);
+    expect(await failure(storage.lastByIndex('keys', 'roundId', { lower: 'b', upper: 'a' }, 5))).toStrictEqual(['StorageError', 'keys: нижняя граница диапазона выше верхней']);
+    expect(await storage.keysByIndex('rounds', 'seq', { lower: 1, upper: 1 })).toStrictEqual(['r1']);
+  });
+
+  it('нет такого хранилища — ошибка с его именем', async () => {
+    expect(await failure(new MemoryStorage().get('nope' as StoreName, 1))).toStrictEqual(['StorageError', 'нет хранилища nope']);
+  });
+
+  it('ключи на выходе — копии: массив ключа из индекса и снимка снаружи не изменить', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, [{ op: 'put', store: 'rounds', value: { roundId: [1, 2], seq: 1 } }]);
+    const [first] = await storage.keysByIndex('rounds', 'seq', { lower: 1, upper: 1 });
+    (first as number[]).push(3);
+    const [last] = await storage.lastByIndex('rounds', 'seq', { lower: 1, upper: 1 }, 1);
+    (last?.key as number[]).push(4);
+    (storage.snapshot().rounds[0]?.[0] as number[]).push(5);
+    expect(await storage.keysByIndex('rounds', 'seq', { lower: 1, upper: 1 })).toStrictEqual([[1, 2]]);
   });
 
   it('delete: запись уходит, отсутствующая — не ошибка', async () => {
@@ -205,6 +257,7 @@ describe('MemoryStorage: ключи всех типов IndexedDB (таблиц�
   });
 
   it('не-ключ как ключ записи — ошибка, как DataError', async () => {
+    expect(NON_KEYS.length).toBeGreaterThan(0);
     for (const name of NON_KEYS) {
       await expect(commit(new MemoryStorage(), [{ op: 'put', store: 'rounds', value: { roundId: buildNonKey(name), seq: 1 } }])).rejects.toThrow(StorageError);
     }
@@ -219,6 +272,12 @@ describe('MemoryStorage: ключи всех типов IndexedDB (таблиц�
     const storage = new MemoryStorage();
     await commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'a', seq: first } }]);
     await expect(commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'b', seq: second } }])).rejects.toThrow('индекс seq');
+  });
+
+  it('уникальный индекс: запись, чей seq — не ключ, не занимает место даты 0', async () => {
+    const storage = new MemoryStorage();
+    await commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'a', seq: null } }]);
+    await expect(commit(storage, [{ op: 'add', store: 'rounds', value: { roundId: 'b', seq: new Date(0) } }])).resolves.toBe('committed');
   });
 
   it('ключи раунда по индексу roundId — и для ключа-массива', async () => {

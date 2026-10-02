@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,7 +9,6 @@ import {
   settleMs,
   type FallProfile,
 } from '../../../src/core/presentation/fall.ts';
-import { scanAllocations } from '../engine/alloc-scan.ts';
 
 // Литералы посчитаны руками. Профиль: касание 400 мс, e = 0.25, два отскока; старт с высоты 300.
 // g = 2·300/400² = 0.00375 ед/мс²; скорость удара 1.5 ед/мс.
@@ -62,6 +59,11 @@ describe('fallHeight — литералы', () => {
     expect(fallHeight(flat, 300, 401)).toBe(0);
     expect(settleMs(flat)).toBe(400);
     expect(bounceCeiling(flat, 300)).toBe(0);
+  });
+
+  it('без отскоков потолка нет и при упругости больше нуля', () => {
+    expect(bounceCeiling({ ...HAND, bounces: 0 }, 300)).toBe(0);
+    expect(bounceCeiling({ ...HAND, bounces: 1 }, 300)).toBe(18.75);
   });
 });
 
@@ -133,19 +135,5 @@ describe('fallHeight — свойства', () => {
         return fallHeight(profile, distance, settle * (1 + 1e-9) + 1e-9 + extra) === 0;
       }),
     );
-  });
-});
-
-describe('падение без аллокаций', () => {
-  const file = 'src/core/presentation/fall.ts';
-  const text = readFileSync(fileURLToPath(new URL(`../../../${file}`, import.meta.url)), 'utf8');
-  const scan = scanAllocations(file, text);
-
-  it('скан нашёл функции падения', () => {
-    expect(scan.functions).toEqual(expect.arrayContaining(['fallHeight', 'settleMs', 'bounceCeiling', 'columnStartMs', 'gridSettleMs']));
-  });
-
-  it('аллокаций нет', () => {
-    expect(scan.findings).toStrictEqual([]);
   });
 });

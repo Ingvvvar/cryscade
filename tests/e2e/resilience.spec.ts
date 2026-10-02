@@ -36,16 +36,24 @@ test('перезагрузка посреди раунда: после неё р
 test('потеря ответа на play: повтор с тем же ключом получает тот же раунд — одно списание', async ({ page }) => {
   const { problems } = collectConsole(page);
   await open(page);
+  // «Потерять следующий ответ» теряет первый ответ с id. Книгу страница запрашивает сама после первого кадра, и пока ответ
+  // на неё в пути, потерялся бы он, а не play. Поэтому сначала целый раунд: play ждёт ту же книгу и отвечает после
+  // loadBook — к покою после раунда ответ на книгу уже пришёл.
+  await spinButton(page).click();
+  await expect.poll(async () => (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length).toBe(1);
+  await waitForState(page, 'idle');
   await labCall(page, 'loseNextResponse');
   await spinButton(page).click();
   // Ответ потерян: попытка истекает через 3 с, повтор — через 250 мс.
+  await expect.poll(async () => (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length, { timeout: 15_000 }).toBe(2);
   const after = await waitForState(page, 'idle', 15_000);
   const plays = (await sentBodies(page)).filter((body) => body.type === 'play');
-  expect(plays).toHaveLength(2);
-  expect(plays[1]).toStrictEqual(plays[0]);
+  expect(plays).toHaveLength(3);
+  expect(plays[2]).toStrictEqual(plays[1]);
+  expect(plays[1]?.idempotencyKey).not.toBe(plays[0]?.idempotencyKey);
   const stored = await readStorage(page);
-  expect([stored.rounds.length, stored.keys]).toStrictEqual([1, 1]);
-  expect(stored.rounds[0]?.idempotencyKey).toBe(plays[0]?.idempotencyKey);
+  expect([stored.rounds.length, stored.keys]).toStrictEqual([2, 2]);
+  expect(stored.rounds.filter((round) => round.idempotencyKey === plays[1]?.idempotencyKey)).toHaveLength(1);
   expect(after.balanceMinor).toBe(reconciled(stored));
   expect(problems).toEqual([]);
 });

@@ -10,6 +10,7 @@ import {
   type Schedule,
   type ScheduleOptions,
 } from '../../../src/core/presentation/index.ts';
+import { clusterContour } from '../../../src/core/presentation/contour.ts';
 import { FIXTURE_NAMES, fixtureRound, type FixtureName } from '../../support/fixture-rounds.ts';
 import { verifyRound } from '../../support/round-model.ts';
 
@@ -28,6 +29,9 @@ function schedule(name: FixtureName, options: ScheduleOptions = NORMAL, previous
 }
 
 const kinds = (s: Schedule): string[] => s.groups.map((group) => group.kind);
+/** Все 49 клеток — ноль: сравнение с длиной, а не every, — пустой или короткий массив не проходит. */
+const ALL_ZERO = new Array<boolean>(49).fill(true);
+const zeros = (values: ArrayLike<number>): boolean[] => Array.from(values, (value) => value === 0);
 const segmentsOf = (s: Schedule, group: number): string[] => {
   const g = s.groups[group];
   return g === undefined ? [] : s.segments.slice(g.firstSegment, g.segmentEnd).map((segment) => segment.kind);
@@ -111,7 +115,7 @@ describe('расписание фикстур', () => {
     expect([...out.symbol]).toStrictEqual(expected);
     expect([...out.symbol]).toStrictEqual(finalGrid(fixtureRound(name).events));
     expect([out.settled, out.segment, out.counterMinor]).toStrictEqual([true, -1, fixtureRound(name).payX100]);
-    expect(out.offsetY.every((y) => y === 0)).toBe(true);
+    expect(zeros(out.offsetY)).toStrictEqual(ALL_ZERO);
   });
 
   it('прежняя сетка — на поле в начале и уходит за время сброса', () => {
@@ -188,6 +192,7 @@ describe('параметры меняют длительности, но не с
 
   it.each(FIXTURE_NAMES)('%s: группы, их события и единицы пропуска одинаковы при любой скорости, пресете и reduced motion', (name) => {
     const shapes = variants.map((options) => schedule(name, options).groups.map((group) => [group.kind, group.fromEvent, group.toEvent, group.unit]));
+    expect(shapes).toHaveLength(5);
     for (const shape of shapes) expect(shape).toStrictEqual(shapes[0]);
   });
 
@@ -233,6 +238,23 @@ describe('строгий пресет (§8.5)', () => {
     expect(schedule('base-win', STRICT).segments.some((segment) => segment.celebrate)).toBe(true);
   });
 
+  it('строгий: выигрыш ровно в ставку (1.00×) не празднуется, на сотую больше — празднуется', () => {
+    // small-win с выплатой кластера и итогом, подменёнными на границу: решает только итог раунда против ставки.
+    const paid = (payX100: number): Schedule =>
+      buildSchedule(
+        {
+          events: fixtureRound('small-win').events.map((event) =>
+            event.t === 'win' ? { ...event, clusters: event.clusters.map((cluster) => ({ ...cluster, payX100 })) } : event.t === 'end' ? { ...event, payX100 } : event,
+          ),
+          betMinor: 100,
+          winMinor: payX100,
+          previousGrid: null,
+        },
+        STRICT,
+      );
+    expect([paid(100).celebrates, paid(101).celebrates]).toStrictEqual([false, true]);
+  });
+
   it('обычный пресет празднует и выигрыш ≤ ставки', () => {
     expect(schedule('small-win').segments.filter((segment) => segment.celebrate).map((segment) => segment.kind)).toStrictEqual(['highlight', 'tally']);
   });
@@ -263,7 +285,7 @@ describe('кадр в ключевые моменты (литералы на sma
     const at = strict.segments.find((item) => item.kind === 'highlight');
     const out = new SceneState();
     sampleScene(strict, ((at?.startMs ?? 0) + (at?.endMs ?? 0)) / 2, out);
-    expect([...out.highlight].every((value) => value === 0)).toBe(true);
+    expect(zeros(out.highlight)).toStrictEqual(ALL_ZERO);
     expect(out.contourAlpha).toBe(1);
   });
 
@@ -280,6 +302,8 @@ describe('кадр в ключевые моменты (литералы на sma
     sampleScene(s, segment('refill').startMs, out);
     const refill = fixtureRound('small-win').events.find((event) => event.t === 'refill');
     if (refill?.t !== 'refill') throw new Error('нет refill');
+    expect(refill.moves.length).toBeGreaterThan(0);
+    expect(refill.drops.length).toBeGreaterThan(0);
     for (const [from, to] of refill.moves) expect(out.offsetY[to]).toBe((to - from) / 7);
     const perColumn = new Map<number, number>();
     for (const drop of refill.drops) perColumn.set(drop.cell % 7, (perColumn.get(drop.cell % 7) ?? 0) + 1);
@@ -309,7 +333,7 @@ describe('кадр фичи и большого выигрыша (feature-start)
       Array.from({ length: 10 }, (_, k) => [k + 1, 9 - k]),
     );
     const feature = s.groups.find((group) => group.kind === 'feature');
-    expect([...(feature?.start.spots ?? [])].every((level) => level === 0)).toBe(true);
+    expect(zeros(feature?.start.spots ?? [])).toStrictEqual(ALL_ZERO);
   });
 
   it('большой выигрыш: к 70 % празднования его счётчик — весь выигрыш, уровень 1', () => {
@@ -326,7 +350,7 @@ describe('точки множителей: основная игра — с ну
     const out = new SceneState();
     sampleScene(s, s.durationMs, out);
     expect([...out.spotLevel].some((level) => level >= 4)).toBe(true);
-    expect([...(s.groups[0]?.start.spots ?? [])].every((level) => level === 0)).toBe(true);
+    expect(zeros(s.groups[0]?.start.spots ?? [])).toStrictEqual(ALL_ZERO);
   });
 
   it('retrigger: точки, набранные во фриспине, живут в следующем заполнении', () => {
@@ -340,6 +364,7 @@ describe('границы групп, пустые точки, колонки', (
   it('на старте группы кадр — уже эта группа: индекс группы — контрольная точка восстановления', () => {
     const s = schedule('cascade-3');
     const out = new SceneState();
+    expect(s.groups.length).toBeGreaterThan(1);
     s.groups.forEach((group, index) => {
       sampleScene(s, group.startMs, out);
       expect(out.group).toBe(index);
@@ -363,6 +388,12 @@ describe('границы групп, пустые точки, колонки', (
     expect([out.offsetY[1], out.offsetY[2], out.offsetY[7]]).toStrictEqual([7, 7, out.offsetY[0]]);
   });
 
+  it('выигрыш основного спина подсчитан до ядер фичи: подсчёт — в его каскаде, а не после плашки', () => {
+    const s = schedule('retrigger');
+    const feature = s.groups.findIndex((group) => group.kind === 'feature');
+    expect([segmentsOf(s, feature - 1).at(-1), segmentsOf(s, feature)]).toStrictEqual(['tally', ['scatters', 'plaqueIn', 'plaqueOut']]);
+  });
+
   it('старт фичи чистит точки: первое заполнение фриспинов — без точек основного спина', () => {
     // retrigger и сид 466 (уровень 3 большого выигрыша): у обоих основной спин оставил точки перед фичей.
     const recorder = new EventRecorder();
@@ -373,8 +404,87 @@ describe('границы групп, пустые точки, колонки', (
       const before = s.groups[feature]?.start.spots;
       const firstFree = s.groups[feature + 1]?.start.spots;
       expect([...(before ?? [])].some((level) => level > 0)).toBe(true);
-      expect([...(firstFree ?? [])].every((level) => level === 0)).toBe(true);
+      expect(zeros(firstFree ?? [])).toStrictEqual(ALL_ZERO);
     }
   });
 });
 
+
+describe('состав расписания: группы, сегменты, данные', () => {
+  /** Вид, данные, празднование, вспышка и длительность сегментов. */
+  const shape = (s: Schedule): (string | number | boolean)[][] =>
+    s.segments.map((segment) => [segment.kind, segment.data, segment.celebrate, segment.flash, segment.endMs - segment.startMs]);
+
+  it('small-win: заполнение 0…1, каскад 1…6 (с end); вспышки — подсветка и взрыв, празднуют подсветка и подсчёт', () => {
+    const s = schedule('small-win');
+    expect(s.groups.map((group) => [group.kind, group.fromEvent, group.toEvent, group.start.freeSpinsLeft])).toStrictEqual([
+      ['fill', 0, 1, -1],
+      ['cascade', 1, 6, -1],
+    ]);
+    expect(shape(s)).toStrictEqual([
+      ['clear', -1, false, false, 220],
+      ['fall', 0, false, false, FALL_NORMAL],
+      ['highlight', 0, true, true, 450],
+      ['explode', 0, false, true, 260],
+      ['spots', 0, false, false, 280],
+      ['refill', 0, false, false, FALL_NORMAL],
+      ['tally', 0, true, false, COUNTER(0.95)],
+    ]);
+    expect([s.fills.length, s.steps.length, s.tallies]).toStrictEqual([1, 1, [{ from: 0, to: 95 }]]);
+  });
+
+  it('шаг каскада несёт кластеры: символ, клетки и контур клеток', () => {
+    const s = schedule('small-win');
+    const cells = [8, 10, 15, 16, 17];
+    expect(s.steps[0]?.clusters).toStrictEqual([{ symbol: 1, cells, contour: clusterContour(cells) }]);
+  });
+
+  it('multiplier-8: каждая группа каскада — свои четыре события; последняя кончается на end', () => {
+    expect(schedule('multiplier-8').groups.map((group) => [group.kind, group.fromEvent, group.toEvent])).toStrictEqual([
+      ['fill', 0, 1],
+      ['cascade', 1, 5],
+      ['cascade', 5, 9],
+      ['cascade', 9, 13],
+      ['cascade', 13, 17],
+      ['cascade', 17, 22],
+    ]);
+  });
+
+  it('biggest: кап — 400 + 700 + 300 мс на плашке 1; празднование — без данных, празднует и вспыхивает', () => {
+    const s = schedule('biggest');
+    expect(shape(s).filter(([kind]) => kind === 'cap' || kind === 'celebrate')).toStrictEqual([
+      ['cap', 1, false, false, 1400],
+      ['celebrate', -1, true, true, 5500],
+    ]);
+    expect(s.plaques).toStrictEqual([
+      { kind: 1, value: 15 },
+      { kind: 3, value: 0 },
+    ]);
+  });
+
+  it('retrigger: заполнения и ядра — по одному на событие; падение и ядра указывают на своё', () => {
+    const s = schedule('retrigger');
+    const events = fixtureRound('retrigger').events;
+    const fills = events.filter((event) => event.t === 'fill').length;
+    expect([s.fills.length, s.scatterSets.length]).toStrictEqual([fills, 2]);
+    expect(s.segments.filter((segment) => segment.kind === 'fall').map((segment) => segment.data)).toStrictEqual(Array.from({ length: fills }, (_, k) => k));
+    expect(s.segments.filter((segment) => segment.kind === 'scatters').map((segment) => segment.data)).toStrictEqual([0, 1]);
+    expect(s.fills.map((fill) => fill.length)).toStrictEqual(new Array<number>(fills).fill(49));
+  });
+
+  it('событие до заполнения и шаг каскада без выигрыша — ошибка вызывающего', () => {
+    const fill = fixtureRound('small-win').events[0];
+    if (fill?.t !== 'fill') throw new Error('нет fill');
+    const build = (events: Parameters<typeof buildSchedule>[0]['events']) => (): Schedule => buildSchedule({ events, betMinor: 100, winMinor: 0, previousGrid: null }, NORMAL);
+    expect(build([{ t: 'explode', cells: [1] }])).toThrow(new Error('расписание: событие до fill'));
+    expect(build([fill, { t: 'explode', cells: [1] }])).toThrow(new Error('расписание: шаг каскада без win'));
+  });
+
+  it('цикл ровно на минимуме — паузы нет; на 1 мс короче — пауза в 1 мс до минимума', () => {
+    const planned = schedule('loss').durationMs;
+    const exact = schedule('loss', { ...NORMAL, preset: { minSpinCycleMs: planned, celebrateSmallWins: true } });
+    const longer = schedule('loss', { ...NORMAL, preset: { minSpinCycleMs: planned + 1, celebrateSmallWins: true } });
+    expect([exact.durationMs, kinds(exact).length, exact.segments.some((segment) => segment.kind === 'pause')]).toStrictEqual([planned, 1, false]);
+    expect([longer.durationMs, longer.segments.at(-1)?.kind, (longer.segments.at(-1)?.endMs ?? 0) - (longer.segments.at(-1)?.startMs ?? 0)]).toStrictEqual([planned + 1, 'pause', 1]);
+  });
+});

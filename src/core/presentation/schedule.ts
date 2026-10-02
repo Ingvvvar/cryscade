@@ -402,9 +402,9 @@ class ScheduleBuilder {
     this.#add(group, 'plaqueOut', this.#timings.plaqueOutMs, this.#plaques.length - 1);
   }
 
+  /** Остаток фриспинов не трогает: группу ретриггера открыли ядра, а следующую — fsSpin с остатком от сервера. */
   #retrigger(add: number, index: number): void {
     const group = this.#current(index);
-    this.#freeSpinsLeft += add;
     this.#plaques.push({ kind: PLAQUE.retrigger, value: add });
     this.#add(group, 'plaqueIn', this.#timings.plaqueInMs, this.#plaques.length - 1);
     this.#add(group, 'plaqueShow', this.#timings.plaqueShowMs, this.#plaques.length - 1);
@@ -440,9 +440,9 @@ class ScheduleBuilder {
       const startMs = at;
       if (draft.kind === 'fill' || draft.kind === 'bigWin') unit += 1;
       draft.segments.forEach((segment, k) => {
-        // Пауза строгого кончается ровно на минимальном цикле: сумма длительностей с плавающей точкой недобрала бы
-        // до него (контрпример property — 2499.9999999999995).
-        const endMs = segment.kind === 'pause' ? Math.max(at + segment.durationMs, this.#options.preset.minSpinCycleMs) : at + segment.durationMs;
+        // Длительности — целые мс (#add): пауза строгого кончается ровно на минимальном цикле. Сумма дробных
+        // недобирала до него (контрпример property — 2499.9999999999995).
+        const endMs = at + segment.durationMs;
         segments.push({ kind: segment.kind, group: groupIndex, startMs: at, endMs, data: segment.data, celebrate: segment.celebrate, flash: segment.flash });
         at = endMs;
         if (k === draft.hold) holds.push(at);

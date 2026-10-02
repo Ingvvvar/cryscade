@@ -65,6 +65,8 @@ export const NON_KEYS = [
   'array with NaN',
   'array with object',
   'cyclic array',
+  'number object',
+  'boolean object',
 ] as const;
 
 export type NonKey = (typeof NON_KEYS)[number];
@@ -118,6 +120,11 @@ export function buildNonKey(name: NonKey): unknown {
       cyclic.push(cyclic);
       return cyclic;
     }
+    // Обёртки примитивов — объекты, а не числа и не даты: ключом не становятся, хотя Number() даёт число.
+    case 'number object':
+      return Object(5) as unknown;
+    case 'boolean object':
+      return Object(true) as unknown;
   }
 }
 

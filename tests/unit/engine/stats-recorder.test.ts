@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CASCADE_SLOTS, RoundEngine, StatsRecorder } from '../../../src/core/engine/index.ts';
+import { CASCADE_SLOTS, RoundEngine, StatsRecorder, type ClusterView } from '../../../src/core/engine/index.ts';
 import type { GameConfig } from '../../../src/core/model/config.ts';
 import { TEST_CONFIG, withCap } from '../../support/configs.ts';
 import { BACKGROUND, ScenarioSource, deadSpins, drops, fill, type ScenarioStep } from '../../support/scenario.ts';
@@ -49,6 +49,30 @@ function usageOf(stats: StatsRecorder): Record<string, [number, number]> {
     cells[`${String(phase)} ${String(symbol)} ${String(band)}`] = [mult, clusters[index] ?? 0];
   });
   return cells;
+}
+
+interface Priced {
+  readonly symbol: number;
+  readonly size: number;
+  readonly mult: number;
+  readonly payX100: number;
+}
+
+/**
+ * Вид кластеров шага напрямую: count первых — кластеры шага, за ними — хвост прошлого шага (ClusterTable при clear
+ * обнуляет только счёт, буферы не стирает).
+ */
+function clustersView(list: readonly Priced[]): ClusterView {
+  const tail: Priced = { symbol: 1, size: 9, mult: 64, payX100: 999 };
+  const at = (cluster: number): Priced => list[cluster] ?? tail;
+  return {
+    count: list.length,
+    symbol: (cluster) => at(cluster).symbol,
+    size: (cluster) => at(cluster).size,
+    cellAt: () => 0,
+    mult: (cluster) => at(cluster).mult,
+    payX100: (cluster) => at(cluster).payX100,
+  };
 }
 
 function cascadesOf(stats: StatsRecorder): Record<string, number> {
@@ -151,6 +175,59 @@ describe('StatsRecorder на литеральных сценариях', () => {
   it('кап в основном спине: обрезка — в основную игру, фичи нет', () => {
     const stats = statsOf(withCap(80), [fill('base', ['*ACESR*', 'CESRQAC', 'SRQDCES', 'QACDSRQ', 'CESDQAC', 'SRQDCES', 'QACDSR*'])]);
     expect(facts(stats)).toMatchObject({ payX100: 80, basePayX100: 80, featurePayX100: 0, capped: true, featured: false });
+  });
+
+  it('пустой список полос — RangeError', () => {
+    expect(() => new StatsRecorder({ sizeBands: [] })).toThrow(RangeError);
+    expect(() => new StatsRecorder({ sizeBands: [] })).toThrow('sizeBands: пустой список полос');
+  });
+
+  // Прямые вызовы записывающего интерфейса: размеры и хвосты, до которых сценарии фазы 1 не доходят.
+  it('кластеры на 48 и 49 клеток — в последней полосе; хвост таблицы за count не считается', () => {
+    const stats = new StatsRecorder(TEST_CONFIG);
+    stats.begin();
+    stats.fill();
+    stats.win(clustersView([{ symbol: 4, size: 49, mult: 1, payX100: 600 }, { symbol: 2, size: 48, mult: 2, payX100: 1200 }]));
+    stats.end(1800);
+    expect(usageOf(stats)).toStrictEqual({ '0 2 5': [2, 1], '0 4 5': [1, 1] });
+    expect(stats.maxClusterMult).toBe(2);
+  });
+
+  it('addUsageTo и addCascadesTo прибавляют к накопленному, а не перезаписывают', () => {
+    const stats = statsOf(TEST_CONFIG, [fill('base', COLUMN_FILL), drops('base', COLUMN_DROPS)]);
+    const usage = new Float64Array(2 * 7 * stats.bands);
+    const clusters = new Float64Array(2 * 7 * stats.bands);
+    const cascades = new Float64Array(2 * CASCADE_SLOTS);
+    stats.addUsageTo(usage, clusters);
+    stats.addUsageTo(usage, clusters);
+    stats.addCascadesTo(cascades);
+    stats.addCascadesTo(cascades);
+    const at = DIAMOND * stats.bands;
+    expect([usage[at], clusters[at], cascades[1]]).toStrictEqual([2, 2, 2]);
+  });
+
+  it('кап во фриспинах после выигрыша основной игры: фича — кап минус основная', () => {
+    const stats = new StatsRecorder(TEST_CONFIG);
+    stats.begin();
+    stats.fill();
+    stats.win(clustersView([{ symbol: 6, size: 5, mult: 1, payX100: 300 }]));
+    stats.fsStart(10);
+    stats.fsSpin();
+    stats.fill();
+    stats.win(clustersView([{ symbol: 6, size: 15, mult: 16, payX100: 160_000 }]));
+    stats.cap();
+    stats.end(1000);
+    expect(facts(stats)).toMatchObject({ payX100: 1000, basePayX100: 300, featurePayX100: 700, capped: true });
+  });
+
+  it('каскад длиннее 63 шагов — в последнем слоте основной игры', () => {
+    const stats = new StatsRecorder(TEST_CONFIG);
+    stats.begin();
+    stats.fill();
+    for (let step = 0; step < 70; step++) stats.win(clustersView([]));
+    stats.end(0);
+    expect(cascadesOf(stats)).toStrictEqual({ 'base 63': 1 });
+    expect(stats.longestCascade).toBe(70);
   });
 
   it('следующий раунд начинается с нуля', () => {
