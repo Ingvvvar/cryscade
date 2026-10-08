@@ -159,6 +159,19 @@ describe('разовые действия', () => {
     expect(inner.sent).toStrictEqual([request(1, 'play'), request(3, 'authenticate'), request(2, 'endRound'), request(4, 'endRound')]);
   });
 
+  it('повторы задержанного endRound держатся с ним до releaseHeld: попытка клиента по таймауту задержку не обходит', () => {
+    const { inner, lab } = rig();
+    lab.holdNextEndRound();
+    lab.send(request(2, 'endRound'));
+    lab.send(request(3, 'endRound'));
+    lab.send(request(4, 'endRound'));
+    expect(inner.sent).toStrictEqual([]);
+    lab.releaseHeld();
+    expect(inner.sent).toStrictEqual([request(2, 'endRound'), request(3, 'endRound'), request(4, 'endRound')]);
+    lab.send(request(5, 'endRound'));
+    expect(inner.sent).toStrictEqual([request(2, 'endRound'), request(3, 'endRound'), request(4, 'endRound'), request(5, 'endRound')]);
+  });
+
   it('перезагрузка посреди раунда: ответ на play доставлен, страница перезагружается, дальше — ничего', () => {
     const { inner, lab, got, reloads } = rig();
     lab.reloadMidNextRound();

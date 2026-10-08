@@ -43,8 +43,8 @@ function checkSettings(settings: LabSettings): void {
 
 /**
  * «Лаборатория сети» (§6.5) — декоратор транспорта, всегда в цепочке, по умолчанию прозрачен. Настройки — задержка,
- * разброс, потеря запроса и ответа. Разовые действия: потерять следующий ответ; задержать следующий endRound до
- * releaseHeld; перезагрузить страницу, как только придёт ответ на следующий play, — посреди раунда. После этого
+ * разброс, потеря запроса и ответа. Разовые действия: потерять следующий ответ; задержать следующий endRound и его
+ * повторы до releaseHeld; перезагрузить страницу, как только придёт ответ на следующий play, — посреди раунда. После этого
  * страница уходит: лаборатория ничего больше не пропускает, и endRound не успевает до сервера.
  */
 export class NetworkLabTransport implements Transport {
@@ -101,7 +101,9 @@ export class NetworkLabTransport implements Transport {
   send(message: unknown): void {
     if (this.#frozen) return;
     const type = requestType(message);
-    if (type === 'endRound' && this.#holdNextEndRound) {
+    // Пока задержанное не отпущено, держатся и следующие endRound — повторы клиента по таймауту попытки: иначе раунд
+    // закрылся бы сам через 3 с, не дождавшись «Відпустити».
+    if (type === 'endRound' && (this.#holdNextEndRound || this.#held.length > 0)) {
       this.#holdNextEndRound = false;
       this.#held.push(message);
       return;

@@ -127,9 +127,10 @@ test('затримка завершення раунду: раунд актив�
       { timeout: 30_000, intervals: [500], message: 'показ не кончился' },
     )
     .toBe(true);
-  // Показ кончился, endRound держит лаборатория: раунд активен, спин занят.
+  // Показ кончился, endRound держит лаборатория: раунд активен, спин занят. Ждём дольше попытки клиента (3 с) и паузы
+  // перед повтором (250 мс): повтор endRound тоже держится, раунд сам не закрывается (CI поймал повтор мимо задержки).
   await expect(spin).toHaveAttribute('aria-busy', 'true');
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(4500);
   expect([await closedRounds(page), (await readStorage(page)).wallet?.activeRoundId === null]).toStrictEqual([0, false]);
   await labAction(page, 'Відпустити затримане', 'Затримане відпущено');
   await expect.poll(() => closedRounds(page), { timeout: 15_000 }).toBe(1);
