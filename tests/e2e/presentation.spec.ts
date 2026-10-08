@@ -42,6 +42,15 @@ async function clockNow(page: Page): Promise<PresentationInfo> {
   return info;
 }
 
+/**
+ * Поддельное время кусками по 2 с: то же время и тот же порядок таймеров, что одним runFor, но страница между кусками
+ * выдыхает. Одним куском в 23 с WebKit на Linux (CI) дважды завис внутри runFor — ни кадра до таймаута теста, — а куски
+ * до 3 с там шли один к одному (трассы прогонов 37850445309, 37855561799).
+ */
+async function runForInSteps(page: Page, ms: number): Promise<void> {
+  for (let left = ms; left > 0; left -= 2000) await page.clock.runFor(Math.min(2000, left));
+}
+
 test('фича на принудительном раунде: плашка ждёт игрока (featureIntro), пробел — показ дальше; деньги сходятся', async ({ page }) => {
   const { problems } = collectConsole(page);
   await open(page);
@@ -126,7 +135,7 @@ test('пропуск во фриспине: два клика — к концу 
   await tapScene(page);
   expect((await clockNow(page)).clock, 'клик в новом спине — к концу группы').toBe(long.endMs);
   // Остальные фриспины и празднование — без кликов, поддельным временем: раунд не кончается раньше последнего.
-  await page.clock.runFor(schedule.durationMs - long.endMs - 500);
+  await runForInSteps(page, schedule.durationMs - long.endMs - 500);
   const late = await clockNow(page);
   expect(schedule.groups[late.group]?.kind, 'все фриспины показаны, идёт празднование').toBe('bigWin');
   expect(late.finished).toBe(false);
