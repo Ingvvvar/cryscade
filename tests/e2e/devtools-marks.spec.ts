@@ -29,7 +29,10 @@ test('dev: фазы кадра — performance.measure с detail.devtools, «о�
   });
   await page.goto('./');
   await waitForState(page, 'idle');
-  await page.waitForTimeout(500);
+  // Ждём кадров, а не времени: в WebKit без GPU (CI) к покою + 500 мс их было 7.
+  const updates = async (): Promise<number> =>
+    (await page.evaluate(() => (window as MarksWindow).__measures ?? [])).filter((item) => item.name === 'cryscade: обновление').length;
+  await expect.poll(updates, { timeout: 15_000, message: 'кадры с разметкой обновления' }).toBeGreaterThan(10);
   const measures = await page.evaluate(() => (window as MarksWindow).__measures ?? []);
   const update = measures.filter((item) => item.name === 'cryscade: обновление');
   const render = measures.filter((item) => item.name === 'cryscade: отрисовка');

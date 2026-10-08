@@ -130,8 +130,19 @@ test('пропуск во фриспине: два клика — к концу 
   expect(schedule.groups[late.group]?.kind, 'все фриспины показаны, идёт празднование').toBe('bigWin');
   expect(late.finished).toBe(false);
   expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play']);
+  // Конец показа — тоже поддельным временем, шагами, пока игра не встанет в покой: после resume() часы страницы в WebKit
+  // на Linux (CI) не шли — 15 с на 31178 мс из 31679 (трасса прогона 37837257813), а показ — функция этих часов.
+  await expect
+    .poll(
+      async () => {
+        await page.clock.runFor(100);
+        return (await gameSnapshot(page)).state.name;
+      },
+      { timeout: 15_000, message: 'игра не пришла в idle' },
+    )
+    .toBe('idle');
   await page.clock.resume();
-  const after = await waitForState(page, 'idle');
+  const after = await gameSnapshot(page);
   const done = await clockNow(page);
   expect([done.finished, done.clock]).toStrictEqual([true, schedule.durationMs]);
   expect((await gameCalls(page)).map((body) => body.type)).toStrictEqual(['authenticate', 'play', 'endRound']);
