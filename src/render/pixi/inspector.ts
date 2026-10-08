@@ -2,7 +2,7 @@
 // условием сборки, в прод-бандл он не попадает (греп с положительным контролем — tests/e2e/bundle.spec.ts).
 // Наружу — только простые данные.
 
-import { GraphicsContext, Sprite, Texture, UPDATE_PRIORITY } from 'pixi.js';
+import { GraphicsContext, Sprite, Texture, UPDATE_PRIORITY, type Application, type Ticker, type TickerCallback } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
 import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../layout.ts';
 import type { RendererInfo, SceneLabels } from '../renderer.ts';
@@ -62,6 +62,39 @@ class ContextCounter {
 
 /** Событие окна: сцена готова и прогрета, первый видимый кадр — следующий. По нему тест снимает счётчики GPU. */
 const SCENE_READY_EVENT = 'cryscade:scene-ready';
+
+/**
+ * Программный рендер (e2e в CI без GPU, §14): render Pixi — не чаще раза в столько мс. Программный WebGL на 60 кадрах
+ * занимает все ядра раннера (проба: покой игры без GPU — 6.4 ядра M4, с остановленным тикером — 0.3), и тестам не
+ * остаётся процессора: в CI тесты шли в 4–90 раз медленнее, чем локально, и падали по таймауту. Тикер, часы показа и
+ * сцена идут каждый кадр, как у игрока, — реже только отрисовка; с GPU не меняется ничего.
+ */
+const SOFTWARE_RENDER_MS = 250;
+
+/**
+ * Отрисовка по времени тикера: render Pixi снят с тикера и зовётся с того же приоритета не чаще SOFTWARE_RENDER_MS.
+ * Живёт, пока тикер держит его слушателя.
+ */
+class RenderThrottle {
+  readonly #app: Application;
+  /** Время тикера с последней отрисовки, мс: первая — сразу. */
+  #since = SOFTWARE_RENDER_MS;
+  readonly #tick = (ticker: Ticker): void => {
+    this.#since += ticker.elapsedMS;
+    if (this.#since < SOFTWARE_RENDER_MS) return;
+    this.#since = 0;
+    this.#app.render();
+  };
+
+  constructor(app: Application) {
+    this.#app = app;
+    // TickerPlugin вешает render приложения с контекстом app — снять той же парой.
+    const render: unknown = Reflect.get(app, 'render');
+    if (typeof render !== 'function') throw new Error('у Application нет render');
+    app.ticker.remove(render as TickerCallback<Application>, app);
+    app.ticker.add(this.#tick, undefined, UPDATE_PRIORITY.LOW);
+  }
+}
 
 type ControlKind = 'distinct' | 'atlas';
 
@@ -130,6 +163,7 @@ export class SceneProbe implements SceneInspector {
   attach(scene: InspectableScene): void {
     this.#scene = scene;
     this.#inits += 1;
+    if (scene.info.software) new RenderThrottle(scene.app);
     window.dispatchEvent(new Event(SCENE_READY_EVENT));
   }
 
