@@ -32,7 +32,8 @@ jobs:
       - run: npx playwright test --trace retain-on-failure
         env:
           CI: 'true'
-      - if: failure()
+      # Трасса и test-results — и при отмене по таймауту задания: list-репортёр печатает ошибки только в конце прогона.
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-test-results
