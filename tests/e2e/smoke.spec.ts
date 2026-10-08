@@ -1,4 +1,5 @@
 import { expect, test } from '../support/fixtures.ts';
+import { BROWSER_ENVIRONMENT } from '../support/page-probe.ts';
 
 test('страница открывается: консоль пуста, запросы только к своему origin, шрифты загружены', async ({ page, baseURL }) => {
   const consoleMessages: string[] = [];
@@ -29,5 +30,6 @@ test('страница открывается: консоль пуста, зап
   expect(requests.filter((url) => !url.startsWith('data:') && new URL(url).origin !== origin)).toEqual([]);
   expect(failures).toEqual([]);
   expect(pageErrors).toEqual([]);
-  expect(consoleMessages).toEqual([]);
+  // Без GPU (CI) браузер пишет свои сообщения среды — их и только их терпит общий фильтр e2e (§15, фаза 9).
+  expect(consoleMessages.filter((line) => !BROWSER_ENVIRONMENT.some((pattern) => pattern.test(line)))).toEqual([]);
 });
