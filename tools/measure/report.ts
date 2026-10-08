@@ -40,6 +40,7 @@ interface Heaps {
   readonly page: Side;
   readonly worker: Side;
   readonly liveTextures: number;
+  readonly liveContexts: number;
 }
 
 interface Memory {
@@ -121,15 +122,15 @@ function memoryRows(): string[] {
     if (run?.at300 !== undefined) {
       const { at50, at300 } = run;
       rows.push(
-        `| ${renderer} | 50 → 300 | ${mb(at50.page.objects)} → ${mb(at300.page.objects)} (${pct(at50.page.objects, at300.page.objects)}) | ${mb(at50.worker.objects)} → ${mb(at300.worker.objects)} (${pct(at50.worker.objects, at300.worker.objects)}) | ${String(at50.liveTextures)} → ${String(at300.liveTextures)} | ${mb(at50.page.used)} → ${mb(at300.page.used)} (${pct(at50.page.used, at300.page.used)}) | ${mb(at50.worker.used)} → ${mb(at300.worker.used)} (${pct(at50.worker.used, at300.worker.used)}) |`,
+        `| ${renderer} | 50 → 300 | ${mb(at50.page.objects)} → ${mb(at300.page.objects)} (${pct(at50.page.objects, at300.page.objects)}) | ${mb(at50.worker.objects)} → ${mb(at300.worker.objects)} (${pct(at50.worker.objects, at300.worker.objects)}) | ${String(at50.liveTextures)} → ${String(at300.liveTextures)} | ${String(at50.liveContexts)} → ${String(at300.liveContexts)} | ${mb(at50.page.used)} → ${mb(at300.page.used)} (${pct(at50.page.used, at300.page.used)}) | ${mb(at50.worker.used)} → ${mb(at300.worker.used)} (${pct(at50.worker.used, at300.worker.used)}) |`,
       );
     } else {
-      rows.push(`| ${renderer} | нет данных — npm run measure | | | | | |`);
+      rows.push(`| ${renderer} | нет данных — npm run measure | | | | | | |`);
     }
     if (control?.at150 !== undefined) {
       const { at50, at150 } = control;
       rows.push(
-        `| ${renderer}, контроль ?memleak=1 | 50 → 150 | ${mb(at50.page.objects)} → ${mb(at150.page.objects)} (${pct(at50.page.objects, at150.page.objects)}) | ${mb(at50.worker.objects)} → ${mb(at150.worker.objects)} (${pct(at50.worker.objects, at150.worker.objects)}) | ${String(at50.liveTextures)} → ${String(at150.liveTextures)} | ${mb(at50.page.used)} → ${mb(at150.page.used)} | ${mb(at50.worker.used)} → ${mb(at150.worker.used)} |`,
+        `| ${renderer}, контроль ?memleak=1 | 50 → 150 | ${mb(at50.page.objects)} → ${mb(at150.page.objects)} (${pct(at50.page.objects, at150.page.objects)}) | ${mb(at50.worker.objects)} → ${mb(at150.worker.objects)} (${pct(at50.worker.objects, at150.worker.objects)}) | ${String(at50.liveTextures)} → ${String(at150.liveTextures)} | ${String(at50.liveContexts)} → ${String(at150.liveContexts)} | ${mb(at50.page.used)} → ${mb(at150.page.used)} | ${mb(at50.worker.used)} → ${mb(at150.worker.used)} |`,
       );
     }
   }
@@ -141,7 +142,7 @@ function memorySummary(): string {
     const run = read(`memory-${renderer}`) as Memory | null;
     if (run?.at300 === undefined) return `${renderer}: нет данных`;
     const { at50, at300 } = run;
-    return `${renderer}: страница ${pct(at50.page.objects, at300.page.objects)}, воркер ${pct(at50.worker.objects, at300.worker.objects)}, текстур ${String(at50.liveTextures)} → ${String(at300.liveTextures)}`;
+    return `${renderer}: страница ${pct(at50.page.objects, at300.page.objects)}, воркер ${pct(at50.worker.objects, at300.worker.objects)}, текстур ${String(at50.liveTextures)} → ${String(at300.liveTextures)}, GraphicsContext ${String(at50.liveContexts)} → ${String(at300.liveContexts)}`;
   });
   return parts.join('; ');
 }
@@ -177,7 +178,7 @@ const lines = [
   `| книга | ≤ 1 МБ gzip, лениво | ${book()}; лениво — e2e loadBook (fairness.spec) |`,
   `| атлас | ≤ 2048 × 2048 | ${atlas()} |`,
   '| аллокации в sampleScene | 0 | 0 — tests/unit/presentation/sample-alloc.test.ts |',
-  `| память за 300 спинов: объекты кучи страницы и воркера ≤ +5% к 50-му, живых текстур не больше | ≤ +5%, не больше | ${memorySummary()} |`,
+  `| память за 300 спинов: объекты кучи страницы и воркера ≤ +5% к 50-му, живых текстур и GraphicsContext не больше | ≤ +5%, не больше | ${memorySummary()} |`,
   `| кадр — без подёргиваний на телефоне | проверка владельца | ${frameSummary()} (стенд — не телефон) |`,
   '',
   '## Время кадра',
@@ -190,14 +191,15 @@ const lines = [
   ...frameTable('webgpu'),
   '## Память за 300 спинов',
   '',
-  'Турбо и автопропуск; первые семь спинов — принудительные крупные раунды (пулы — до верха до отметки 50). Объекты',
-  'кучи — по снимку V8 после сборки: достижимое от корней, без кода JIT и внутренних кэшей движка (tests/measure/',
-  'heap-objects.ts); usedSize — сырая куча (Runtime.getHeapUsage), её рост — прогрев JIT. Живые текстуры — созданные',
-  'минус удалённые на границе API. Проверка: объекты ≤ +5%, живых текстур не больше; контроль ?memleak=1 — все три',
-  'проверки краснеют.',
+  'Турбо и автопропуск; первые восемь спинов — принудительные крупные раунды, первый — самый длинный каскад книги (пулы —',
+  'до верха до отметки 50). Объекты кучи — по снимку V8 после сборки: достижимое от корней, без кода JIT и внутренних',
+  'кэшей движка (tests/measure/heap-objects.ts); usedSize — сырая куча (Runtime.getHeapUsage), её рост — прогрев JIT.',
+  'Живые текстуры — созданные минус удалённые на границе API WebGL и WebGPU; живые GraphicsContext — созданные минус',
+  'уничтоженные на границе API Pixi (счётчик зонда сцены). Проверка: объекты ≤ +5%, живых текстур и GraphicsContext не',
+  'больше; контроль ?memleak=1 — все четыре проверки краснеют.',
   '',
-  '| Рендерер | Спины | Объекты страницы, МБ | Объекты воркера, МБ | Живые текстуры | usedSize страницы, МБ | usedSize воркера, МБ |',
-  '|---|---|---|---|---|---|---|',
+  '| Рендерер | Спины | Объекты страницы, МБ | Объекты воркера, МБ | Живые текстуры | Живые GraphicsContext | usedSize страницы, МБ | usedSize воркера, МБ |',
+  '|---|---|---|---|---|---|---|---|',
   ...memoryRows(),
   '',
 ];

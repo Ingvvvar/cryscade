@@ -2,7 +2,7 @@
 // условием сборки, в прод-бандл он не попадает (греп с положительным контролем — tests/e2e/bundle.spec.ts).
 // Наружу — только простые данные.
 
-import { Sprite, Texture, UPDATE_PRIORITY } from 'pixi.js';
+import { GraphicsContext, Sprite, Texture, UPDATE_PRIORITY } from 'pixi.js';
 import { CELL_COUNT } from '../../core/model/grid.ts';
 import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../layout.ts';
 import type { RendererInfo, SceneLabels } from '../renderer.ts';
@@ -12,6 +12,52 @@ interface SceneInfo extends RendererInfo {
   readonly maxBatchableTextures: number;
   readonly resolution: number;
   readonly fontReady: boolean;
+}
+
+/** GraphicsContext с установки счётчика: живые — созданные минус уничтоженные. */
+interface ContextCounts {
+  readonly created: number;
+  readonly destroyed: number;
+}
+
+/**
+ * Счётчик GraphicsContext на границе API Pixi (замер памяти §13) — как счётчик текстур на границе WebGL и WebGPU, но у
+ * контекста нет API браузера, и считать можно только на классе Pixi. Рождение — присваивание uid в конструкторе
+ * GraphicsContext (в том числе своего контекста каждого Graphics и прокси BitmapText): сеттер на прототипе считает и тут же
+ * кладёт экземпляру обычное своё поле, дальше uid читается как всегда. Смерть — destroy(); повторный вызов не считается.
+ * Ставится один раз на страницу — зондом сцены, до первой сцены.
+ */
+class ContextCounter {
+  #created = 0;
+  #destroyed = 0;
+
+  constructor() {
+    const prototype = GraphicsContext.prototype;
+    const destroy: unknown = Reflect.get(prototype, 'destroy');
+    if (typeof destroy !== 'function') throw new Error('у GraphicsContext нет destroy');
+    const born = (): void => {
+      this.#created += 1;
+    };
+    const died = (): void => {
+      this.#destroyed += 1;
+    };
+    Object.defineProperty(prototype, 'uid', {
+      configurable: true,
+      set(this: GraphicsContext, value: unknown) {
+        born();
+        Object.defineProperty(this, 'uid', { value, writable: true, enumerable: true, configurable: true });
+      },
+    });
+    Reflect.set(prototype, 'destroy', function (this: GraphicsContext, ...args: unknown[]): unknown {
+      if (!this.destroyed) died();
+      const result: unknown = Reflect.apply(destroy, this, args);
+      return result;
+    });
+  }
+
+  counts(): ContextCounts {
+    return { created: this.#created, destroyed: this.#destroyed };
+  }
 }
 
 /** Событие окна: сцена готова и прогрета, первый видимый кадр — следующий. По нему тест снимает счётчики GPU. */
@@ -77,6 +123,9 @@ export class SceneProbe implements SceneInspector {
   };
   /** Положительный контроль замера памяти: текстуры на GPU, которые никто не отпустит. */
   readonly #leaked: Texture[] = [];
+  readonly #contexts = new ContextCounter();
+  /** Положительный контроль счётчика контекстов: GraphicsContext, которые никто не уничтожит. */
+  readonly #leakedContexts: GraphicsContext[] = [];
 
   attach(scene: InspectableScene): void {
     this.#scene = scene;
@@ -226,6 +275,16 @@ export class SceneProbe implements SceneInspector {
     texture.source.autoGarbageCollect = false;
     scene.app.renderer.texture.initSource(texture.source);
     this.#leaked.push(texture);
+  }
+
+  /** GraphicsContext с загрузки зонда: созданные и уничтоженные на границе API Pixi. */
+  graphicsContexts(): ContextCounts {
+    return this.#contexts.counts();
+  }
+
+  /** Положительный контроль счётчика контекстов: ещё один GraphicsContext — не уничтожается никогда. */
+  leakContext(): void {
+    this.#leakedContexts.push(new GraphicsContext());
   }
 
   /** Текстуры контроля не уничтожаются: побывав в батче WebGPU, источник держит модульный кэш Pixi (atlas.ts). */

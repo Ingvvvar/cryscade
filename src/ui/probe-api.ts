@@ -75,6 +75,12 @@ export interface FrameSamples {
   readonly tags: readonly number[];
 }
 
+/** GraphicsContext с загрузки зонда — на границе API Pixi (замер памяти §13): живые — созданные минус уничтоженные. */
+export interface ContextCounts {
+  readonly created: number;
+  readonly destroyed: number;
+}
+
 export interface CryscadeProbe {
   info(): ProbeSceneInfo | null;
   mounts(): MountCounts;
@@ -134,6 +140,8 @@ export interface CryscadeProbe {
   stopFrames(): FrameSamples;
   /** Положительный контроль замера кадра: слушатель тикера жжёт ms в каждом кадре; 0 — снять. */
   frameWork(ms: number): void;
+  /** GraphicsContext с загрузки зонда: созданные и уничтоженные на границе API Pixi (замер памяти §13). */
+  graphicsContexts(): ContextCounts;
   readonly lab: ProbeLab;
 }
 

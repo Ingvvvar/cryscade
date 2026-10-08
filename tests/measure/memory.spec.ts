@@ -1,26 +1,32 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 import type { ForcedName } from '../../src/ui/forced-rounds.ts';
+import type { ContextCounts } from '../../src/ui/probe-api.ts';
 import { writeMeasure } from '../gpu/support/phase9.ts';
 import { installTextureCounter, type TextureCounts } from '../gpu/support/texture-counter.ts';
 import { heapObjectBytes } from './heap-objects.ts';
+import { longestBookRound, type LongestRound } from './longest-round.ts';
 import { waitForState } from '../support/game-page.ts';
 import { collectConsole, sceneInfo, type ProbeWindow } from '../support/page-probe.ts';
 
 // Память за 300 спинов (§13, фаза 9): турбо и автопропуск, спины — клик «Спін» в странице (синтетический ввод приводит
-// игру в состояние). Первые семь спинов — принудительные крупные раунды (кап, ретриггер, большие выигрыши, множитель,
-// фича, каскад): пулы по высшей отметке — контексты контуров, пулы Pixi, осколки — доходят до верха до отметки 50; иначе
-// крупный раунд, выпавший между 50-м и 300-м, прибавлял их рост к проверке (проба: без прогрева 1.2–4.8%, с ним
-// 0.84–1.24% — почти весь остаток — журналы самого зонда, ~180 Б на спин). На 50-м и 300-м спине — сборка мусора через CDP (HeapProfiler.collectGarbage, дважды), снимок кучи
+// игру в состояние). Первые восемь спинов — принудительные крупные раунды (самый длинный каскад книги, кап, ретриггер,
+// большие выигрыши, множитель, фича, каскад): пулы по высшей отметке — контексты контуров, пулы Pixi, осколки — доходят
+// до верха до отметки 50; иначе крупный раунд, выпавший между 50-м и 300-м, прибавлял их рост к проверке (проба: без
+// прогрева 1.2–4.8%, с ним 0.84–1.24% — почти весь остаток — журналы самого зонда, ~180 Б на спин). На 50-м и 300-м спине — сборка мусора через CDP (HeapProfiler.collectGarbage, дважды), снимок кучи
 // страницы и воркера (воркер — его цель CDP через Target.sendMessageToTarget: performance.memory в воркере нет) и
 // объекты кучи по снимку (heap-objects.ts: без кода JIT и внутренних кэшей движка); живые текстуры — созданные минус
-// удалённые на границе API. Объекты кучи ≤ +5% к 50-му, живых текстур не больше; оба рендерера. Сырая usedSize
+// удалённые на границе API WebGL и WebGPU, живые GraphicsContext — созданные минус уничтоженные на границе API Pixi
+// (счётчик зонда сцены). Объекты кучи ≤ +5% к 50-му, живых текстур и GraphicsContext не больше; оба рендерера. Прямой
+// счётчик контекстов ловит то, что куча пропускает: контур без переиспользования (новый контекст на шаг каждого раунда,
+// прежний брошен) — куча +0.8%, как и без него, контекстов +20 за 250 спинов (мутация M1 прогона №3). Сырая usedSize
 // (Runtime.getHeapUsage) — в отчёт: её рост между 50-м и 300-м — прогрев JIT (проба: +450 КБ кода страницы на 250
 // спинах, объектов — +60 КБ). Это же закрывает заметку §15: дробное время декора и тепло в background.update и
 // frame.update не копят объектов в куче. Положительный контроль — ?memleak=1 (только dev и e2e): зонд держит массив
-// 64 КБ и текстуру на каждый раунд, воркер — свой массив 64 КБ; на 50 → 150 спинах все три проверки краснеют.
+// 64 КБ, текстуру и GraphicsContext на каждый раунд, воркер — свой массив 64 КБ; на 50 → 150 спинах все четыре проверки
+// краснеют.
 
 const GROWTH = 1.05;
-/** Прогрев пулов до отметки 50: самые крупные раунды — первыми. */
+/** Прогрев пулов до отметки 50 после самого длинного каскада книги: самые крупные раунды — первыми. */
 const WARM_UP: readonly ForcedName[] = ['maxWin', 'retrigger', 'bigWin3', 'bigWin2', 'multiplier', 'feature', 'cascade'];
 
 type CountWindow = ProbeWindow & { __textureCounts?: TextureCounts };
@@ -35,6 +41,8 @@ interface Heaps {
   readonly page: Side;
   readonly worker: Side;
   readonly liveTextures: number;
+  readonly contexts: ContextCounts;
+  readonly liveContexts: number;
 }
 
 /** Сессия CDP воркера игры через сессию страницы: сообщения цели — Target.sendMessageToTarget без flatten. */
@@ -111,9 +119,11 @@ async function heaps(page: Page, cdp: CDPSession, worker: WorkerSession): Promis
   const workerSide = { objects: heapObjectBytes(await worker.snapshot()), used: workerUsed };
   const counts = await page.evaluate(() => (window as CountWindow).__textureCounts ?? null);
   if (counts === null) throw new Error('счётчик текстур не установлен');
+  const contexts = await page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.graphicsContexts() ?? null);
+  if (contexts === null) throw new Error('нет зонда: счётчик GraphicsContext не прочитан');
   expect(pageSide.objects, 'объекты кучи страницы посчитаны').toBeGreaterThan(0);
   expect(workerSide.objects, 'объекты кучи воркера посчитаны').toBeGreaterThan(0);
-  return { page: pageSide, worker: workerSide, liveTextures: counts.created - counts.destroyed };
+  return { page: pageSide, worker: workerSide, liveTextures: counts.created - counts.destroyed, contexts, liveContexts: contexts.created - contexts.destroyed };
 }
 
 const growth = (from: number, to: number): string => `${((to / from - 1) * 100).toFixed(2)}%`;
@@ -123,15 +133,16 @@ function describe(at: Heaps, later: Heaps): string {
   return (
     `страница: объекты ${mb(at.page.objects)} → ${mb(later.page.objects)} МБ (${growth(at.page.objects, later.page.objects)}), usedSize ${mb(at.page.used)} → ${mb(later.page.used)} (${growth(at.page.used, later.page.used)}); ` +
     `воркер: объекты ${mb(at.worker.objects)} → ${mb(later.worker.objects)} МБ (${growth(at.worker.objects, later.worker.objects)}), usedSize ${mb(at.worker.used)} → ${mb(later.worker.used)} (${growth(at.worker.used, later.worker.used)}); ` +
-    `живых текстур ${String(at.liveTextures)} → ${String(later.liveTextures)}`
+    `живых текстур ${String(at.liveTextures)} → ${String(later.liveTextures)}; ` +
+    `живых GraphicsContext ${String(at.liveContexts)} → ${String(later.liveContexts)} (создано ${String(at.contexts.created)} → ${String(later.contexts.created)}, уничтожено ${String(at.contexts.destroyed)} → ${String(later.contexts.destroyed)})`
   );
 }
 
 /**
  * Спины до goal показанных раундов — клик «Спін» в странице и ожидание покоя (автопропуск ведёт показ); первые спины —
- * принудительные раунды WARM_UP.
+ * принудительные раунды warmUp: имя или сид.
  */
-async function spinsTo(page: Page, goal: number): Promise<void> {
+async function spinsTo(page: Page, goal: number, warmUp: readonly (ForcedName | number)[]): Promise<void> {
   await page.evaluate(async ({ target, warmUp }) => {
     const probe = (window as ProbeWindow).__cryscadeProbe;
     const spin = document.querySelector<HTMLButtonElement>('button.spin');
@@ -155,7 +166,7 @@ async function spinsTo(page: Page, goal: number): Promise<void> {
       spin.click();
       await until(() => probe.shownRounds().length > before && idle());
     }
-  }, { target: goal, warmUp: WARM_UP });
+  }, { target: goal, warmUp });
 }
 
 interface Session {
@@ -182,35 +193,47 @@ async function openSession(page: Page, renderer: 'webgl' | 'webgpu', leak: boole
   return { page, cdp, worker: await WorkerSession.attach(cdp), gpu: info.gpu, problems };
 }
 
+/** Прогрев: самый длинный каскад книги (сид — по книге, тем же движком и расписанием), потом WARM_UP. */
+function warmUpRounds(): { readonly longest: LongestRound; readonly rounds: readonly (ForcedName | number)[] } {
+  const longest = longestBookRound();
+  expect(longest.steps, 'самый длинный каскад книги найден').toBeGreaterThan(0);
+  return { longest, rounds: [longest.seed, ...WARM_UP] };
+}
+
 for (const renderer of ['webgl', 'webgpu'] as const) {
-  test(`${renderer}: 300 спинов в турбо с автопропуском — куча страницы и воркера ≤ +5% к 50-му, живых текстур не больше`, async ({ page }) => {
+  test(`${renderer}: 300 спинов в турбо с автопропуском — куча страницы и воркера ≤ +5% к 50-му, живых текстур и GraphicsContext не больше`, async ({ page }) => {
     test.setTimeout(20 * 60_000);
+    const warmUp = warmUpRounds();
     const session = await openSession(page, renderer, false);
-    await spinsTo(page, 50);
+    await spinsTo(page, 50, warmUp.rounds);
     const at50 = await heaps(page, session.cdp, session.worker);
-    await spinsTo(page, 300);
+    await spinsTo(page, 300, warmUp.rounds);
     const at300 = await heaps(page, session.cdp, session.worker);
-    console.log(`${renderer} (${session.gpu}), 50 → 300: ${describe(at50, at300)}`);
-    writeMeasure(`memory-${renderer}`, { renderer, gpu: session.gpu, spins: [50, 300], at50, at300 });
+    console.log(`${renderer} (${session.gpu}), прогрев с сида ${String(warmUp.longest.seed)} (${String(warmUp.longest.steps)} шагов каскада), 50 → 300: ${describe(at50, at300)}`);
+    writeMeasure(`memory-${renderer}`, { renderer, gpu: session.gpu, spins: [50, 300], longest: warmUp.longest, at50, at300 });
     expect(at300.page.objects, 'объекты кучи страницы на 300-м — не больше +5% к 50-му').toBeLessThanOrEqual(at50.page.objects * GROWTH);
     expect(at300.worker.objects, 'объекты кучи воркера на 300-м — не больше +5% к 50-му').toBeLessThanOrEqual(at50.worker.objects * GROWTH);
     expect(at300.liveTextures, 'живых текстур не прибавилось').toBeLessThanOrEqual(at50.liveTextures);
     expect(at50.liveTextures, 'текстуры сцены посчитаны').toBeGreaterThan(0);
+    expect(at300.liveContexts, 'живых GraphicsContext не прибавилось').toBeLessThanOrEqual(at50.liveContexts);
+    expect(at50.liveContexts, 'GraphicsContext сцены посчитаны').toBeGreaterThan(0);
     expect(session.problems).toEqual([]);
   });
 
-  test(`${renderer}: контроль — ?memleak=1, 50 → 150 спинов: куча страницы и воркера выросла больше 5%, живых текстур больше`, async ({ page }) => {
+  test(`${renderer}: контроль — ?memleak=1, 50 → 150 спинов: куча страницы и воркера выросла больше 5%, живых текстур и GraphicsContext больше`, async ({ page }) => {
     test.setTimeout(20 * 60_000);
+    const warmUp = warmUpRounds();
     const session = await openSession(page, renderer, true);
-    await spinsTo(page, 50);
+    await spinsTo(page, 50, warmUp.rounds);
     const at50 = await heaps(page, session.cdp, session.worker);
-    await spinsTo(page, 150);
+    await spinsTo(page, 150, warmUp.rounds);
     const at150 = await heaps(page, session.cdp, session.worker);
     console.log(`${renderer}, контроль ?memleak=1, 50 → 150: ${describe(at50, at150)}`);
-    writeMeasure(`memory-control-${renderer}`, { renderer, gpu: session.gpu, spins: [50, 150], at50, at150 });
+    writeMeasure(`memory-control-${renderer}`, { renderer, gpu: session.gpu, spins: [50, 150], longest: warmUp.longest, at50, at150 });
     expect(at150.page.objects, 'контроль: проверка кучи страницы краснеет').toBeGreaterThan(at50.page.objects * GROWTH);
     expect(at150.worker.objects, 'контроль: проверка кучи воркера краснеет').toBeGreaterThan(at50.worker.objects * GROWTH);
     expect(at150.liveTextures, 'контроль: проверка текстур краснеет').toBeGreaterThan(at50.liveTextures);
+    expect(at150.liveContexts, 'контроль: проверка GraphicsContext краснеет').toBeGreaterThan(at50.liveContexts);
     expect(session.problems).toEqual([]);
   });
 }

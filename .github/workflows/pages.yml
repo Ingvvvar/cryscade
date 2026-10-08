@@ -1,12 +1,15 @@
 name: Pages
 
-# Деплой живого адреса (§15, фаза 9): только после зелёного CI на main — сборка того же коммита с base /cryscade/
-# (vite.config.ts) и выкладка официальными actions GitHub Pages.
+# Деплой живого адреса (§15, фаза 9): после зелёного CI на main — сборка того же коммита с base /cryscade/
+# (vite.config.ts) и выкладка официальными actions GitHub Pages. Вручную (workflow_dispatch) — сборка и деплой main:
+# первый деплой после включения Pages или повтор. В приватном репозитории оба задания пропускаются условием, а не падают:
+# Pages там не включён, и сборка упала бы уже на configure-pages.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,12 +22,15 @@ concurrency:
 
 jobs:
   build:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: >-
+      ${{ !github.event.repository.private && (
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -38,6 +44,7 @@ jobs:
 
   deploy:
     needs: build
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

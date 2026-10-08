@@ -93,8 +93,8 @@ export class PageProbe implements MountObserver {
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
   readonly warmUp = new URLSearchParams(window.location.search).get('warmup') !== 'off';
   /**
-   * ?memleak=1 — положительный контроль замера памяти (§13): на каждый новый раунд зонд держит объект и текстуру на GPU,
-   * а воркер по каналу зонда — свой объект. Только dev и e2e-сборка.
+   * ?memleak=1 — положительный контроль замера памяти (§13): на каждый новый раунд зонд держит объект, текстуру на GPU и
+   * GraphicsContext, а воркер по каналу зонда — свой объект. Только dev и e2e-сборка.
    */
   readonly #memLeak = new URLSearchParams(window.location.search).get('memleak') === '1';
   readonly #leakedObjects: number[][] = [];
@@ -164,10 +164,11 @@ export class PageProbe implements MountObserver {
     }
   }
 
-  /** Положительный контроль замера памяти: объект и текстура здесь, объект в воркере — по каналу зонда. */
+  /** Положительный контроль замера памяти: объект, текстура и GraphicsContext здесь, объект в воркере — по каналу зонда. */
   #leak(): void {
     this.#leakedObjects.push(new Array<number>(LEAK_DOUBLES).fill(0.5));
     this.scene.leakTexture();
+    this.scene.leakContext();
     this.#leakChannel ??= new BroadcastChannel(PROBE_CHANNEL);
     const message: MemoryLeak = { type: 'memoryLeak' };
     this.#leakChannel.postMessage(message);
@@ -315,6 +316,7 @@ export class PageProbe implements MountObserver {
       frameWork: (ms) => {
         this.scene.frameWork(ms);
       },
+      graphicsContexts: () => scene.graphicsContexts(),
       replays: () => [...this.#replays],
       lab: {
         set: (settings: Partial<LabSettings>) => {
