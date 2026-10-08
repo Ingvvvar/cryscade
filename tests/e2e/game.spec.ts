@@ -1,7 +1,7 @@
 import { expect, test } from '../support/fixtures.ts';
 import { fixtureFirstGrid } from '../support/fixture-rounds.ts';
 import { gameSnapshot, readStorage, reconciled, waitForState } from '../support/game-page.ts';
-import { collectConsole, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
+import { collectConsole, sceneInfo, waitSettled, type ProbeWindow } from '../support/page-probe.ts';
 
 // Игра в браузере (§15, фаза 4): воркер с IndexedDB, Web Locks и BroadcastChannel, живая панель. e2e-сборка с зондом.
 // Показ раунда пропускает зонд (?autoskip=1) тем же тапом, что у игрока: тесты не ждут показа (фаза 5).
@@ -10,6 +10,10 @@ test('первый спин: сетка покоя нового кошелька
   const { problems } = collectConsole(page);
   await page.goto('./?autoskip=1');
   const idle = await waitForState(page, 'idle');
+  // Строка рендерера — в лог прогона: по ней видно, на чём шёл браузер (в CI — программный рендер, §15, фаза 9).
+  await expect.poll(() => page.evaluate(() => (window as ProbeWindow).__cryscadeProbe?.info() ?? null)).not.toBeNull();
+  const info = await sceneInfo(page);
+  console.log(`${test.info().project.name}: рендерер ${info.name} — ${info.gpu}; программный: ${String(info.software)}`);
   expect(idle.grid).toStrictEqual(fixtureFirstGrid('feature-start'));
   expect(idle.balanceMinor).toBe(100_000);
   await expect(page.getByTestId('balance')).toHaveText('1 000,00');

@@ -6,7 +6,7 @@ import { BROWSER_ENVIRONMENT, mountCounts, sceneInfo, waitSettled, type ProbeWin
 // Здесь же — положительный контроль фильтра консоли (BROWSER_ENVIRONMENT, общий для всех e2e): сообщения среды без GPU
 // в этой среде обязаны прийти, и ничего, кроме них: «No available adapters.» — откат сначала спрашивает WebGPU;
 // «GPU stall due to ReadPixels» — headless shell читает кадр WebGL на SwiftShader (проверено на голой странице без Pixi).
-// И контроль отрисовки при программном рендере: зонд зовёт render Pixi не чаще раза в 250 мс (e2e в CI без GPU).
+// И контроль отрисовки при программном рендере: зонд зовёт render Pixi не чаще раза в секунду (e2e в CI без GPU).
 
 test('без ?renderer= откат на WebGL работает, и программный рендер назван программным', async ({ page }) => {
   const raw: string[] = [];
@@ -44,7 +44,7 @@ function installRenderCounter(): void {
   });
 }
 
-test('программный рендер: тикер — каждый кадр, отрисовка — не чаще раза в 250 мс (e2e в CI без GPU)', async ({ page }) => {
+test('программный рендер: тикер — каждый кадр, отрисовка — не чаще раза в секунду (e2e в CI без GPU)', async ({ page }) => {
   await page.addInitScript(installRenderCounter);
   await page.goto('./');
   await waitSettled(page);
@@ -61,7 +61,7 @@ test('программный рендер: тикер — каждый кадр,
   });
   console.log(`программный рендер, ${idle.ms.toFixed(0)} мс покоя: кадров тикера ${String(idle.ticks)}, отрисовок ${String(idle.renders)}`);
   expect(idle.renders, 'отрисовки есть').toBeGreaterThan(0);
-  expect(idle.renders, 'отрисовка — не чаще раза в 250 мс').toBeLessThanOrEqual(Math.floor(idle.ms / 250) + 1);
+  expect(idle.renders, 'отрисовка — не чаще раза в секунду').toBeLessThanOrEqual(Math.floor(idle.ms / 1000) + 1);
   expect(idle.ticks, 'тикер идёт каждый кадр — чаще отрисовок').toBeGreaterThan(idle.renders * 3);
 });
 
