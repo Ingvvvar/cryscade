@@ -29,7 +29,7 @@ function Zone({ layout, name, children }: ZoneProps) {
   );
 }
 
-export interface PanelProps {
+interface PanelProps {
   readonly layout: Layout;
   readonly game: Game;
   readonly snapshot: ControllerSnapshot;

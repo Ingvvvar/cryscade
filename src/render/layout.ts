@@ -31,7 +31,7 @@ export interface Viewport {
   readonly insets: Insets;
 }
 
-export type Orientation = 'portrait' | 'landscape';
+type Orientation = 'portrait' | 'landscape';
 
 /** winLabel — подпись в React, winValue — число выигрыша в Pixi (§11: счётчик крутится в Pixi). */
 export type ZoneName =

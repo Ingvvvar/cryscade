@@ -9,6 +9,8 @@ import { Modal } from './modal.tsx';
 import type { DialogProps } from './services.ts';
 
 const PRESET_ORDER: readonly PresetName[] = ['standard', 'strict'];
+/** Подпись пресета — ключ словаря по его имени: имя пресета код не сравнивает (§1.6). */
+const PRESET_LABEL = { standard: 'presetStandard', strict: 'presetStrict' } as const satisfies Record<PresetName, string>;
 
 export function SettingsDialog({ services, onClose, returnFocus }: DialogProps) {
   const { dict } = useLanguage();
@@ -48,7 +50,7 @@ export function SettingsDialog({ services, onClose, returnFocus }: DialogProps) 
                 services.settings.setPreset(name);
               }}
             />
-            <span>{name === 'strict' ? dict.text.presetStrict : dict.text.presetStandard}</span>
+            <span>{dict.text[PRESET_LABEL[name]]}</span>
           </label>
         ))}
         <p className="field-hint">{locked === null ? dict.text.presetNext : dict.text.presetLocked}</p>

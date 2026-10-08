@@ -21,7 +21,7 @@ function worstRate(play: (seed: number) => void): number {
   return worst;
 }
 
-export interface Throughput {
+interface Throughput {
   readonly silentPerCore: number;
   readonly statsPerCore: number;
 }

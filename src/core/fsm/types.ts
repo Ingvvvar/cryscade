@@ -62,8 +62,6 @@ export type ClientEvent =
   /** Ответ не прошёл гард или пришёл от сервера другой версии. */
   | { readonly type: 'unusable'; readonly reason: 'version' | 'invalid' };
 
-export type ClientEventType = ClientEvent['type'];
-
 /** Что повторяет «Повторити»: тот же запрос — play с тем же ключом, endRound с тем же roundId. */
 export type RetryTarget =
   | { readonly call: 'authenticate' }
@@ -122,8 +120,6 @@ export type StateView =
    */
   | { readonly name: 'replaying'; readonly stage: 'loading' | 'showing' | 'held' | 'done'; readonly roundId: string | null }
   | { readonly name: 'error'; readonly kind: ErrorKind; readonly retry: RetryTarget | null; readonly holdsLock: boolean };
-
-export type StateName = StateView['name'];
 
 export interface Transition {
   readonly state: ClientState;

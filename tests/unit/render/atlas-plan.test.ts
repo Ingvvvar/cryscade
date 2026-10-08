@@ -23,6 +23,7 @@ describe('план атласа', () => {
 
   it('каждый ключ — ровно один кадр размером с запись × разрешение', () => {
     expect(plan.frames.map((f) => f.key).sort()).toStrictEqual(entries.map((e) => e.key).sort());
+    expect(plan.frames.length).toBeGreaterThan(0);
     for (const frame of plan.frames) {
       const entry = entries.find((e) => e.key === frame.key);
       expect(frame.width).toBe(Math.ceil((entry?.width ?? 0) * plan.resolution));

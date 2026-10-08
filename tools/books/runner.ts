@@ -8,7 +8,7 @@ import { BookCollector, type CollectorPlain } from './collector.ts';
 // Проход прообраза книги: та же симуляция, что у отчёта фазы 2 (сборщик MathStats), и выборки корзин. Итог не зависит
 // от числа потоков: сборщик сливается точным сложением, выборки — нижние K по хешу сида.
 
-export interface PrototypePlain {
+interface PrototypePlain {
   readonly stats: MathPlain;
   readonly collector: CollectorPlain;
 }

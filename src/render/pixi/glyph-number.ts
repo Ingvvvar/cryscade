@@ -6,7 +6,7 @@ import { Container, Sprite, type CharData } from 'pixi.js';
 import { MAX_GLYPHS, layoutInteger, layoutMoney, type NumberCodes } from '../number-layout.ts';
 import { glyphsByCode, installedFont, type InstalledFont } from './fonts.ts';
 
-export interface GlyphNumberOptions {
+interface GlyphNumberOptions {
   readonly font: string;
   /** Кегль, единицы дизайна. */
   readonly size: number;

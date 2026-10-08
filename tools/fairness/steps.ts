@@ -6,7 +6,7 @@ import { winMinor } from '../../src/core/money.ts';
 import type { Book } from '../../src/server/book.ts';
 import { MAX_COUNTER, fairnessMessage, fromHex, pickValue, toHex } from '../../src/server/fairness.ts';
 
-export interface VerifyInput {
+interface VerifyInput {
   /** Раскрытый секрет сервера — 32 байта hex. */
   readonly secret: string;
   readonly clientSeed: string;
@@ -15,7 +15,7 @@ export interface VerifyInput {
 }
 
 /** Один counter: сообщение HMAC, дайджест, первые 8 байт и решение границы. */
-export interface CounterStep {
+interface CounterStep {
   readonly counter: number;
   readonly message: string;
   readonly digest: string;
@@ -26,7 +26,7 @@ export interface CounterStep {
   readonly point: number | null;
 }
 
-export interface VerifySteps {
+interface VerifySteps {
   /** SHA-256 секрета — с ним сверяют опубликованное до игры обязательство. */
   readonly commitment: string;
   readonly records: number;
@@ -97,7 +97,7 @@ export function verifySteps(input: VerifyInput, book: Book, ports: VerifyPorts):
   throw new Error(`${String(MAX_COUNTER)} значений подряд за границей равномерности`);
 }
 
-export interface VerifyReport {
+interface VerifyReport {
   readonly lines: readonly string[];
   /** Обязательство (если дано) и движок сошлись. */
   readonly ok: boolean;

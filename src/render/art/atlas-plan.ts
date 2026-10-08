@@ -10,15 +10,15 @@ export const ATLAS_MAX_SIZE = 2048;
 /** Пикселей между кадрами и от края: линейная выборка и мипмапы не цепляют соседа. */
 export const ATLAS_PADDING = 2;
 /** Поле вокруг силуэта под размытие свечения, единицы дизайна. */
-export const GLOW_MARGIN = 14;
+const GLOW_MARGIN = 14;
 /** Исходник рамки для NineSliceSprite: угол и край. */
-export const FRAME_SLICE = 64;
+const FRAME_SLICE = 64;
 /** Плашка числа множителя — NineSliceSprite по ширине числа: концы-полукруги по CHIP.cap. Под кегль числа 22 (§9). */
 export const CHIP = { width: 56, height: 28, cap: 14 } as const;
 /** Замок фриспинов в плашке: рисунок 12 × 14.5 ед. в этом масштабе — под кегль числа 22. */
 export const LOCK_SCALE = 1.25;
 /** Панель плашек фичи — NineSliceSprite: угол и край. */
-export const PANEL_SLICE = 96;
+const PANEL_SLICE = 96;
 export const PANEL_BORDER = 32;
 
 export type ShardIndex = 0 | 1 | 2;
@@ -54,7 +54,7 @@ export function shardKey(symbol: SymbolId, index: ShardIndex): AtlasKey {
 }
 
 /** Размер в единицах дизайна. */
-export interface AtlasEntry {
+interface AtlasEntry {
   readonly key: AtlasKey;
   readonly width: number;
   readonly height: number;

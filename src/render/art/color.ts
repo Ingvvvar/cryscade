@@ -1,6 +1,6 @@
 // Цвет арта: упакованный 0xRRGGBB в sRGB; свет считается в линейном пространстве.
 
-export interface Linear {
+interface Linear {
   readonly r: number;
   readonly g: number;
   readonly b: number;

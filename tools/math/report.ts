@@ -56,7 +56,7 @@ function ratioError(batches: readonly Batch[], x: (batch: Batch) => number, n: (
   return Math.sqrt(variance / batches.length) / meanN;
 }
 
-export interface BookCorrection {
+interface BookCorrection {
   /** c = 0.96 / RTP природный. */
   readonly factor: number;
   /** Книга возможна, только если после поправки доля выигрышей не больше 1: проигрыши не бывают отрицательными. */
@@ -211,7 +211,7 @@ const oneIn = (rate: number): string => (rate === 0 ? '—' : `1 на ${Math.rou
 const x = (value: number, digits = 2): string => `${value.toFixed(digits)}×`;
 
 /** Параметры прогона, от нагрузки стенда не зависящие: время и скорость в отчёт не попадают. */
-export interface RunMeta {
+interface RunMeta {
   readonly from: number;
   readonly threads: number;
   readonly taskSize: number;
@@ -221,7 +221,7 @@ export interface RunMeta {
 /** Раздел скорости: его заполняет `npm run math:speed`, проверив нагрузку стенда. */
 export const SPEED_OPEN = '<!-- скорость -->';
 export const SPEED_CLOSE = '<!-- /скорость -->';
-export const SPEED_PENDING = 'Замер не проводился: `npm run math:speed` на свободной машине.';
+const SPEED_PENDING = 'Замер не проводился: `npm run math:speed` на свободной машине.';
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
   return [`| ${header.join(' | ')} |`, `|${header.map(() => '---').join('|')}|`, ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');

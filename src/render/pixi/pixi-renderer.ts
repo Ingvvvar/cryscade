@@ -22,7 +22,7 @@ import { RoundView } from './round-view.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
 import { warmUp } from './warmup.ts';
 
-export interface PixiRendererOptions {
+interface PixiRendererOptions {
   /** Порядок попыток; рендерера вне списка не будет — принудительный ?renderer= не откатывается молча. */
   readonly preference: readonly RendererName[];
   /** Тестовый зонд; в проде — null. */

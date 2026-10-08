@@ -7,11 +7,11 @@ import type { CollectorPlain } from './collector.ts';
 // всё в BigInt. Порядок — по итогу, потом по сиду: максимальный выигрыш книги — последние индексы.
 
 /** Единица веса на раунд прообраза: 2^16 — вес записи проигрыша и самой частой корзины влезает в u32. */
-export const WEIGHT_UNIT = 65_536;
+const WEIGHT_UNIT = 65_536;
 /** RTP книги — 96/100 точно. */
 const RTP_NUMERATOR = 96n;
 
-export interface SelectedBook {
+interface SelectedBook {
   readonly records: readonly BookRecord[];
   /** Σ веса × payX100 и Σ весов — RTP = sum / (100 × total). */
   readonly paid: bigint;

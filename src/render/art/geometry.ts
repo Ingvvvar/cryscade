@@ -44,14 +44,14 @@ export function chamfer(points: readonly Point[], cut: number): Point[] {
   return out;
 }
 
-export interface Bounds {
+interface Bounds {
   readonly minX: number;
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
 }
 
-export function bounds(points: readonly Point[]): Bounds {
+function bounds(points: readonly Point[]): Bounds {
   return {
     minX: Math.min(...points.map((p) => p.x)),
     minY: Math.min(...points.map((p) => p.y)),

@@ -9,7 +9,7 @@ import { tasksOf, type SimulationPlan, type Task } from './task.ts';
 // функция конфига и сида, набор сливается сложением счётов.
 
 /** Конфиг записи: веса и правила игры, кап недостижимый. Таблица на векторы не влияет. */
-export function uncapped(config: GameConfig): GameConfig {
+function uncapped(config: GameConfig): GameConfig {
   return { ...config, capX100: UNCAPPED_X100 };
 }
 

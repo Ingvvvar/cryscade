@@ -151,7 +151,7 @@ function copied(entry: IndexEntry): IndexedRecord {
 
 export type StorageSnapshot = Readonly<Record<StoreName, readonly (readonly [StoreKey, unknown])[]>>;
 
-export interface MemoryStorageOptions {
+interface MemoryStorageOptions {
   /** true — память стоит на месте IndexedDB (тесты). В проде память — это режим без IndexedDB: false. */
   readonly durable?: boolean;
 }

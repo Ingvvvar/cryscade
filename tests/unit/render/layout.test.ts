@@ -120,6 +120,7 @@ describe('computeLayout — литералы', () => {
     ]) {
       const layout = computeLayout(viewport);
       expect(layout.scale).toBe(0);
+      expect(Object.values(layout.stage).length).toBeGreaterThan(0);
       for (const value of Object.values(layout.stage)) expect(Number.isFinite(value)).toBe(true);
     }
   });

@@ -153,7 +153,7 @@ export interface VerifyResult {
 }
 
 /** counter выбора — от 0 до 63: дальше сервер бросает (server/fairness.ts, MAX_COUNTER). */
-export const VERIFY_COUNTER_MAX = 63;
+const VERIFY_COUNTER_MAX = 63;
 
 export interface Results {
   readonly authenticate: AuthenticateResult;

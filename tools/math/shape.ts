@@ -2,7 +2,7 @@
 // с «красивым» округлением. Дешевеет только нижняя полоса, верхние сохраняют пропорции черновика: до капа доводят
 // множители и каскады, а не один кластер. Структура не меняется: 7 символов, 6 полос, награды и ретриггер — как в §4.2.
 
-export const WEIGHT_TOTAL = 10_000;
+const WEIGHT_TOTAL = 10_000;
 
 /**
  * Веса 7 платящих символов пропорционально r^ярус (Кварц — ярус 0, Бриллиант — 6), ядро — scatter, сумма — 10 000.
@@ -40,7 +40,7 @@ export const DRAFT_PAYTABLE_X100: readonly (readonly number[])[] = [
 export const MAX_CELL_X100 = 100_000;
 
 /** Множитель полосы b (0 — полоса 5–6): нижняя дешевеет в m раз, остальные — как в черновике. */
-export function bandFactor(band: number, low: number): number {
+function bandFactor(band: number, low: number): number {
   return band === 0 ? low : 1;
 }
 
@@ -50,7 +50,7 @@ export function scaledTable(k: number, low = 1): number[][] {
 }
 
 /** Шаг красивого значения: ниже 1× — 0.05, до 10× — 0.1, от 10× — 1×. */
-export function niceStepX100(valueX100: number): number {
+function niceStepX100(valueX100: number): number {
   if (valueX100 < 100) return 5;
   if (valueX100 < 1000) return 10;
   return 100;

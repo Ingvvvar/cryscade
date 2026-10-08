@@ -180,6 +180,7 @@ describe('forbiddenReach', () => {
       ['src/core/probe.ts', ['src/core/engine/e.ts']],
       ['src/core/engine/e.ts', []],
     ]);
+    expect([...graph.values()].flat()).toHaveLength(3);
     for (const [from, targets] of graph) {
       for (const to of targets) expect(checkEdge(from, file(to))).toBeNull();
     }

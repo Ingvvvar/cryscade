@@ -17,7 +17,7 @@ import { ShardView } from './shard-view.ts';
 import { SpotChips } from './spot-chips.ts';
 import { WinCounter } from './win-counter.ts';
 
-export interface RoundViewOptions {
+interface RoundViewOptions {
   readonly texts: SceneTexts;
   readonly codes: NumberCodes;
 }

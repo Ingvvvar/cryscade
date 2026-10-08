@@ -8,7 +8,7 @@ import type { ExternalSource } from '../external.ts';
 import type { Language } from '../i18n/dictionary.ts';
 import type { SettingsView } from '../settings.ts';
 
-export interface SettingsControl extends ExternalSource<SettingsView> {
+interface SettingsControl extends ExternalSource<SettingsView> {
   setLanguage(language: Language): void;
   setPreset(preset: PresetName): void;
   setSound(sound: boolean): void;
@@ -24,7 +24,7 @@ export interface FairnessControl {
 }
 
 /** Лаборатория сети (§6.5): настройки и разовые действия — тот же декоратор транспорта, что всегда в цепочке. */
-export interface LabControl {
+interface LabControl {
   readonly settings: LabSettings;
   set(settings: Partial<LabSettings>): void;
   loseNextResponse(): void;

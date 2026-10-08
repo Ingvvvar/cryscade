@@ -19,7 +19,7 @@ import type { Presentation } from './presenter.ts';
 import type { CallOutcome, Rgs } from './rgs-client.ts';
 import { WalletBook, type WalletUpdate } from './wallet-book.ts';
 
-export interface GameControllerPorts {
+interface GameControllerPorts {
   readonly rgs: Rgs;
   /** Замок раунда cryscade-round — общий для вкладок (Web Locks). */
   readonly roundLock: RoundLock;

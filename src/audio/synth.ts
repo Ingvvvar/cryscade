@@ -10,7 +10,7 @@ import type { Voice } from './director.ts';
 const BASE_HZ = 220;
 const PENTATONIC = [0, 2, 4, 7, 9] as const;
 
-export function pentatonic(step: number): number {
+function pentatonic(step: number): number {
   const octave = Math.floor(step / PENTATONIC.length);
   const degree = PENTATONIC[((step % PENTATONIC.length) + PENTATONIC.length) % PENTATONIC.length] ?? 0;
   return BASE_HZ * 2 ** ((12 * octave + degree) / 12);

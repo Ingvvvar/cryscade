@@ -8,22 +8,22 @@ import { cellRect, toScreen, type ChipRect, type Layout, type Rect } from '../la
 import type { RendererInfo, SceneLabels } from '../renderer.ts';
 import type { InspectableScene, SceneInspector } from './scene-inspector.ts';
 
-export interface SceneInfo extends RendererInfo {
+interface SceneInfo extends RendererInfo {
   readonly maxBatchableTextures: number;
   readonly resolution: number;
   readonly fontReady: boolean;
 }
 
 /** Событие окна: сцена готова и прогрета, первый видимый кадр — следующий. По нему тест снимает счётчики GPU. */
-export const SCENE_READY_EVENT = 'cryscade:scene-ready';
+const SCENE_READY_EVENT = 'cryscade:scene-ready';
 
-export type ControlKind = 'distinct' | 'atlas';
+type ControlKind = 'distinct' | 'atlas';
 
 /** Метка кадра для замера: что на сцене в этот кадр — решает зонд страницы по показу. */
-export type FrameTagger = () => number;
+type FrameTagger = () => number;
 
 /** Записанные кадры: длительность, мс, и метка — по индексу. */
-export interface FrameSamples {
+interface FrameSamples {
   readonly ms: number[];
   readonly tags: number[];
 }

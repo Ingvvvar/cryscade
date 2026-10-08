@@ -16,14 +16,10 @@ export {
 } from './states.ts';
 export type {
   ClientEvent,
-  ClientEventType,
   ClientState,
   Command,
   ErrorKind,
   RejectCode,
-  RetryTarget,
   ShownRound,
-  StateName,
   StateView,
-  Transition,
 } from './types.ts';

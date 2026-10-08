@@ -24,7 +24,7 @@ export interface MountCounts {
   readonly destroys: number;
 }
 
-export type ControlSprites = 'distinct' | 'atlas';
+type ControlSprites = 'distinct' | 'atlas';
 
 /** Лаборатория сети этой вкладки (§6.5): e2e провоцирует сбои через неё. */
 export interface ProbeLab {

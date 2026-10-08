@@ -22,7 +22,7 @@ export interface UpgradeTarget {
   createIndex(store: StoreName, index: IndexName, keyPath: string, unique: boolean): void;
 }
 
-export interface Migration {
+interface Migration {
   readonly version: number;
   readonly up: (target: UpgradeTarget) => void;
 }

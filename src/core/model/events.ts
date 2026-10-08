@@ -45,5 +45,3 @@ export type RoundEvent =
   | { readonly t: 'cap' }
   /** min(кап, Σ payX100 всех кластеров всех win). */
   | { readonly t: 'end'; readonly payX100: number };
-
-export type RoundEventType = RoundEvent['t'];

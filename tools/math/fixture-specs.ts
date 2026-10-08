@@ -4,7 +4,7 @@ import type { RoundEvent } from '../../src/core/model/events.ts';
 
 // Фикстуры раундов: что ищем и в каком виде храним. Раунд — простые данные: сид, итог и события.
 
-export interface RoundSummary {
+interface RoundSummary {
   readonly payX100: number;
   readonly featured: boolean;
   readonly retriggers: number;
@@ -34,7 +34,7 @@ export function summarize(events: readonly RoundEvent[]): RoundSummary {
   return { payX100, featured, retriggers, capped, baseSteps, maxClusterMult };
 }
 
-export interface FixtureSpec {
+interface FixtureSpec {
   readonly name: string;
   readonly description: string;
   /** null — самый крупный на сидах отчёта, иначе первый сид по возрастанию, для которого условие выполнено. */

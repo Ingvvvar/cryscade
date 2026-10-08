@@ -14,7 +14,7 @@ export interface LabSettings {
 
 export const CLEAR_NETWORK: LabSettings = { latencyMs: 0, jitterMs: 0, requestLoss: 0, responseLoss: 0 };
 
-export interface NetworkLabOptions {
+interface NetworkLabOptions {
   /** Случайность — снаружи: в браузере Math.random, в тестах — сценарий. От 0 включительно до 1. */
   readonly random: () => number;
   /** «Перезагрузить страницу»: в браузере — location.reload. */

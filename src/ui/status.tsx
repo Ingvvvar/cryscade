@@ -7,7 +7,7 @@ import { AutoplayBar, type AutoplayControl } from './autoplay-controls.tsx';
 import type { Game } from './game.ts';
 import { useLanguage } from './language-context.ts';
 
-export interface StatusProps {
+interface StatusProps {
   readonly game: Game;
   readonly snapshot: ControllerSnapshot;
   /** Перезагрузка страницы — из корня композиции. */

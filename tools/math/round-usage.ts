@@ -14,7 +14,7 @@ import { PAYING_SYMBOL_COUNT } from '../../src/core/model/symbols.ts';
 export const UNCAPPED_X100 = Number.MAX_SAFE_INTEGER;
 
 /** Клеток таблицы на фазу: 7 символов × полосы. Фаза 0 — основная игра, 1 — фича. */
-export function phaseCells(bands: number): number {
+function phaseCells(bands: number): number {
   return PAYING_SYMBOL_COUNT * bands;
 }
 

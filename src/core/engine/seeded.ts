@@ -5,7 +5,7 @@ import type { RoundRecorder } from './recorder.ts';
 import { RngSymbolSource } from './source.ts';
 import { WatchdogSource } from './watchdog.ts';
 
-export interface SeededEngineOptions {
+interface SeededEngineOptions {
   /**
    * Порог сторожа: запросов к источнику за раунд. Задаёт вызывающий по самому длинному честному раунду своего
    * конфига (§4.7); без него сторожа нет. Превышение — WatchdogError с сидом.

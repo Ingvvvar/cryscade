@@ -25,7 +25,7 @@ export function elapsed(ms: number): string {
   return hours > 0 ? `${String(hours)}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export interface SessionStripProps {
+interface SessionStripProps {
   readonly session: ExternalSource<SessionView>;
   readonly now: () => number;
   readonly className: string;

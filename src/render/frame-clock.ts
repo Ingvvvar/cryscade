@@ -4,7 +4,7 @@
 // чем на миллисекунду, дрейфа нет. Дальше по пути кадра — часы декора, часы показа, sampleScene — идут только целые.
 
 /** Что часам кадра нужно от тикера: время прошедшего кадра в дробных миллисекундах — Ticker Pixi подходит как есть. */
-export interface FrameTicker {
+interface FrameTicker {
   readonly deltaMS: number;
 }
 

@@ -13,9 +13,9 @@ import { FALL, gridSettleMs, type FallProfile } from './fall.ts';
 import { EMPTY_CELL, PLAQUE, type PlaqueKind } from './scene-state.ts';
 import { TIMINGS, bigWinLevel, celebrateMs, counterMs, type SegmentTimings, type Speed } from './timings.ts';
 
-export type GroupKind = 'fill' | 'cascade' | 'feature' | 'retrigger' | 'bigWin';
+type GroupKind = 'fill' | 'cascade' | 'feature' | 'retrigger' | 'bigWin';
 
-export type SegmentKind =
+type SegmentKind =
   | 'clear'
   | 'fall'
   | 'highlight'
@@ -45,7 +45,7 @@ export interface Segment {
 }
 
 /** Что на поле на старте группы. */
-export interface GroupStart {
+interface GroupStart {
   readonly grid: Int8Array;
   readonly spots: Uint8Array;
   readonly counterMinor: number;
@@ -53,7 +53,7 @@ export interface GroupStart {
   readonly freeSpinIndex: number;
 }
 
-export interface Group {
+interface Group {
   readonly kind: GroupKind;
   readonly startMs: number;
   readonly endMs: number;
@@ -71,14 +71,14 @@ export interface Group {
   readonly start: GroupStart;
 }
 
-export interface StepCluster {
+interface StepCluster {
   readonly symbol: number;
   readonly cells: readonly number[];
   readonly contour: readonly ContourRing[];
 }
 
 /** Шаг каскада: кластеры, взрыв, точки, досыпка — всё, что sampleScene нужно, уже в буферах. */
-export interface CascadeStep {
+interface CascadeStep {
   readonly clusters: readonly StepCluster[];
   /** 1 — клетка в кластере шага. */
   readonly won: Uint8Array;
@@ -91,12 +91,12 @@ export interface CascadeStep {
   readonly fallFrom: Int8Array;
 }
 
-export interface Tally {
+interface Tally {
   readonly from: number;
   readonly to: number;
 }
 
-export interface Plaque {
+interface Plaque {
   readonly kind: PlaqueKind;
   readonly value: number;
 }
@@ -127,7 +127,7 @@ export interface Schedule {
   readonly speed: Speed;
 }
 
-export interface ScheduleRound {
+interface ScheduleRound {
   readonly events: readonly RoundEvent[];
   readonly betMinor: number;
   /** Выигрыш раунда от сервера — итог счётчика. */

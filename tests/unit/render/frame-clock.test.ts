@@ -31,10 +31,15 @@ function newSpaceUsed(): number {
   return getHeapSpaceStatistics().find((space) => space.space_name === 'new_space')?.space_used_size ?? Number.NaN;
 }
 
-/** Байт нового пространства на кадр: прогон без единой сборки (иначе рост не виден), после прогрева JIT. */
+/**
+ * Байт нового пространства на кадр: прогон без единой сборки (иначе рост не виден), после прогрева JIT. Прогрев — не
+ * меньше трёх серий и 250 мс: без оптимизирующего компилятора промежуточные дробные упаковываются в кучу (~65 Б на кадр
+ * против ~1 Б), а три серии — около миллисекунды, и в холодном прогоне всего набора фоновый компилятор V8 за неё не успел.
+ */
 function bytesPerFrame(frame: () => void): number {
   const frames = 3000;
-  for (let warm = 0; warm < 3; warm++) for (let k = 0; k < frames; k++) frame();
+  const until = performance.now() + 250;
+  for (let warm = 0; warm < 3 || performance.now() < until; warm++) for (let k = 0; k < frames; k++) frame();
   for (let attempt = 0; attempt < 20; attempt++) {
     const profiler = new GCProfiler();
     profiler.start();

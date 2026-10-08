@@ -15,7 +15,7 @@ import {
 
 export const PROTOCOL_VERSION = 1;
 
-export interface RequestEnvelope {
+interface RequestEnvelope {
   readonly v: typeof PROTOCOL_VERSION;
   readonly id: number;
   readonly body: RequestBody;
@@ -35,7 +35,7 @@ export function responseEnvelope<T>(id: number | null, body: ResponseBody<T>): R
   return { v: PROTOCOL_VERSION, id, body };
 }
 
-export type ParsedRequest =
+type ParsedRequest =
   | { readonly ok: true; readonly id: number; readonly body: RequestBody }
   | { readonly ok: false; readonly id: number | null; readonly error: ProtocolError };
 
@@ -53,7 +53,7 @@ export function parseRequest(raw: unknown): ParsedRequest {
   return { ok: true, id, body: body as RequestBody };
 }
 
-export type ParsedResponse<T extends RequestType> =
+type ParsedResponse<T extends RequestType> =
   | { readonly kind: 'result'; readonly id: number; readonly result: Results[T] }
   | { readonly kind: 'error'; readonly id: number | null; readonly error: ProtocolError }
   /** Сервер другой версии: клиенту остаётся предложить перезагрузку. */

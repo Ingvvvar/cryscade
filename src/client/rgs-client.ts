@@ -11,9 +11,9 @@ import {
 import type { Sleep, Transport } from './ports.ts';
 
 /** Таймаут одной попытки (§6.5). */
-export const ATTEMPT_TIMEOUT_MS = 3000;
+const ATTEMPT_TIMEOUT_MS = 3000;
 /** Паузы перед повторами (§6.5): после четвёртого повтора — экран ошибки. */
-export const RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000, 2000];
+const RETRY_DELAYS_MS: readonly number[] = [250, 500, 1000, 2000];
 
 export type CallOutcome<T> =
   | { readonly kind: 'ok'; readonly result: T }
@@ -31,7 +31,7 @@ export interface Rgs {
   call<B extends RequestBody>(body: B, signal?: AbortSignal): Promise<CallOutcome<Results[B['type']]>>;
 }
 
-export interface RgsClientOptions {
+interface RgsClientOptions {
   readonly attemptTimeoutMs?: number;
   readonly retryDelaysMs?: readonly number[];
 }

@@ -1,7 +1,7 @@
 import type { RoundLease, RoundLock } from './ports.ts';
 
 /** Замок показа раунда (§6.5): общий для вкладок профиля. */
-export const ROUND_LOCK = 'cryscade-round';
+const ROUND_LOCK = 'cryscade-round';
 
 /** То, что замку нужно от navigator.locks. */
 export interface LockRequests {

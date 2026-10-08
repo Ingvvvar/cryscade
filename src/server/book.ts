@@ -7,7 +7,7 @@
 import { BOOK_RECORDS_MAX } from '../protocol/index.ts';
 
 const MAGIC = [0x43, 0x52, 0x59, 0x42] as const;
-export const BOOK_VERSION = 1;
+const BOOK_VERSION = 1;
 const HEADER = 18;
 const RECORD = 12;
 /** Не больше 80 000 записей (§5): книга с запасом ложится в 1 МБ gzip. Индекс книги в протоколе — тот же предел. */
@@ -91,7 +91,7 @@ export class Book {
   }
 }
 
-export type BookRead = { readonly ok: true; readonly book: Book } | { readonly ok: false; readonly problem: string };
+type BookRead = { readonly ok: true; readonly book: Book } | { readonly ok: false; readonly problem: string };
 
 /** Байты → книга через гард: магия, версия, размер, веса от 1, сумма в заголовке равна сумме записей, итог не выше капа. */
 export function decodeBook(bytes: Uint8Array, capX100: number): BookRead {

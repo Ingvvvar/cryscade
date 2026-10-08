@@ -14,7 +14,7 @@ import { GlyphNumber } from './glyph-number.ts';
 import type { GridView } from './grid-view.ts';
 
 /** Центр плашки ниже центра клетки: низ плашки — на краю подложки. Единицы дизайна. */
-export const CHIP_OFFSET_Y = CELL / 2 - BACKING_INSET - CHIP.height / 2;
+const CHIP_OFFSET_Y = CELL / 2 - BACKING_INSET - CHIP.height / 2;
 /** Кегль числа (§9): при 16 ед. в портрете на телефоне шириной 390 px число выходило около 9 px. */
 const DIGIT_SIZE = 22;
 const PAD = 7;

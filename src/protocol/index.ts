@@ -5,15 +5,11 @@ export {
   parseResponse,
   requestEnvelope,
   responseEnvelope,
-  type ParsedRequest,
-  type ParsedResponse,
-  type RequestEnvelope,
   type ResponseEnvelope,
 } from './envelope.ts';
 export { isAscendingInts, isClientSeed, isHex64, isIntIn, isNat, isPositive, isRecord, isToken } from './guards.ts';
 export {
   BOOK_RECORDS_MAX,
-  VERIFY_COUNTER_MAX,
   checkError,
   checkRequestBody,
   checkResult,

@@ -39,7 +39,7 @@ export interface AutoplayGame {
 }
 
 /** Таймеры корня композиции: в браузере setTimeout, в тестах — поддельные. Вернёт отмену. */
-export type Schedule = (ms: number, task: () => void) => () => void;
+type Schedule = (ms: number, task: () => void) => () => void;
 
 /** Пауза между спинами серии — итог раунда успевает показаться. */
 export const AUTOPLAY_PAUSE_MS = 400;

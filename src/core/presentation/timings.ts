@@ -46,8 +46,8 @@ export const TIMINGS = {
 } as const satisfies Record<Speed, SegmentTimings>;
 
 /** Подсчёт выигрыша: от 300 до 2000 мс по логарифму выигрыша в ставках; 5000× и больше — 2000. */
-export const COUNTER_MIN_MS = 300;
-export const COUNTER_MAX_MS = 2000;
+const COUNTER_MIN_MS = 300;
+const COUNTER_MAX_MS = 2000;
 const COUNTER_TOP_X100 = 500_000;
 
 /** Длительность подсчёта выигрыша payX100 (сотые ставки); ноль — подсчёта нет. */
@@ -66,7 +66,7 @@ export const BIG_WIN = [
   { level: 2, fromX100: 5000, celebrateMs: 3400 },
   { level: 3, fromX100: 10_000, celebrateMs: 4200 },
 ] as const;
-export const MAX_WIN_LEVEL = 4;
+const MAX_WIN_LEVEL = 4;
 export const MAX_WIN_CELEBRATE_MS = 5500;
 
 /** Уровень большого выигрыша: 0 — нет; 4 — кап. */
@@ -81,6 +81,3 @@ export function celebrateMs(level: number, speed: Speed): number {
   const base = level === MAX_WIN_LEVEL ? MAX_WIN_CELEBRATE_MS : (BIG_WIN.find((step) => step.level === level)?.celebrateMs ?? 0);
   return base * TIMINGS[speed].celebrateScale;
 }
-
-/** Вспышек и пульсаций — не больше трёх в любую секунду (WCAG 2.3.1). */
-export const FLASHES_PER_SECOND = 3;

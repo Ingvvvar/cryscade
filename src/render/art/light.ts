@@ -8,7 +8,7 @@ import { linear, pack } from './color.ts';
 import { dot3, unit3, type Vec3 } from './geometry.ts';
 import { PALETTE } from './palette.ts';
 
-export interface Light {
+interface Light {
   readonly direction: Vec3;
   readonly intensity: number;
   readonly color: number;

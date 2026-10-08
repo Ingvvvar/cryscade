@@ -14,7 +14,7 @@ export const AWARD_SLOTS = 64;
 /** Наибольший кап для гистограмм: 10 000× ставки, три гистограммы по 8 МБ на поток. */
 export const MAX_CAP_X100 = 1_000_000;
 
-export interface Extreme {
+interface Extreme {
   /** Выплата или число запросов; при равенстве побеждает меньший сид. */
   readonly value: number;
   readonly seed: number;

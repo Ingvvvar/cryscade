@@ -17,7 +17,7 @@ export interface MountObserver {
   bindRemount(remount: (() => void) | null): void;
 }
 
-export interface SceneSessionOptions {
+interface SceneSessionOptions {
   readonly create: () => Renderer;
   /** Рендерер дошёл до готовности — его первый кадр на следующем тике. */
   readonly onReady?: () => void;

@@ -22,7 +22,7 @@ interface OpenDialog {
   readonly returnFocus: HTMLElement | null;
 }
 
-export interface DialogHost {
+interface DialogHost {
   readonly open: (name: DialogName, returnFocus: HTMLElement | null) => void;
   readonly element: ReactNode;
 }

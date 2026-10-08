@@ -4,7 +4,7 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
-export interface ModalProps {
+interface ModalProps {
   /** Имя для тестов и стилей: data-dialog. */
   readonly name: string;
   readonly title: string;

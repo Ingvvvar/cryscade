@@ -64,9 +64,9 @@ import { FAIRNESS_ID, WALLET_ID } from './schema.ts';
 import { SeededRounds } from './seeded-rounds.ts';
 
 /** Все изменения кошелька — под этим замком (§6.3): у всех вкладок один писатель. */
-export const WALLET_LOCK = 'cryscade-wallet';
+const WALLET_LOCK = 'cryscade-wallet';
 
-export interface RgsServerPorts {
+interface RgsServerPorts {
   readonly storage: Storage;
   readonly lock: Lock;
   readonly clock: Clock;

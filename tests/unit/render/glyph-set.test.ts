@@ -18,6 +18,7 @@ describe('glyphSet', () => {
   it('надписи сцены обоих языков: все символы строк ui, кириллица и латиница в наборе', () => {
     const texts = [...sceneTextList(SCENE_TEXTS.uk), ...sceneTextList(SCENE_TEXTS.en)];
     const set = glyphSet(texts);
+    expect(texts.length).toBeGreaterThan(0);
     for (const text of texts) for (const char of text) expect(set).toContain(char);
     expect(set).toEqual(expect.arrayContaining(['Ф', 'і', 'щ', 'ж', 'F', 'T', 'w', 'x']));
   });

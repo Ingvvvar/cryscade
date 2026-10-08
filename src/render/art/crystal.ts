@@ -36,7 +36,7 @@ export interface Band {
   readonly color: number;
 }
 
-export interface FacetArt {
+interface FacetArt {
   readonly points: readonly Point[];
   /** Градиент грани: от внешнего ребра к внутреннему. */
   readonly outer: Point;
@@ -71,7 +71,7 @@ export function gradientBands(points: readonly Point[], from: Point, to: Point, 
   return bands;
 }
 
-export interface Glint {
+interface Glint {
   readonly x: number;
   readonly y: number;
   readonly size: number;
@@ -82,7 +82,7 @@ export interface Segment {
   readonly to: Point;
 }
 
-export interface Shard {
+interface Shard {
   /** Вокруг своего центра масс, внутри круга SHARD_RADIUS. */
   readonly points: readonly Point[];
   readonly color: number;
@@ -103,7 +103,7 @@ export interface CrystalArt extends ArtCommon {
   readonly facets: readonly FacetArt[];
 }
 
-export interface GradientStop {
+interface GradientStop {
   readonly offset: number;
   readonly color: number;
 }
@@ -116,7 +116,7 @@ export interface CoreArt extends ArtCommon {
 }
 
 /** Цвет градиента по остановкам в точке offset ∈ [0, 1]. */
-export function colorAt(stops: readonly GradientStop[], offset: number): number {
+function colorAt(stops: readonly GradientStop[], offset: number): number {
   const first = stops[0];
   if (first === undefined) throw new RangeError('градиент без остановок');
   let previous = first;

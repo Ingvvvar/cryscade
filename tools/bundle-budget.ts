@@ -55,7 +55,7 @@ export function gzipBytes(code: string): number {
   return gzipSync(code).length;
 }
 
-export interface BudgetReport {
+interface BudgetReport {
   readonly limit: number;
   readonly main: number;
   readonly workers: number;

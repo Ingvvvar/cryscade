@@ -9,7 +9,7 @@ import { LanguageContext } from './language-context.ts';
 import type { LanguageView } from './language.ts';
 import { SceneHost, type SceneHostProps } from './scene-host.tsx';
 
-export interface AppProps extends Omit<SceneHostProps, 'onOpenDialog' | 'sound' | 'onSound'> {
+interface AppProps extends Omit<SceneHostProps, 'onOpenDialog' | 'sound' | 'onSound'> {
   readonly language: ExternalSource<LanguageView>;
   readonly services: DialogServices;
 }

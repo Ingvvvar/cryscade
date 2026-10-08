@@ -4,13 +4,13 @@
 // за минуту ещё несколько минут.
 
 /** Доля логических ядер, до которой стенд считается свободным. */
-export const LOAD_SHARE = 0.4;
+const LOAD_SHARE = 0.4;
 
 export function loadThreshold(cores: number): number {
   return LOAD_SHARE * cores;
 }
 
-export interface Load {
+interface Load {
   /** Логических ядер: порог — LOAD_SHARE × ядра. */
   readonly cores: number;
   readonly before: number;
@@ -25,7 +25,7 @@ export interface Clock {
   sleep(ms: number): Promise<void>;
 }
 
-export interface Idle {
+interface Idle {
   readonly idle: boolean;
   readonly load: number;
   readonly waitedMs: number;
@@ -43,7 +43,7 @@ export async function waitForIdle(load: () => number, threshold: number, timeout
   }
 }
 
-export interface Speed {
+interface Speed {
   readonly silentPerCore: number;
   readonly statsPerCore: number;
 }

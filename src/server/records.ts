@@ -18,7 +18,7 @@ export interface WalletRecord {
   readonly resetSeq: number;
 }
 
-export type RoundStatus = 'active' | 'closed';
+type RoundStatus = 'active' | 'closed';
 
 export interface RoundRecord {
   readonly roundId: string;

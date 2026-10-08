@@ -9,14 +9,14 @@ import type { MathReport } from '../math/report.ts';
 // показатели — суммы весов в BigInt: частота события = Σ весов записей с событием / W, точно. Дробные числа — только
 // в тексте отчёта. Ширина интервала Монте-Карло — из прообраза: книга её и заменяет.
 
-export interface BucketFacts {
+interface BucketFacts {
   readonly label: string;
   readonly records: number;
   readonly weight: bigint;
   readonly paid: bigint;
 }
 
-export interface BookFacts {
+interface BookFacts {
   readonly records: number;
   readonly total: bigint;
   /** Σ веса × payX100 и Σ веса × payX100². */
@@ -129,7 +129,7 @@ const percent = (a: bigint, b: bigint, digits = 2): string => `${decimal(100n * 
 const oneIn = (a: bigint, b: bigint): string => (a === 0n ? '—' : `1 на ${Number((2n * b + a) / (2n * a)).toLocaleString('ru-RU')}`);
 const times = (x100: number): string => `${(x100 / 100).toFixed(2)}×`;
 
-export interface BookMeta {
+interface BookMeta {
   readonly file: string;
   readonly sha256: string;
   readonly gzipBytes: number;

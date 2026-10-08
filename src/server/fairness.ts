@@ -39,7 +39,7 @@ export function pickValue(digest: Uint8Array, total: number): number | null {
   return value >= limit ? null : Number(value % weight);
 }
 
-export interface Draw {
+interface Draw {
   readonly index: number;
   /** На каком counter значение прошло: 0 — сразу. */
   readonly counter: number;

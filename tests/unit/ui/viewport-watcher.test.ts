@@ -141,6 +141,7 @@ describe('ViewportWatcher', () => {
   it('dispose снимает все подписки', () => {
     const { screen, source, watcher } = setup();
     watcher.start();
+    expect(screen.queries.length).toBeGreaterThan(0);
     watcher.dispose();
     expect(screen.queries.every((list) => list.listeners.size === 0)).toBe(true);
     expect(source.listeners.size).toBe(0);

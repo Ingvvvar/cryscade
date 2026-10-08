@@ -5,7 +5,7 @@ import { SIMULATOR_MAX_REQUESTS } from './limits.ts';
 /** Раундов в быстрой проверке: сиды [0, 2·10⁵), один поток. */
 export const QUICK_ROUNDS = 200_000;
 
-export interface QuickSum {
+interface QuickSum {
   /** Сумма выплат в сотых долях ставки — «золотая» сумма. */
   readonly payX100: number;
   readonly wins: number;
