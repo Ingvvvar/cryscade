@@ -4,6 +4,18 @@ import { BroadcastTabChannel, UuidKeys, WebRoundLock, WorkerTransport, type Lock
 // Браузерные адаптеры клиента на подставных Worker, LockManager и EventTarget. Настоящие — в e2e: перехват, очередь,
 // две вкладки. Здесь — логика самих адаптеров: перезапуск упавшего воркера, выдача, очередь, перехват и отказы замка.
 
+/**
+ * Событие error воркера. Глобального ErrorEvent в Node 24 нет (появился в v25.0.0; CI — на 24), Event есть: поля —
+ * пустые, транспорт их не читает.
+ */
+class WorkerErrorEvent extends Event implements ErrorEvent {
+  readonly colno = 0;
+  readonly error: unknown = null;
+  readonly filename = '';
+  readonly lineno = 0;
+  readonly message = '';
+}
+
 /** Подставной воркер: что ему прислали, и ручки message и error. */
 class FakeWorker implements WorkerLike {
   onmessage: ((event: MessageEvent) => void) | null = null;
@@ -24,7 +36,7 @@ class FakeWorker implements WorkerLike {
   }
 
   crash(): void {
-    this.onerror?.(new ErrorEvent('error'));
+    this.onerror?.(new WorkerErrorEvent('error'));
   }
 }
 
