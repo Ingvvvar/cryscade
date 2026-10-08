@@ -89,8 +89,9 @@ export class NetworkLabTransport implements Transport {
     this.#holdNextEndRound = true;
   }
 
-  /** Отпустить задержанные endRound — дальше по обычным правилам. */
+  /** Отпустить задержанные endRound и снять ещё не сработавшую задержку — дальше по обычным правилам. */
   releaseHeld(): void {
+    this.#holdNextEndRound = false;
     for (const message of this.#held.splice(0)) this.#forward(message);
   }
 

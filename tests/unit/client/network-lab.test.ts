@@ -172,6 +172,15 @@ describe('разовые действия', () => {
     expect(inner.sent).toStrictEqual([request(2, 'endRound'), request(3, 'endRound'), request(4, 'endRound'), request(5, 'endRound')]);
   });
 
+  it('releaseHeld снимает и взведённую задержку: endRound после «Відпустити» идёт, даже если до него ничего не держалось', () => {
+    const { inner, lab } = rig();
+    lab.holdNextEndRound();
+    lab.releaseHeld();
+    lab.send(request(2, 'endRound'));
+    lab.send(request(3, 'endRound'));
+    expect(inner.sent).toStrictEqual([request(2, 'endRound'), request(3, 'endRound')]);
+  });
+
   it('перезагрузка посреди раунда: ответ на play доставлен, страница перезагружается, дальше — ничего', () => {
     const { inner, lab, got, reloads } = rig();
     lab.reloadMidNextRound();
