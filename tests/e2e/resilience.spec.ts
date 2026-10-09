@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
 import { gameSnapshot, labCall, readStorage, reconciled, sentBodies, shownRounds, waitForState } from '../support/game-page.ts';
-import { collectConsole } from '../support/page-probe.ts';
+import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 
 // Устойчивость (§6.5, §15 фаза 4): перезагрузка посреди раунда, потеря ответа, две вкладки на одном кошельке, перехват
 // очередью и кнопкой. Вкладки — страницы одного контекста: общие IndexedDB, Web Locks и BroadcastChannel. Сбои — через
@@ -137,6 +137,56 @@ test('перехват кнопкой: A жива, B «Грати тут» до�
   await a.waitForTimeout(3500);
   expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual([abandoned]);
   const afterA = await waitForState(a, 'idle');
+  const stored = await readStorage(b);
+  expect(stored.rounds.map((round) => [round.idempotencyKey, round.status])).toStrictEqual([[abandoned?.idempotencyKey, 'closed']]);
+  expect(await shownRounds(b)).toStrictEqual(stored.rounds.map((round) => round.roundId));
+  expect(await shownRounds(a)).toStrictEqual([]);
+  expect([afterA.balanceMinor, afterB.balanceMinor]).toStrictEqual([reconciled(stored), reconciled(stored)]);
+  expect(consoles.flatMap((console) => console.problems)).toEqual([]);
+});
+
+type StatesWindow = ProbeWindow & { __states?: string[] };
+
+/** Журнал смен состояния вкладки — из самой страницы, раз в миллисекунду: опрос теста столько не видит. */
+async function recordStates(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const scope = window as StatesWindow;
+    const states: string[] = [];
+    scope.__states = states;
+    window.setInterval(() => {
+      const name = scope.__cryscadeProbe?.game()?.state.name ?? 'none';
+      if (states.at(-1) !== name) states.push(name);
+    }, 1);
+  });
+}
+
+const statesOf = (page: Page): Promise<string[]> => page.evaluate(() => [...((window as StatesWindow).__states ?? [])]);
+
+// Быстрый путь того же перехвата (решение 6 прогона №3, проба 20/20 в Chromium и WebKit): конец раунда B никто не держит,
+// B доигрывает раунд A с автопропуском за доли секунды и отдаёт замок раньше, чем опрос теста увидел бы A в ожидании, —
+// A проходит ожидание сразу в authenticate. Тест не ждёт ожидания A: прежний тест ждал и запирал сам себя.
+test('перехват кнопкой, быстрый путь: B доигрывает раунд A быстрее опроса A; брошенный ключ A не уходит; деньги сходятся', async ({ context }) => {
+  const a = await context.newPage();
+  const b = await context.newPage();
+  const consoles = [collectConsole(a), collectConsole(b)];
+  await open(a);
+  await open(b);
+  await labCall(a, 'set', { responseLoss: 1 });
+  await spinButton(a).click();
+  await expect.poll(async () => (await sentBodies(a)).filter((body) => body.type === 'play').length).toBe(1);
+  await spinButton(b).click();
+  await waitForState(b, 'waitingForTab');
+  await recordStates(a);
+  await b.getByRole('button', { name: 'Грати тут' }).click();
+  const afterB = await waitForState(b, 'idle');
+  const whenBIdle = await statesOf(a);
+  await labCall(a, 'set', { responseLoss: 0 });
+  const [abandoned] = (await sentBodies(a)).filter((body) => body.type === 'play');
+  // Окно, в котором A повторила бы play (таймаут 3 с + пауза 250 мс), — наблюдаем отсутствие повтора, не ждём исхода.
+  await a.waitForTimeout(3500);
+  expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual([abandoned]);
+  const afterA = await waitForState(a, 'idle');
+  console.log(`быстрый перехват: состояния A к покою B — ${whenBIdle.join(' → ')}; все — ${(await statesOf(a)).join(' → ')}`);
   const stored = await readStorage(b);
   expect(stored.rounds.map((round) => [round.idempotencyKey, round.status])).toStrictEqual([[abandoned?.idempotencyKey, 'closed']]);
   expect(await shownRounds(b)).toStrictEqual(stored.rounds.map((round) => round.roundId));
