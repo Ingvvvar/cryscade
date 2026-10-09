@@ -137,7 +137,9 @@ test('ссылка в никуда: раунда нет в истории бра
 });
 
 test('вся книга: события и итог каждой из 58 354 записей в движке браузера побайтно равны Node', async ({ page }) => {
-  test.setTimeout(180_000);
+  // В CI WebKit на Linux — 1.7–2.7 мин в зелёных прогонах (около минуты — подсчёт в Node) и больше 3 мин рядом с тяжёлым
+  // тестом в соседнем воркере (37997177148). Предел — вдвое выше худшего.
+  test.setTimeout(360_000);
   const { problems } = collectConsole(page);
   const book = localBook();
   const rounds = new SeededRounds(DEFAULT_CONFIG, 100_000);
