@@ -105,17 +105,16 @@ test('пропуск во фриспине: два клика — к концу 
   // ~2000 кадров поддельными часами: локально 21–31 с, в CI на 2 ядрах — около 100 с (прогон 37850445309).
   test.setTimeout(180_000);
   const { problems } = collectConsole(page);
+  // Звук выключен настройкой из прошлой сессии игрока (та же запись, что оставляет ♪): предмет теста — пропуск, а не
+  // звук. WebKit на Linux (CI) со звуком висел внутри runFor на тысячах кадров подряд — в местах сигналов (конец раунда,
+  // каскады); локально — нет. Кнопкой нельзя: клик ждёт двух кадров, а поддельные часы в WebKit на Linux сами не идут.
+  await page.addInitScript(() => {
+    localStorage.setItem('cryscade:settings', JSON.stringify({ v: 1, language: 'uk', preset: 'standard', sound: false }));
+  });
   await page.clock.install({ time: 0 });
   await open(page);
   await force(page, 'feature');
-  // Звук выключен первым жестом, как это сделал бы игрок (♪): предмет теста — пропуск, а не звук. WebKit на Linux (CI)
-  // со звуком висел внутри runFor на тысячах кадров подряд — в местах сигналов (конец раунда, каскады); локально — нет.
-  await page.getByRole('button', { name: 'Звук' }).click();
   await expect(page.getByRole('button', { name: 'Звук' })).toHaveAttribute('aria-pressed', 'false');
-  // Фокус — прочь с кнопки: в Chromium пробел нажал бы её же, а не крутил.
-  await page.evaluate(() => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  });
   // Часы страницы стоят: показ двигается только runFor — клики меряются от места, где он стоит, без гонки с тикером.
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
   await page.keyboard.press('Space');
