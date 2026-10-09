@@ -108,6 +108,14 @@ test('пропуск во фриспине: два клика — к концу 
   await page.clock.install({ time: 0 });
   await open(page);
   await force(page, 'feature');
+  // Звук выключен первым жестом, как это сделал бы игрок (♪): предмет теста — пропуск, а не звук. WebKit на Linux (CI)
+  // со звуком висел внутри runFor на тысячах кадров подряд — в местах сигналов (конец раунда, каскады); локально — нет.
+  await page.getByRole('button', { name: 'Звук' }).click();
+  await expect(page.getByRole('button', { name: 'Звук' })).toHaveAttribute('aria-pressed', 'false');
+  // Фокус — прочь с кнопки: в Chromium пробел нажал бы её же, а не крутил.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  });
   // Часы страницы стоят: показ двигается только runFor — клики меряются от места, где он стоит, без гонки с тикером.
   await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 100);
   await page.keyboard.press('Space');
