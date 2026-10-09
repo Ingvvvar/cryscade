@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Не latest: с 19 октября 2026 это Ubuntu 26, а системные зависимости Playwright для WebKit на ней не проверены.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
