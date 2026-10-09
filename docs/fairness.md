@@ -121,6 +121,7 @@ PY
 ## Всё одной командой
 
 ```sh
+# раскрытый секрет демонстрационного раунда — ничего не защищает
 node tools/fairness/verify.ts --secret=6ce21799a457eefb0c1e6532af8132dc4fdf902e4ff9459c36f3088adfc5e48d \
   --client-seed=368b3992e69d7702 --nonce=2 --commitment=2e2bb4e58966f22a7cdd8eed6d6a7b4030abef3cf5b0cead067218feb9d2e8be
 ```
