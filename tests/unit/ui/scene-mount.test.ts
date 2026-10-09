@@ -6,7 +6,7 @@ import { RUN_TIMEOUT_MS } from '../../support/property-run.ts';
 
 // Поддельный рендерер: init ждёт, пока тест не разрешит или не отвергнет его. Двойной destroy — ошибка.
 const HOST = {} as HTMLElement;
-const INFO: RendererInfo = { name: 'webgl', gpu: 'fake', software: false };
+const INFO: RendererInfo = { name: 'webgl', gpu: 'fake swiftshader', software: true, economy: true };
 
 class InjectedFailure extends Error {}
 
@@ -64,6 +64,8 @@ class Harness {
   readonly log: string[] = [];
   readonly renderers: FakeRenderer[] = [];
   readonly ready: FakeRenderer[] = [];
+  /** Что init рендерера сказал о себе — onReady получает это рядом с рендерером (полоса эконом-режима в ui). */
+  readonly infos: RendererInfo[] = [];
   readonly errors: unknown[] = [];
   readonly mount: SceneMount<FakeRenderer>;
 
@@ -75,7 +77,10 @@ class Harness {
         this.log.push(`create#${String(renderer.id)}`);
         return renderer;
       },
-      (renderer) => this.ready.push(renderer),
+      (renderer, info) => {
+        this.ready.push(renderer);
+        this.infos.push(info);
+      },
       (error) => this.errors.push(error),
     );
   }
@@ -106,6 +111,7 @@ describe('SceneMount — сценарии', () => {
     expect(h.log).toStrictEqual(['create#1', 'init#1']);
     expect(h.mount.renderer).toBe(h.renderer(1));
     expect(h.ready).toStrictEqual([h.renderer(1)]);
+    expect(h.infos).toStrictEqual([{ name: 'webgl', gpu: 'fake swiftshader', software: true, economy: true }]);
   });
 
   it('размонтировались во время await init — рендерер уничтожается сразу по возврату', async () => {

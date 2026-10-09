@@ -92,6 +92,8 @@ export class PageProbe implements MountObserver {
   readonly #replays: unknown[] = [];
   /** ?warmup=off выключает прогрев — положительный контроль его проверки; только в dev и e2e-сборке. */
   readonly warmUp = new URLSearchParams(window.location.search).get('warmup') !== 'off';
+  /** ?economy=off выключает эконом-режим без GPU — контроль его проверки (в покое кадры идут); только в dev и e2e-сборке. */
+  readonly economy = new URLSearchParams(window.location.search).get('economy') !== 'off';
   /**
    * ?memleak=1 — положительный контроль замера памяти (§13): на каждый новый раунд зонд держит объект, текстуру на GPU и
    * GraphicsContext, а воркер по каналу зонда — свой объект. Только dev и e2e-сборка.
@@ -263,6 +265,7 @@ export class PageProbe implements MountObserver {
       pinAmbient: (seconds) => {
         scene.pinAmbient(seconds);
       },
+      ambientSeconds: () => scene.ambientSeconds(),
       backgroundOnly: (on) => {
         scene.backgroundOnly(on);
       },

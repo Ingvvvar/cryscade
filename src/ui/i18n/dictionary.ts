@@ -61,6 +61,8 @@ export interface Dictionary {
     readonly loading: string;
     /** Запрос не удался: сервер не ответил или ответ не годится. */
     readonly failed: string;
+    /** Эконом-режим без аппаратного ускорения (§10) — полоса уведомлений, один раз за загрузку. */
+    readonly economy: string;
   };
   /** Правила и выплаты (§11): числа — из конфига модели. */
   readonly rules: {

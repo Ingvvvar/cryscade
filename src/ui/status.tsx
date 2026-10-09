@@ -17,11 +17,21 @@ interface StatusProps {
 }
 
 /**
- * Полосы над сценой; exitHref — выход из повтора в обычный запуск. Хранилище, отказ спину и повтор — живой областью
- * (role="status"); полоса автоигры — вне её: ход серии диктор не читает на каждом раунде, итог раунда объявляет свой
- * aria-live.
+ * Полосы над сценой; exitHref — выход из повтора в обычный запуск; economy — полоса эконом-режима (§10). Хранилище, отказ
+ * спину, повтор и эконом-режим — живой областью (role="status"); полоса автоигры — вне её: ход серии диктор не читает на
+ * каждом раунде, итог раунда объявляет свой aria-live.
  */
-export function NoticeBar({ snapshot, exitHref, autoplay }: { readonly snapshot: ControllerSnapshot; readonly exitHref: string; readonly autoplay: AutoplayControl }) {
+export function NoticeBar({
+  snapshot,
+  exitHref,
+  autoplay,
+  economy,
+}: {
+  readonly snapshot: ControllerSnapshot;
+  readonly exitHref: string;
+  readonly autoplay: AutoplayControl;
+  readonly economy: boolean;
+}) {
   const { dict } = useLanguage();
   const { state, notice } = snapshot;
   const refusal = state.name === 'idle' && state.refusal !== null ? (dict.refusal[state.refusal] ?? null) : null;
@@ -29,8 +39,8 @@ export function NoticeBar({ snapshot, exitHref, autoplay }: { readonly snapshot:
   return (
     <div className="notices">
       <AutoplayBar autoplay={autoplay} />
-      {(notice !== null || refusal !== null || replay) && (
-        <NoticeLines replay={replay} notice={notice} refusal={refusal} exitHref={exitHref} />
+      {(notice !== null || refusal !== null || replay || economy) && (
+        <NoticeLines replay={replay} notice={notice} refusal={refusal} economy={economy} exitHref={exitHref} />
       )}
     </div>
   );
@@ -40,11 +50,13 @@ function NoticeLines({
   replay,
   notice,
   refusal,
+  economy,
   exitHref,
 }: {
   readonly replay: boolean;
   readonly notice: ControllerSnapshot['notice'];
   readonly refusal: string | null;
+  readonly economy: boolean;
   readonly exitHref: string;
 }) {
   const { dict } = useLanguage();
@@ -64,6 +76,11 @@ function NoticeLines({
         </p>
       )}
       {refusal !== null && <p className="notice notice-refusal">{refusal}</p>}
+      {economy && (
+        <p className="notice notice-economy" data-notice="economy">
+          {dict.text.economy}
+        </p>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@
 
 import { computeLayout, type Layout, type Viewport } from '../render/layout.ts';
 import type { NumberStyle } from '../render/number-layout.ts';
-import type { LanguageSink, Renderer, SceneSource, SceneTexts, SourceSink, ViewportSink } from '../render/renderer.ts';
+import type { LanguageSink, Renderer, RendererInfo, SceneSource, SceneTexts, SourceSink, ViewportSink } from '../render/renderer.ts';
 import { SceneMount } from './scene-mount.ts';
 
 /** Счётчики монтирований для тестового зонда. */
@@ -19,8 +19,8 @@ export interface MountObserver {
 
 interface SceneSessionOptions {
   readonly create: () => Renderer;
-  /** Рендерер дошёл до готовности — его первый кадр на следующем тике. */
-  readonly onReady?: () => void;
+  /** Рендерер дошёл до готовности — его первый кадр на следующем тике; info — чем он рисует и в каком режиме. */
+  readonly onReady?: (info: RendererInfo) => void;
   readonly onLayout: (layout: Layout) => void;
   readonly onError: (error: unknown) => void;
   readonly observer: MountObserver | null;
@@ -38,8 +38,8 @@ export class SceneSession implements ViewportSink, SourceSink, LanguageSink {
     this.#options = options;
     this.#mount = new SceneMount<Renderer>(
       options.create,
-      (renderer) => {
-        this.#ready(renderer);
+      (renderer, info) => {
+        this.#ready(renderer, info);
       },
       (error) => {
         options.observer?.noteError(error);
@@ -84,11 +84,11 @@ export class SceneSession implements ViewportSink, SourceSink, LanguageSink {
     this.#mount.renderer?.setLanguage(texts, numbers);
   }
 
-  #ready(renderer: Renderer): void {
+  #ready(renderer: Renderer, info: RendererInfo): void {
     if (this.#viewport !== null) renderer.resize(this.#viewport.viewport, this.#viewport.pixelRatio);
     renderer.setReducedMotion(this.#reducedMotion);
     renderer.setSource(this.#source);
     if (this.#language !== null) renderer.setLanguage(this.#language.texts, this.#language.numbers);
-    this.#options.onReady?.();
+    this.#options.onReady?.(info);
   }
 }

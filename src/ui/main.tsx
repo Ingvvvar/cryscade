@@ -141,6 +141,7 @@ async function mount(): Promise<void> {
       preference: choice.preference,
       inspector: probe?.scene ?? null,
       warmUp: probe?.warmUp ?? true,
+      economy: probe?.economy ?? true,
       texts: current.scene,
       numbers: current.money.style,
       allTexts: LANGUAGES.map((name) => SCENE_TEXTS[name]),

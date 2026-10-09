@@ -61,6 +61,7 @@ export const EN: Dictionary = {
     lab: 'Network lab',
     loading: 'Loading…',
     failed: 'The game server did not answer — try again',
+    economy: 'Hardware acceleration is unavailable — graphics simplified',
   },
   rules: {
     symbols: ['Quartz', 'Amethyst', 'Citrine', 'Emerald', 'Sapphire', 'Ruby', 'Diamond'],

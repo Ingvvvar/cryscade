@@ -235,6 +235,11 @@ body {
   border-color: var(--glow);
 }
 
+/* Эконом-режим без GPU (§10): один раз за загрузку. */
+.notice-economy {
+  border-color: var(--glow);
+}
+
 /* Плашка повтора: полоса пропускает тап на сцену, ссылка выхода — нет. */
 .notice-replay {
   border-color: var(--glow);

@@ -3,18 +3,18 @@
 // дошёл до конца init и уничтожен. Отменённое до своей очереди монтирование рендерер не создаёт вовсе;
 // размонтировались во время await init — рендерер уничтожается сразу по возврату. Живых — не больше одного.
 
-import type { RendererLifecycle } from '../render/renderer.ts';
+import type { RendererInfo, RendererLifecycle } from '../render/renderer.ts';
 
 export class SceneMount<R extends RendererLifecycle> {
   readonly #create: () => R;
-  readonly #onReady: (renderer: R) => void;
+  readonly #onReady: (renderer: R, info: RendererInfo) => void;
   readonly #onError: (error: unknown) => void;
   #chain: Promise<void> = Promise.resolve();
   #generation = 0;
   #attached = false;
   #live: R | null = null;
 
-  constructor(create: () => R, onReady: (renderer: R) => void, onError: (error: unknown) => void) {
+  constructor(create: () => R, onReady: (renderer: R, info: RendererInfo) => void, onError: (error: unknown) => void) {
     this.#create = create;
     this.#onReady = onReady;
     this.#onError = onError;
@@ -55,8 +55,9 @@ export class SceneMount<R extends RendererLifecycle> {
   async #start(generation: number, host: HTMLElement): Promise<void> {
     if (generation !== this.#generation) return;
     const renderer = this.#create();
+    let info: RendererInfo;
     try {
-      await renderer.init(host);
+      info = await renderer.init(host);
     } catch (error) {
       // Рендерер после неудачного init уничтожается так же: он мог успеть создать канвас и контекст.
       renderer.destroy();
@@ -68,6 +69,6 @@ export class SceneMount<R extends RendererLifecycle> {
       return;
     }
     this.#live = renderer;
-    this.#onReady(renderer);
+    this.#onReady(renderer, info);
   }
 }

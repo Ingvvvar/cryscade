@@ -7,7 +7,7 @@ import { SCENE_TEXTS } from '../../../src/ui/scene-texts.ts';
 import { SceneSession, type MountObserver } from '../../../src/ui/scene-session.ts';
 
 const HOST = {} as HTMLElement;
-const SOURCE: SceneSource = { tick: () => new SceneState(), schedule: null, finished: false };
+const SOURCE: SceneSource = { tick: () => new SceneState(), schedule: null, finished: false, clock: 0 };
 const PORTRAIT: Viewport = { width: 390, height: 844, insets: { top: 47, right: 0, bottom: 34, left: 0 } };
 const LANDSCAPE: Viewport = { width: 1280, height: 720, insets: { top: 0, right: 0, bottom: 0, left: 0 } };
 const EN_NUMBERS: NumberStyle = { group: ',', decimal: '.', groupFrom: 1000 };
@@ -19,7 +19,7 @@ class FakeRenderer implements Renderer {
   init(): Promise<RendererInfo> {
     return new Promise((resolve) => {
       this.#resolve = () => {
-        resolve({ name: 'webgl', gpu: 'fake', software: false });
+        resolve({ name: 'webgl', gpu: 'fake swiftshader', software: true, economy: true });
       };
     });
   }
@@ -71,9 +71,10 @@ class Counter implements MountObserver {
 
 const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: Layout[]; observer: Counter } {
+function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: Layout[]; observer: Counter; infos: RendererInfo[] } {
   const renderers: FakeRenderer[] = [];
   const layouts: Layout[] = [];
+  const infos: RendererInfo[] = [];
   const observer = new Counter();
   const session = new SceneSession({
     create: () => {
@@ -81,11 +82,12 @@ function setup(): { session: SceneSession; renderers: FakeRenderer[]; layouts: L
       renderers.push(renderer);
       return renderer;
     },
+    onReady: (info) => infos.push(info),
     onLayout: (layout) => layouts.push(layout),
     onError: () => undefined,
     observer,
   });
-  return { session, renderers, layouts, observer };
+  return { session, renderers, layouts, observer, infos };
 }
 
 describe('SceneSession', () => {
@@ -99,6 +101,16 @@ describe('SceneSession', () => {
     renderers[0]?.finishInit();
     await flush();
     expect(renderers[0]?.calls).toStrictEqual(['resize 390@3', 'motion true', 'source есть']);
+  });
+
+  it('готовность — с тем, что init рендерера сказал о себе: эконом-режим доходит до ui (полоса уведомлений)', async () => {
+    const { session, renderers, infos } = setup();
+    session.attach(HOST);
+    await flush();
+    expect(infos).toStrictEqual([]);
+    renderers[0]?.finishInit();
+    await flush();
+    expect(infos).toStrictEqual([{ name: 'webgl', gpu: 'fake swiftshader', software: true, economy: true }]);
   });
 
   it('источник после готовности идёт рендереру сразу; без источника рендерер получает null', async () => {

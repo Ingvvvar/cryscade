@@ -38,7 +38,8 @@ test.describe('DPR телефона 3', () => {
   test.use({ deviceScaleFactor: 3, viewport: { width: 390, height: 844 } });
 
   test('разрешение рендерера — 2: атлас выпечен в 2×, лишние пиксели шейдеру не нужны', async ({ page }) => {
-    await page.goto('./?renderer=webgl');
+    // Эконом-режим выключен: в CI без GPU он поставил бы 1× (его проверка — fallback.spec); здесь — предел плотности.
+    await page.goto('./?renderer=webgl&economy=off');
     await waitSettled(page);
     expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3);
     expect((await sceneInfo(page)).resolution).toBe(2);

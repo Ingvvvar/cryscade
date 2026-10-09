@@ -13,6 +13,8 @@ export interface RendererInfo {
   readonly gpu: string;
   /** Программный рендер (SwiftShader, запасной адаптер WebGPU): на нём производительность не мерят. */
   readonly software: boolean;
+  /** Эконом-режим (§10): программный рендер — фон стоит, разрешение 1×, кадр рисуется, только когда изменился. */
+  readonly economy: boolean;
 }
 
 /** Жизненный цикл — для SceneMount. init асинхронный; канвас рендерер создаёт в host сам и сам убирает в destroy. */
@@ -61,6 +63,8 @@ export interface SceneSource {
   /** Ход часов на deltaMs — целые миллисекунды: дробное время тикера округляют часы кадра (frame-clock.ts). */
   tick(deltaMs: number): SceneState;
   readonly schedule: Schedule | null;
+  /** Время показа, мс: кадр — функция расписания и времени; эконом-режим рисует, только когда они сменились. */
+  readonly clock: number;
   /** Показ дошёл до конца расписания. */
   readonly finished: boolean;
 }

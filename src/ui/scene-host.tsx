@@ -72,6 +72,32 @@ function useGameKeys(game: Game): void {
   }, [game]);
 }
 
+/** Полоса эконом-режима (§10): один раз за загрузку — видна столько мс и больше не возвращается. */
+const ECONOMY_NOTICE_MS = 8000;
+
+type EconomyNotice = 'none' | 'shown' | 'gone';
+
+/**
+ * Полоса эконом-режима: первый рендерер в эконом-режиме её показывает, через ECONOMY_NOTICE_MS она уходит. Перемонтирование
+ * сцены (новый init в той же загрузке) её не повторяет: состояние живёт в компоненте, а не в рендерере.
+ */
+function useEconomyNotice(): { readonly shown: boolean; readonly note: (economy: boolean) => void } {
+  const [notice, setNotice] = useState<EconomyNotice>('none');
+  useEffect(() => {
+    if (notice !== 'shown') return;
+    const id = window.setTimeout(() => {
+      setNotice('gone');
+    }, ECONOMY_NOTICE_MS);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [notice]);
+  const note = useCallback((economy: boolean) => {
+    if (economy) setNotice((current) => (current === 'none' ? 'shown' : current));
+  }, []);
+  return { shown: notice === 'shown', note };
+}
+
 /**
  * Итог раунда — экранному диктору (§11): одно объявление на раунд, когда раунд закрыт, — не на каждый каскад. Текст
  * ставится через ref: рендеров React нет.
@@ -123,6 +149,8 @@ export function SceneHost({
   }, [preferences]);
   useGameKeys(game);
   const announcer = useRoundAnnouncer(game);
+  const economy = useEconomyNotice();
+  const noteEconomy = economy.note;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -130,7 +158,10 @@ export function SceneHost({
     if (host === null || insets === null) return;
     sessionRef.current ??= new SceneSession({
       create,
-      onReady: onSceneReady,
+      onReady: (info) => {
+        noteEconomy(info.economy);
+        onSceneReady();
+      },
       onLayout: setLayout,
       onError: () => {
         setFailed(true);
@@ -151,7 +182,7 @@ export function SceneHost({
       watcher.dispose();
       session.detach();
     };
-  }, [create, observer, source, onSceneReady]);
+  }, [create, observer, source, onSceneReady, noteEconomy]);
 
   // Язык игрока — надписям и суммам сцены: на живом рендерере сразу, новому — по готовности.
   useEffect(() => {
@@ -183,7 +214,7 @@ export function SceneHost({
           onSound={onSound}
         />
       )}
-      <NoticeBar snapshot={snapshot} exitHref={replayExit} autoplay={autoplay} />
+      <NoticeBar snapshot={snapshot} exitHref={replayExit} autoplay={autoplay} economy={economy.shown} />
       <p ref={announcer} className="sr-only" role="status" aria-live="polite" data-testid="announcer" />
       <StatusScreen game={game} snapshot={snapshot} reload={reload} exitHref={replayExit} />
       {failed && (

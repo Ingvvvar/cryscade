@@ -91,6 +91,8 @@ export interface CryscadeProbe {
   renderOnce(): void;
   /** Закрепить время декора (фон, блик рамки); null — снять. */
   pinAmbient(seconds: number | null): void;
+  /** Время декора, с: при reduced motion и в эконом-режиме стоит; сцены нет — null. */
+  ambientSeconds(): number | null;
   backgroundOnly(on: boolean): void;
   atlasPng(): Promise<string | null>;
   stopTicker(): void;

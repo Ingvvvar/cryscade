@@ -3,8 +3,20 @@
 // вешает страницу (проба на Pixi 8.21). Свои части — атлас, фон, рамку, показ раунда — рендерер создаёт сам.
 // Кадр рендер тянет сам: тикер двигает часы источника (SceneSource) и ставит его SceneState — рендер ничего не решает.
 // Порядок init: приложение → шрифты → атлас → сцена → прогрев → канвас в DOM → тикер.
+// Эконом-режим (§10) — на программном рендерере: фон и декор стоят, как при reduced motion, разрешение 1×, кадр рисуется,
+// только когда изменился (RenderGate). На GPU render Pixi остаётся на тикере, как его повесил TickerPlugin.
 
-import { Application, Container, Sprite, type Renderer as PixiRendererBackend, type Ticker, type WebGLRenderer, type WebGPURenderer } from 'pixi.js';
+import {
+  Application,
+  Container,
+  Sprite,
+  UPDATE_PRIORITY,
+  type Renderer as PixiRendererBackend,
+  type Ticker,
+  type TickerCallback,
+  type WebGLRenderer,
+  type WebGPURenderer,
+} from 'pixi.js';
 import { SYMBOL_COUNT, type SymbolId } from '../../core/model/symbols.ts';
 import { AmbientClock } from '../ambient-clock.ts';
 import { ATLAS_RESOLUTION, symbolKey } from '../art/atlas-plan.ts';
@@ -12,7 +24,9 @@ import { PALETTE } from '../art/palette.ts';
 import { FrameClock } from '../frame-clock.ts';
 import { computeLayout, renderResolution, type Layout, type Viewport } from '../layout.ts';
 import { numberCodes, type NumberCodes, type NumberStyle } from '../number-layout.ts';
+import { RenderGate } from '../render-gate.ts';
 import { sceneTextList, type Renderer, type RendererInfo, type RendererName, type SceneSource, type SceneTexts } from '../renderer.ts';
+import { isSoftwareRenderer } from '../software-renderer.ts';
 import { CrystalAtlas } from './atlas.ts';
 import { CaveBackground } from './background.ts';
 import { DIGITS_FONT, LABELS_FONT, digitTexts, ensureDigitsFont, ensureLabelsFont, fontMissing, fontPages } from './fonts.ts';
@@ -34,24 +48,28 @@ interface PixiRendererOptions {
   readonly numbers: NumberStyle;
   /** Надписи всех языков игрока: шрифт надписей ставится из них сразу — смена языка без новых страниц глифов. */
   readonly allTexts: readonly SceneTexts[];
+  /** Эконом-режим разрешён: включится на программном рендерере. Выключает только зонд — контроль его проверки. */
+  readonly economy: boolean;
 }
 
-const SOFTWARE = /swiftshader|llvmpipe|software/i;
-/** Тепло фриспинов (§9) набирается и уходит за столько миллисекунд; при reduced motion — сразу. */
+/** Тепло фриспинов (§9) набирается и уходит за столько миллисекунд; при reduced motion и в эконом-режиме — сразу. */
 const WARMTH_MS = 600;
 
-function describeRenderer(renderer: PixiRendererBackend): RendererInfo {
+/** Что рендерер узнаёт о себе сам; эконом-режим решает PixiRenderer. */
+type Detected = Omit<RendererInfo, 'economy'>;
+
+function describeRenderer(renderer: PixiRendererBackend): Detected {
   if (renderer.name === 'webgpu') {
     const info = (renderer as WebGPURenderer).gpu.adapter.info;
     const gpu = [info.vendor, info.architecture, info.device, info.description].filter((part) => part !== '').join(' ');
-    return { name: 'webgpu', gpu, software: info.isFallbackAdapter || SOFTWARE.test(gpu) };
+    return { name: 'webgpu', gpu, software: info.isFallbackAdapter || isSoftwareRenderer(gpu) };
   }
   if (renderer.name === 'webgl') {
     const gl = (renderer as WebGLRenderer).gl;
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     const value: unknown = debug === null ? gl.getParameter(gl.RENDERER) : gl.getParameter(debug.UNMASKED_RENDERER_WEBGL);
     const gpu = String(value);
-    return { name: 'webgl', gpu, software: SOFTWARE.test(gpu) };
+    return { name: 'webgl', gpu, software: isSoftwareRenderer(gpu) };
   }
   throw new Error(`рендерер ${renderer.name} не поддерживается: нужен WebGPU или WebGL`);
 }
@@ -91,6 +109,23 @@ export class PixiRenderer implements Renderer {
   #icons: Promise<readonly string[]> | null = null;
   /** Фазы кадра для DevTools — только dev (§13). */
   #marks: FrameMarks | null = null;
+  /** Эконом-режим (§10): программный рендерер, и зонд его не выключил. */
+  #economy = false;
+  /** Отрисовка через ворота: эконом-режим или порог зонда; на GPU без порога — null, render Pixi на тикере как есть. */
+  #gate: RenderGate | null = null;
+  /** Из чего был собран прошлый кадр: изменилось что-то — воротам пора рисовать. */
+  #seenSource: SceneSource | null = null;
+  #seenSchedule: SceneSource['schedule'] = null;
+  #seenClock = Number.NaN;
+  #seenAmbient = Number.NaN;
+  #seenWarmth = Number.NaN;
+  readonly #draw = (ticker: Ticker): void => {
+    if (this.#gate?.frame(ticker.elapsedMS) === true) this.#app?.render();
+  };
+  /** Ввод по сцене — кадр в эконом-режиме, даже если показ на него не ответил. */
+  readonly #onInput = (): void => {
+    this.#gate?.invalidate();
+  };
 
   constructor(options: PixiRendererOptions) {
     this.#options = options;
@@ -118,7 +153,10 @@ export class PixiRenderer implements Renderer {
       autoStart: false,
     });
     this.#ready = true;
-    const info = describeRenderer(app.renderer);
+    const detected = describeRenderer(app.renderer);
+    this.#economy = this.#options.economy && detected.software;
+    const info: RendererInfo = { ...detected, economy: this.#economy };
+    if (this.#economy) app.renderer.resize(app.screen.width, app.screen.height, 1);
     const texts = this.#options.allTexts.flatMap(sceneTextList);
     const fontReady = (await ensureDigitsFont()) && (await ensureLabelsFont(texts));
     const atlas = new CrystalAtlas(app.renderer);
@@ -128,7 +166,7 @@ export class PixiRenderer implements Renderer {
     const round = new RoundView(atlas, this.#root, { texts: this.#texts, codes: this.#codes });
     this.#scene = { atlas, background, frame, round };
     app.stage.addChild(background.view, this.#root);
-    this.#ambient.setReducedMotion(this.#reducedMotion);
+    this.#ambient.setReducedMotion(this.#still);
     this.#applyViewport();
     this.#frame(0);
     if (this.#options.warmUp) {
@@ -138,6 +176,10 @@ export class PixiRenderer implements Renderer {
     }
     host.appendChild(canvas);
     app.ticker.add(this.#tick);
+    if (this.#economy) {
+      this.#gateRenders(app, true);
+      canvas.addEventListener('pointerdown', this.#onInput);
+    }
     if (import.meta.env.DEV) {
       this.#marks = new FrameMarks();
       this.#marks.attach(app.ticker);
@@ -161,16 +203,26 @@ export class PixiRenderer implements Renderer {
         chipRects: () => round.chipRects(),
         isolateChipParts: (lock, digits) => {
           round.isolateChipParts(lock, digits);
+          this.#gate?.invalidate();
         },
         plaqueText: () => round.plaqueText(),
         labels: () => round.labels(),
         pinAmbient: (seconds) => {
           this.#ambient.pin(seconds);
           this.#applyAmbient();
+          this.#gate?.invalidate();
         },
         backgroundOnly: (on) => {
           this.#root.visible = !on;
+          this.#gate?.invalidate();
         },
+        throttle: (ms) => {
+          (this.#gate ?? this.#gateRenders(app, false)).throttle(ms);
+        },
+        invalidate: () => {
+          this.#gate?.invalidate();
+        },
+        ambient: () => this.#ambient.seconds,
       };
       inspector.attach(this.#inspected);
     }
@@ -185,12 +237,14 @@ export class PixiRenderer implements Renderer {
   /** Сразу встаёт только время фона (решение 1): частицы и падение раунда — по его расписанию, со следующего раунда. */
   setReducedMotion(on: boolean): void {
     this.#reducedMotion = on;
-    this.#ambient.setReducedMotion(on);
+    this.#ambient.setReducedMotion(this.#still);
     this.#applyAmbient();
+    this.#gate?.invalidate();
   }
 
   setSource(source: SceneSource | null): void {
     this.#source = source;
+    this.#gate?.invalidate();
   }
 
   setLanguage(texts: SceneTexts, numbers: NumberStyle): void {
@@ -198,6 +252,7 @@ export class PixiRenderer implements Renderer {
     this.#numbers = numbers;
     this.#codes = numberCodes(numbers);
     this.#scene?.round.setWords(texts, this.#codes);
+    this.#gate?.invalidate();
   }
 
   /**
@@ -230,6 +285,8 @@ export class PixiRenderer implements Renderer {
     const scene = this.#scene;
     if (app !== null && this.#ready) {
       app.ticker.remove(this.#tick);
+      app.ticker.remove(this.#draw);
+      this.#canvas?.removeEventListener('pointerdown', this.#onInput);
       this.#marks?.detach(app.ticker);
       this.#marks = null;
       if (scene !== null) {
@@ -246,6 +303,7 @@ export class PixiRenderer implements Renderer {
     this.#ready = false;
     this.#scene = null;
     this.#icons = null;
+    this.#gate = null;
   }
 
   /** Кадр: часы источника на deltaMs (целые мс от часов кадра), его SceneState — на сцену; тепло фриспинов — фону и рамке. */
@@ -259,9 +317,51 @@ export class PixiRenderer implements Renderer {
       scene.round.apply(state, source.schedule);
       target = state.freeSpinsLeft >= 0 ? 1 : 0;
     }
-    const step = this.#reducedMotion ? 1 : Math.min(1, deltaMs / WARMTH_MS);
+    const step = this.#still ? 1 : Math.min(1, deltaMs / WARMTH_MS);
     this.#warmth += Math.max(-step, Math.min(step, target - this.#warmth));
     this.#applyAmbient();
+    this.#noteFrame(source);
+  }
+
+  /** Фон и декор стоят: reduced motion игрока или эконом-режим. */
+  get #still(): boolean {
+    return this.#reducedMotion || this.#economy;
+  }
+
+  /**
+   * Кадр — функция расписания и времени показа (sampleScene), времени декора и тепла фриспинов: изменилось что-то из них
+   * с прошлого тика — воротам пора рисовать. Ресайз, язык и прочее зовут invalidate сами.
+   */
+  #noteFrame(source: SceneSource | null): void {
+    const schedule = source?.schedule ?? null;
+    const clock = source?.clock ?? 0;
+    const ambient = this.#ambient.seconds;
+    if (source === this.#seenSource && schedule === this.#seenSchedule && clock === this.#seenClock && ambient === this.#seenAmbient && this.#warmth === this.#seenWarmth) return;
+    this.#seenSource = source;
+    this.#seenSchedule = schedule;
+    this.#seenClock = clock;
+    this.#seenAmbient = ambient;
+    this.#seenWarmth = this.#warmth;
+    this.#gate?.invalidate();
+  }
+
+  /**
+   * Отрисовка через ворота: render Pixi снят с тикера — TickerPlugin вешает его с контекстом приложения на LOW — и
+   * зовётся с того же приоритета, когда ворота пускают. onDemand — эконом-режим; без него — порог зонда.
+   */
+  #gateRenders(app: Application, onDemand: boolean): RenderGate {
+    const gate = new RenderGate(onDemand);
+    const render: unknown = Reflect.get(app, 'render');
+    if (typeof render !== 'function') throw new Error('у Application нет render');
+    app.ticker.remove(render as TickerCallback<Application>, app);
+    app.ticker.add(this.#draw, undefined, UPDATE_PRIORITY.LOW);
+    this.#gate = gate;
+    return gate;
+  }
+
+  /** Разрешение отрисовки: эконом-режим — 1×, иначе плотность экрана до предела. */
+  #resolution(pixelRatio: number): number {
+    return this.#economy ? 1 : renderResolution(pixelRatio);
   }
 
   #applyAmbient(): void {
@@ -280,11 +380,12 @@ export class PixiRenderer implements Renderer {
     if (app === null || !this.#ready || state === null || scene === null) return;
     const layout = computeLayout(state.viewport);
     this.#layout = layout;
-    app.renderer.resize(Math.max(1, state.viewport.width), Math.max(1, state.viewport.height), renderResolution(state.pixelRatio));
+    app.renderer.resize(Math.max(1, state.viewport.width), Math.max(1, state.viewport.height), this.#resolution(state.pixelRatio));
     this.#root.position.set(layout.stage.x, layout.stage.y);
     this.#root.scale.set(layout.scale);
     scene.background.layout(layout);
     scene.frame.setDesign(layout.design);
     scene.round.setDesign(layout.design);
+    this.#gate?.invalidate();
   }
 }

@@ -34,6 +34,12 @@ export interface InspectableScene {
   pinAmbient(seconds: number | null): void;
   /** Только фон: для паритета GLSL и WGSL. */
   backgroundOnly(on: boolean): void;
+  /** Render Pixi — не чаще раза в ms по времени тикера: зонд при программном рендере (CI без GPU, §14). */
+  throttle(ms: number): void;
+  /** Кадр изменился мимо рендерера (контрольные спрайты зонда): нарисовать его и в эконом-режиме. */
+  invalidate(): void;
+  /** Время декора, с: при reduced motion и в эконом-режиме стоит. */
+  ambient(): number;
 }
 
 export interface SceneInspector {
