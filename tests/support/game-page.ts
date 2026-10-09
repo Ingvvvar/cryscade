@@ -38,6 +38,26 @@ export async function waitForState(page: Page, name: ControllerSnapshot['state']
   return gameSnapshot(page);
 }
 
+/**
+ * Тест как игрок: пока раунд не кончился (done), тапает по середине сцены — кликом по координате. Раунд из книги бывает
+ * фичей (доля 4.9e-3), и её плашка ждёт тапа (featureIntro): тест, который только ждёт, простоял бы на ней до таймаута.
+ * Тап во время показа — пропуск, в покое — ничего. Без зонда тоже: done читает DOM или IndexedDB (прод-сборка, lab.spec).
+ */
+export async function tapUntil(page: Page, done: () => Promise<boolean>, message: string, timeout = 60_000): Promise<void> {
+  const size = page.viewportSize();
+  if (size === null) throw new Error('нет размера окна');
+  await expect
+    .poll(
+      async () => {
+        if (await done()) return true;
+        await page.mouse.click(size.width / 2, size.height / 2);
+        return false;
+      },
+      { timeout, intervals: [250], message },
+    )
+    .toBe(true);
+}
+
 export interface StoredRound {
   readonly roundId: string;
   readonly seq: number;

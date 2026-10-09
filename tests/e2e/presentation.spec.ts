@@ -2,7 +2,7 @@ import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
 import type { ShownRound } from '../../src/client/index.ts';
 import type { PresentationInfo, ScheduleSummary } from '../../src/ui/probe-api.ts';
-import { gameCalls, gameSnapshot, readStorage, reconciled, sentBodies, waitForState } from '../support/game-page.ts';
+import { gameCalls, gameSnapshot, readStorage, reconciled, sentBodies, tapUntil, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 import { autoSkip, force, open, presentation, waitGroup } from '../support/presentation-page.ts';
 import { fixtureShown } from '../support/shown-rounds.ts';
@@ -69,6 +69,27 @@ test('фича на принудительном раунде: плашка жд
   await autoSkip(page);
   const after = await waitForState(page, 'idle');
   expect(after.balanceMinor).toBe(100_000 - BET + 3350);
+  const stored = await readStorage(page);
+  expect(stored.rounds.map((round) => [round.status, round.winMinor])).toStrictEqual([['closed', 3350]]);
+  expect(after.balanceMinor).toBe(reconciled(stored));
+  expect(problems).toEqual([]);
+});
+
+// Доказательство помощника прод-тестов (lab.spec): там раунд не задать, и фича из книги выпадает раз на ~200 раундов —
+// здесь она каждый раз. Без тапа плашка стоит; помощник тапает по сцене, пока раунд не закрыт.
+test('игрок доигрывает фичу тапами по сцене (tapUntil): без тапа плашка стоит, с ними раунд закрыт, деньги сходятся', async ({ page }) => {
+  test.setTimeout(90_000);
+  const { problems } = collectConsole(page);
+  await open(page);
+  await force(page, 'feature');
+  await page.getByRole('button', { name: 'Спін' }).click();
+  await waitForState(page, 'featureIntro', 20_000);
+  await page.waitForTimeout(1000);
+  expect((await gameSnapshot(page)).state.name, 'без тапа плашка стоит').toBe('featureIntro');
+  const started = Date.now();
+  await tapUntil(page, async () => (await readStorage(page)).rounds.filter((round) => round.status === 'closed').length === 1, 'раунд фичи не закрылся');
+  console.log(`фича доиграна тапами помощника за ${String(Date.now() - started)} мс`);
+  const after = await waitForState(page, 'idle');
   const stored = await readStorage(page);
   expect(stored.rounds.map((round) => [round.status, round.winMinor])).toStrictEqual([['closed', 3350]]);
   expect(after.balanceMinor).toBe(reconciled(stored));

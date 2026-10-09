@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
 import type { ForcedName } from '../../src/ui/forced-rounds.ts';
-import { labCall, readStorage, waitForState } from '../support/game-page.ts';
+import { gameSnapshot, labCall, readStorage, tapUntil, waitForState } from '../support/game-page.ts';
 import { collectConsole, type ProbeWindow } from '../support/page-probe.ts';
 
 // Автоигра (§11, решение 4 фазы 7): каждая остановка — с полосой и причиной. Раунды, от которых зависит остановка,
@@ -205,6 +205,7 @@ test('раунд тримає інша вкладка: спін не пішов 
 });
 
 test('гравець зупинив: «Стоп» — серія стоїть; строгі правила — «Авто» вимкнено', async ({ page }) => {
+  test.setTimeout(90_000);
   const { problems } = collectConsole(page);
   await page.goto('./');
   await waitForState(page, 'idle');
@@ -214,7 +215,9 @@ test('гравець зупинив: «Стоп» — серія стоїть; �
   await expect(bar(page)).toContainText('Автогра: залишилось');
   await page.getByTestId('autoplay-bar').getByRole('button', { name: 'Стоп' }).click();
   await expect(bar(page)).toContainText('Автогру зупинено');
-  await waitForState(page, 'idle', 30_000);
+  // Серия под нагрузкой могла успеть ко второму раунду — он уже из книги, а остановленная серия плашку фичи не продолжает:
+  // раунд доигрывает игрок тапами по сцене.
+  await tapUntil(page, async () => (await gameSnapshot(page)).state.name === 'idle', 'раунд не кончился после «Стоп»');
   const after = await closed(page);
   await page.waitForTimeout(1500);
   expect(await closed(page)).toBe(after);
