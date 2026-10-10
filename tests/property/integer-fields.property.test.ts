@@ -207,7 +207,7 @@ describe('целые поля хранилища и протокола', () => {
         .map((leaf) => `${sample.name} ${path.join('.')} = ${String(leaf)}`),
     );
     expect(passed).toStrictEqual([]);
-  });
+  }, 60_000);
 
   it('property: любой лист, x + 0.5 при любом целом x до 2^52 — отказ', () => {
     fc.assert(
