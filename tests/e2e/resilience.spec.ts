@@ -128,14 +128,19 @@ test('перехват кнопкой: A жива, B «Грати тут» до�
   await labCall(b, 'holdNextEndRound');
   await b.getByRole('button', { name: 'Грати тут' }).click();
   await waitForState(a, 'waitingForTab');
+  // Что A отправила, пока не увидела перехват: play и — на медленном раннере — его повтор с тем же ключом по таймауту
+  // (3 с + 250 мс; CI 38171342253: клики WebKit шли по 1–1.6 с, перехват пришёл после повтора). Обещание — после перехвата
+  // ключ больше не уходит.
+  const beforeTakeover = (await sentBodies(a)).filter((body) => body.type === 'play');
+  expect(new Set(beforeTakeover.map((body) => body.idempotencyKey)).size, 'один ключ — повторы того же раунда').toBe(1);
+  const [abandoned] = beforeTakeover;
   await labCall(a, 'set', { responseLoss: 0 });
   await waitForState(b, 'ending');
   await labCall(b, 'releaseHeld');
   const afterB = await waitForState(b, 'idle');
-  const [abandoned] = (await sentBodies(a)).filter((body) => body.type === 'play');
   // Окно, в котором A повторила бы play (таймаут 3 с + пауза 250 мс), — наблюдаем отсутствие повтора, не ждём исхода.
   await a.waitForTimeout(3500);
-  expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual([abandoned]);
+  expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual(beforeTakeover);
   const afterA = await waitForState(a, 'idle');
   const stored = await readStorage(b);
   expect(stored.rounds.map((round) => [round.idempotencyKey, round.status])).toStrictEqual([[abandoned?.idempotencyKey, 'closed']]);
@@ -181,10 +186,13 @@ test('перехват кнопкой, быстрый путь: B доигрыв
   const afterB = await waitForState(b, 'idle');
   const whenBIdle = await statesOf(a);
   await labCall(a, 'set', { responseLoss: 0 });
-  const [abandoned] = (await sentBodies(a)).filter((body) => body.type === 'play');
+  // Что A отправила до покоя B: play и — на медленном раннере — его повтор с тем же ключом (как в тесте выше).
+  const beforeIdle = (await sentBodies(a)).filter((body) => body.type === 'play');
+  expect(new Set(beforeIdle.map((body) => body.idempotencyKey)).size, 'один ключ — повторы того же раунда').toBe(1);
+  const [abandoned] = beforeIdle;
   // Окно, в котором A повторила бы play (таймаут 3 с + пауза 250 мс), — наблюдаем отсутствие повтора, не ждём исхода.
   await a.waitForTimeout(3500);
-  expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual([abandoned]);
+  expect((await sentBodies(a)).filter((body) => body.type === 'play')).toStrictEqual(beforeIdle);
   const afterA = await waitForState(a, 'idle');
   console.log(`быстрый перехват: состояния A к покою B — ${whenBIdle.join(' → ')}; все — ${(await statesOf(a)).join(' → ')}`);
   const stored = await readStorage(b);
