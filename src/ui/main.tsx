@@ -24,6 +24,7 @@ import { App } from './App.tsx';
 import { Autoplay } from './autoplay.ts';
 import { LANGUAGES } from './i18n/dictionary.ts';
 import { UK } from './i18n/uk.ts';
+import { InputModality } from './input-modality.ts';
 import { LanguageStore, type DictionaryLoader } from './language.ts';
 import type { PageProbe } from './probe.ts';
 import { PresentationPreferences } from './presentation-preferences.ts';
@@ -55,6 +56,8 @@ async function mount(): Promise<void> {
   if (root === null) {
     throw new Error('В index.html нет #root');
   }
+  // Рамка фокуса — только после клавиатуры (§11): отметка последнего ввода у <html>, правило — в styles.css.
+  new InputModality(window, document.documentElement).start();
   const probe = await loadProbe();
   const choice = rendererChoice(window.location.search);
   const reload = (): void => {

@@ -21,12 +21,84 @@ body {
   color: var(--text);
 }
 
+/* Подсветку касания рисует браузер (прогон №6): Chromium — прямоугольником со скруглением 3 px поверх любой кнопки (у
+   круглой «Спін» проступал квадрат), iOS — на узле со слушателем клика (у тапа по сцене это корень React — темнел весь
+   экран). Свойство наследуется: прозрачна везде. Отклик на нажатие — свой и в форме кнопки (:active ниже). */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  appearance: none;
+}
+
+/* Двойной тап не приближает элементы управления и сцену, клик приходит без задержки. */
+button,
+a,
+input,
+label,
+.scene-host {
+  touch-action: manipulation;
+}
+
+/* Нажатое — темнее (светлее нельзя: под надписью «Спін» контраст упал бы ниже 4.5:1) и чуть меньше; при reduced motion —
+   без масштаба. filter и transform форму не меняют: нажатая «Спін» — тот же круг. */
+:is(button:not(:disabled), a[href]):active {
+  filter: brightness(0.8);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a[href] {
+    transition:
+      transform 80ms ease-out,
+      filter 80ms ease-out;
+  }
+
+  :is(button:not(:disabled), a[href]):active {
+    transform: scale(0.95);
+  }
+}
+
+/* Область нажатия — не меньше 44 × 44 CSS-пикселя: где кнопка меньше, её расширяет невидимый ::before. Форма, рамка
+   фокуса и нажатое — по видимой кнопке: сплошной outline рисуется по рамке элемента, без потомков. */
+:is(button, .status-action, .notice-link, .inline-action) {
+  position: relative;
+}
+
+:is(button, .status-action, .notice-link, .inline-action)::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
+button:disabled::before {
+  content: none;
+}
+
 #root,
 .app,
 .scene,
 .scene-host {
   position: fixed;
   inset: 0;
+}
+
+/* Долгое нажатие на панели и сцене не выделяет текст («Спін») и не открывает меню iOS. Поля ввода выделяются; диалоги
+   лежат вне .scene — хеши и сиды честности копируют. */
+.scene {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.scene :is(input, textarea) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .scene-canvas {
@@ -46,11 +118,25 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Оверлей над живой сценой пропускает тап на канвас; интерактивным детям — auto (§11). */
+/* Оверлей над живой сценой пропускает тап на канвас; интерактивным детям — auto (§11). Свой контекст наложения: области
+   нажатия кнопок (z-index −1) лежат под видимыми кнопками — сосед свою видимую часть не теряет, область забирает только
+   свободное место. */
 .panel {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  isolation: isolate;
+}
+
+.panel button::before {
+  z-index: -1;
+}
+
+/* Верхняя зона — у края экрана, а над «Турбо» и «Авто» — ставка: их область растёт вниз. */
+.zone-top button::before,
+.zone-toggles button::before {
+  top: 0;
+  transform: translateX(-50%);
 }
 
 .zone {
@@ -72,9 +158,11 @@ body {
   border-radius: calc(var(--u) * 16);
 }
 
+/* Рамка фокуса — только :focus-visible, outline повторяет скругление (у «Спін» — круг); не тоньше 2 px и на маленьком
+   телефоне, где 3 единицы дизайна — около 1.5 px. */
 .panel button:focus-visible {
-  outline: calc(var(--u) * 3) solid var(--glow);
-  outline-offset: calc(var(--u) * 3);
+  outline: max(2px, calc(var(--u) * 3)) solid var(--glow);
+  outline-offset: max(2px, calc(var(--u) * 3));
 }
 
 .zone-top {
@@ -160,6 +248,11 @@ body {
   background: radial-gradient(circle at 50% 20%, rgb(63 224 208 / 0.55) 0%, var(--cave-2) 64%) !important;
   border-color: rgb(63 224 208 / 0.7) !important;
   box-shadow: 0 0 calc(var(--u) * 28) rgb(63 224 208 / 0.35);
+}
+
+/* «Спін» — круг, и область нажатия — тот же круг: углы его квадрата остаются сцене. */
+.spin::before {
+  border-radius: 50%;
 }
 
 .toggle {
@@ -312,6 +405,8 @@ body {
   left: calc(max(12px, env(safe-area-inset-left)) + var(--u) * 16);
   margin: 0;
   min-width: calc(var(--u) * 320);
+  /* Пункты не ниже 44 px: в ландшафте на телефоне меню выше экрана — тогда прокрутка (содержимое без полей и рамки). */
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 12px - var(--u) * 111);
   padding: calc(var(--u) * 16);
   color: var(--text);
   background: var(--cave-1);
@@ -326,8 +421,9 @@ body {
   gap: calc(var(--u) * 12);
 }
 
+/* Пункты popover — не ниже 44 px: шаг между ними меньше 44 px невидимой областью не расширить, она ушла бы к соседу. */
 .panel .menu-item {
-  min-height: calc(var(--u) * 64);
+  min-height: max(44px, calc(var(--u) * 64));
   padding: 0 calc(var(--u) * 20);
   text-align: start;
   font-size: calc(var(--u) * 22);
@@ -516,6 +612,8 @@ body {
 .levels {
   box-sizing: border-box;
   width: min(92vw, calc(var(--u) * 560));
+  /* Автоигра в ландшафте на телефоне выше экрана: «Почати» уходила за край — теперь прокрутка внутри. */
+  max-height: calc(100dvh - 24px);
   padding: calc(var(--u) * 20);
   color: var(--text);
   background: var(--cave-1);
@@ -544,7 +642,7 @@ body {
 }
 
 .panel .level {
-  min-height: calc(var(--u) * 64);
+  min-height: max(44px, calc(var(--u) * 64));
   font-family: 'Unbounded Variable', system-ui, sans-serif;
   font-size: calc(var(--u) * 22);
   font-weight: 600;
@@ -600,7 +698,7 @@ body {
   line-height: 1.45;
 }
 
-.rules:focus {
+.rules:focus-visible {
   outline: none;
 }
 
@@ -655,11 +753,17 @@ body {
   font-weight: 600;
 }
 
+/* Строки истории — не ниже 44 px: у «Перевірити» и «Відтворити» каждой строки своя область 44 × 44, без соседней. */
+.history th,
+.history td {
+  padding-block: 10px;
+}
+
 .table-scroll {
   overflow-x: auto;
 }
 
-.table-scroll:focus {
+.table-scroll:focus-visible {
   outline: none;
 }
 
@@ -674,7 +778,9 @@ body {
   border-radius: 10px;
 }
 
+/* inline-block: поля и рамка ссылки входят в высоту строки, область нажатия не выходит в соседнюю строку. */
 .inline-action {
+  display: inline-block;
   padding: 2px 10px;
   font-size: 0.85rem;
   text-decoration: none;
@@ -813,6 +919,13 @@ button.notice-link {
 }
 
 .panel .autoplay-start {
-  min-height: calc(var(--u) * 60);
+  min-height: max(44px, calc(var(--u) * 60));
   font-size: calc(var(--u) * 22);
+}
+
+/* Последний ввод — указатель (касание, мышь): рамки нет ни у чего, и у фокуса, который поставил скрипт, — WebKit считает
+   его видимым и рисовал рамку вокруг первого элемента диалога, открытого касанием. Отметку ставит ui/input-modality.ts.
+   Правило — последнее в файле: перебивает рамки выше. */
+:root[data-input='pointer'] :focus-visible {
+  outline: none;
 }
