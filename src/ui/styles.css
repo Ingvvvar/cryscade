@@ -80,6 +80,14 @@ button:disabled::before {
   content: none;
 }
 
+/* Рамка фокуса — только :focus-visible: с клавиатуры видна, от касания и мыши — нет (правило последнего ввода — в конце
+   файла). outline повторяет скругление (Chrome 94+, Safari 16.4+): рамка — по форме элемента. Без этого правила поля
+   popover автоигры получали рамку браузера — тонкую и другого цвета. */
+:focus-visible {
+  outline: 3px solid var(--glow);
+  outline-offset: 2px;
+}
+
 #root,
 .app,
 .scene,
@@ -580,6 +588,18 @@ button:disabled::before {
   height: 20px;
   margin: 0;
   accent-color: var(--glow);
+}
+
+/* Радио и флажок рисует система — круг и скруглённый квадрат, а скругление браузер у них сбрасывает в 0: рамка фокуса на
+   самом поле шла квадратом вокруг круглого радио. Рамка — у всей строки выбора, она скруглена так, как видна; тоже только
+   после клавиатуры (правило последнего ввода её не видит: строка не в фокусе). */
+.choice input:focus-visible {
+  outline: none;
+}
+
+:root:not([data-input='pointer']) .choice:has(input:focus-visible) {
+  outline: 3px solid var(--glow);
+  outline-offset: 2px;
 }
 
 .field:disabled .choice {
