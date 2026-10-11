@@ -217,6 +217,8 @@ for (const [platform, names] of [
           await expect(page.getByRole('button', { name: 'Спін', exact: true })).toHaveAttribute('aria-busy', 'true');
           await settle(page);
           await page.addStyleTag({ content: '.scene-canvas { visibility: hidden !important; }' });
+          // Без GPU (CI) полоса эконом-режима 8 с лежит над верхней зоной: рамку ☰ и ♪ под ней не видно — ждём, пока уйдёт.
+          await expect(page.locator('[data-notice="economy"]')).toHaveCount(0, { timeout: 20_000 });
           // WebKit на macOS по Tab кнопки не обходит (настройка системы) — там Option+Tab; на Linux — Tab.
           const next = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
           const problems: string[] = [];
@@ -324,22 +326,48 @@ for (const [platform, names] of [
   }
 }
 
-/** Нажатое «Спін»: :active, затемнение и масштаб — когда стиль дошёл до конца перехода. */
-async function pressedLook(spin: Locator): Promise<{ readonly filter: string; readonly transform: string }> {
-  await expect.poll(() => spin.evaluate((element) => element.matches(':active') && getComputedStyle(element).filter === 'brightness(0.8)'), { timeout: 2000 }).toBe(true);
-  await spin.page().waitForTimeout(150);
-  return spin.evaluate((element) => ({ filter: getComputedStyle(element).filter, transform: getComputedStyle(element).transform }));
+interface Look {
+  readonly filter: string;
+  readonly transform: string;
+  /** Кадров, в которые «Спін» была :active. */
+  readonly frames: number;
+}
+
+/**
+ * Вид нажатой «Спін» пишет сама страница: каждый кадр, пока кнопка :active, — фильтр и трансформ. Опрос извне по CDP на
+ * медленном раннере пропускал окно нажатия (долгое касание снимает :active через полсекунды). Итог — последний кадр
+ * нажатия: переход 80 мс к нему уже кончился.
+ */
+async function watchPressed(spin: Locator): Promise<void> {
+  await spin.evaluate((element) => {
+    const frames: { filter: string; transform: string }[] = [];
+    (window as unknown as { pressedFrames: typeof frames }).pressedFrames = frames;
+    const until = performance.now() + 5000;
+    const tick = (): void => {
+      if (element.matches(':active')) {
+        const style = getComputedStyle(element);
+        frames.push({ filter: style.filter, transform: style.transform });
+      }
+      if (performance.now() < until) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+async function pressedLook(spin: Locator): Promise<Look> {
+  const frames = await spin.evaluate(() => (window as unknown as { pressedFrames: { filter: string; transform: string }[] }).pressedFrames);
+  const last = frames.at(-1);
+  return { filter: last?.filter ?? 'не нажата', transform: last?.transform ?? 'не нажата', frames: frames.length };
 }
 
 /** Касание с удержанием через жест браузера (Chromium): тот же путь, что у пальца, — :active и долгое нажатие. */
-async function touchHold(cdp: CDPSession, spin: Locator): Promise<{ readonly filter: string; readonly transform: string; readonly selection: string }> {
+async function touchHold(cdp: CDPSession, spin: Locator): Promise<Look & { readonly selection: string }> {
   const box = await spin.boundingBox();
   if (box === null) throw new Error('нет «Спін»');
-  const gesture = cdp.send('Input.synthesizeTapGesture', { x: box.x + box.width / 2, y: box.y + box.height / 2, duration: 1500, tapCount: 1, gestureSourceType: 'touch' });
-  const look = await pressedLook(spin);
-  await gesture;
+  await watchPressed(spin);
+  await cdp.send('Input.synthesizeTapGesture', { x: box.x + box.width / 2, y: box.y + box.height / 2, duration: 1500, tapCount: 1, gestureSourceType: 'touch' });
   const selection = await spin.page().evaluate(() => window.getSelection()?.toString() ?? '');
-  return { ...look, selection };
+  return { ...(await pressedLook(spin)), selection };
 }
 
 test.describe('Android · Galaxy S5 · нажатие', () => {
@@ -351,10 +379,14 @@ test.describe('Android · Galaxy S5 · нажатие', () => {
     await idle(page);
     const cdp = await context.newCDPSession(page);
     const spin = page.getByRole('button', { name: 'Спін', exact: true });
-    expect(await touchHold(cdp, spin)).toStrictEqual({ filter: 'brightness(0.8)', transform: 'matrix(0.95, 0, 0, 0.95, 0, 0)', selection: '' });
+    const pressed = await touchHold(cdp, spin);
+    expect(pressed.frames, 'кадров нажатия').toBeGreaterThan(3);
+    expect({ filter: pressed.filter, transform: pressed.transform, selection: pressed.selection }).toStrictEqual({ filter: 'brightness(0.8)', transform: 'matrix(0.95, 0, 0, 0.95, 0, 0)', selection: '' });
     await settle(page);
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    expect(await touchHold(cdp, spin)).toStrictEqual({ filter: 'brightness(0.8)', transform: 'none', selection: '' });
+    const reduced = await touchHold(cdp, spin);
+    expect(reduced.frames, 'кадров нажатия').toBeGreaterThan(3);
+    expect({ filter: reduced.filter, transform: reduced.transform, selection: reduced.selection }).toStrictEqual({ filter: 'brightness(0.8)', transform: 'none', selection: '' });
     await settle(page);
     // Положительный контроль: выделение разрешено — то же долгое нажатие выделяет надпись «Спін».
     await page.addStyleTag({ content: '.scene, .scene * { -webkit-user-select: text !important; user-select: text !important; }' });
@@ -371,19 +403,22 @@ test.describe('iOS · iPhone SE (3rd gen) · нажатие', () => {
     await idle(page);
     const spin = page.getByRole('button', { name: 'Спін', exact: true });
     // Удержания касания в WebKit Playwright нет — нажатие мышью: :active тот же. Отпускание — мимо кнопки: клика нет.
-    const hold = async (): Promise<{ readonly filter: string; readonly transform: string }> => {
+    // Мышь держит :active до отпускания: ждём, пока нажатая кнопка придёт к своему виду (переход WebKit в headless идёт
+    // медленнее 80 мс), — не придёт, если нажатое другое.
+    const pressedTo = async (look: { readonly filter: string; readonly transform: string }): Promise<void> => {
       const box = await spin.boundingBox();
       if (box === null) throw new Error('нет «Спін»');
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
-      const look = await pressedLook(spin);
+      await expect
+        .poll(() => spin.evaluate((element) => ({ active: element.matches(':active'), filter: getComputedStyle(element).filter, transform: getComputedStyle(element).transform })), { timeout: 3000 })
+        .toStrictEqual({ active: true, ...look });
       await page.mouse.move(box.x + box.width / 2, 2);
       await page.mouse.up();
-      return look;
     };
-    expect(await hold()).toStrictEqual({ filter: 'brightness(0.8)', transform: 'matrix(0.95, 0, 0, 0.95, 0, 0)' });
+    await pressedTo({ filter: 'brightness(0.8)', transform: 'matrix(0.95, 0, 0, 0.95, 0, 0)' });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    expect(await hold()).toStrictEqual({ filter: 'brightness(0.8)', transform: 'none' });
+    await pressedTo({ filter: 'brightness(0.8)', transform: 'none' });
     await expect(spin).toHaveAttribute('aria-busy', 'false');
     expect(await spin.evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-user-select'))).toBe('none');
   });
