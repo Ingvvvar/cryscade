@@ -37,6 +37,10 @@ export default defineConfig({
     // Игра на e2e-сборке: зонд видит контроллер и лабораторию сети; вкладки одного профиля делят IndexedDB и замки.
     { name: 'game', testMatch: specs([...GAME, 'keyboard', 'frame-clock']), use: { ...chrome, baseURL: url(E2E) } },
     { name: 'webkit', testMatch: specs(GAME), use: { ...safari, baseURL: url(E2E) } },
+    // Телефоны и планшеты с касаниями (прогон №6): Chromium как Android, WebKit как iPhone; устройство и ориентация —
+    // в describe теста, проект выбирает свои по имени. Только DOM, без зонда: тот же тест идёт на живом адресе.
+    { name: 'touch', testMatch: 'touch.spec.ts', grep: /Android · /, use: { ...chrome, baseURL: url(E2E) } },
+    { name: 'touch-webkit', testMatch: 'touch.spec.ts', grep: /iOS · /, use: { ...safari, baseURL: url(E2E) } },
   ],
   webServer: [
     {
