@@ -2,7 +2,7 @@
 // идёт и на живом адресе. Ввод — касанием по координате (touchscreen), с клавиатуры — Tab. Решения «квадрат 44 × 44» и
 // «рамка по форме» — в touch-targets.ts, здесь — что о них знает страница.
 
-import { devices, expect, type Locator, type Page } from '@playwright/test';
+import { devices, expect, type CDPSession, type Locator, type Page } from '@playwright/test';
 import { decodePng } from './png.ts';
 import { ringReport, signedDistance, verdict, type HitMap, type Rect, type RingReport, type Shape, type Verdict } from './touch-targets.ts';
 
@@ -386,4 +386,46 @@ export async function focusRing(page: Page): Promise<FocusRing | null> {
     return { name: item.name, type: item.type, style: item.style, width: item.width, inner: item.inner, report };
   }
   throw new Error('элемент в фокусе не стоит на месте: снимки с рамкой и без не сравнить');
+}
+
+interface Look {
+  readonly filter: string;
+  readonly transform: string;
+  /** Кадров, в которые кнопка была :active: жест дошёл до страницы. */
+  readonly frames: number;
+}
+
+/**
+ * Вид нажатой кнопки пишет сама страница: каждый кадр, пока кнопка :active, — фильтр и трансформ (опрос извне по CDP
+ * окно долгого касания пропускает: оно снимает :active через полсекунды). Итог — последний кадр нажатия.
+ */
+async function watchPressed(target: Locator): Promise<void> {
+  await target.evaluate((element) => {
+    const frames: { filter: string; transform: string }[] = [];
+    (window as unknown as { pressedFrames: typeof frames }).pressedFrames = frames;
+    const until = performance.now() + 5000;
+    const tick = (): void => {
+      if (element.matches(':active')) {
+        const style = getComputedStyle(element);
+        frames.push({ filter: style.filter, transform: style.transform });
+      }
+      if (performance.now() < until) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/**
+ * Долгое касание жестом браузера Chromium (Input.synthesizeTapGesture, 1.5 с): путь пальца — :active и долгое нажатие.
+ * Возвращает вид нажатой кнопки и выделение после жеста.
+ */
+export async function touchHold(cdp: CDPSession, target: Locator): Promise<Look & { readonly selection: string }> {
+  const box = await target.boundingBox();
+  if (box === null) throw new Error('нет кнопки');
+  await watchPressed(target);
+  await cdp.send('Input.synthesizeTapGesture', { x: box.x + box.width / 2, y: box.y + box.height / 2, duration: 1500, tapCount: 1, gestureSourceType: 'touch' });
+  const selection = await target.page().evaluate(() => window.getSelection()?.toString() ?? '');
+  const frames = await target.evaluate(() => (window as unknown as { pressedFrames: { filter: string; transform: string }[] }).pressedFrames);
+  const last = frames.at(-1);
+  return { filter: last?.filter ?? 'не нажата', transform: last?.transform ?? 'не нажата', frames: frames.length, selection };
 }

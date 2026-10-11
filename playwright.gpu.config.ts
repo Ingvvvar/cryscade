@@ -13,9 +13,10 @@ export default defineConfig({
   reporter: 'list',
   workers: 1,
   projects: [
-    { name: 'gpu', testIgnore: ['strict-mode.spec.ts', 'touch-shots.spec.ts'], use: { ...chrome, baseURL: url(E2E) } },
+    { name: 'gpu', testIgnore: ['strict-mode.spec.ts', 'touch-shots.spec.ts', 'long-press.spec.ts'], use: { ...chrome, baseURL: url(E2E) } },
     // Нажатое каждой кнопки на телефонах и планшетах (прогон №6) — reports/mobile/: Android — Chromium, iPhone и iPad — WebKit.
-    { name: 'gpu-touch', testMatch: 'touch-shots.spec.ts', grep: /Android · /, use: { ...chrome, baseURL: url(E2E) } },
+    // Долгое касание жестом браузера — только здесь: в CI на Linux синтетическое касание :active не даёт.
+    { name: 'gpu-touch', testMatch: ['touch-shots.spec.ts', 'long-press.spec.ts'], grep: /Android · /, use: { ...chrome, baseURL: url(E2E) } },
     { name: 'gpu-touch-webkit', testMatch: 'touch-shots.spec.ts', grep: /iOS · /, use: { ...devices['Desktop Safari'], baseURL: url(E2E) } },
     // StrictMode на WebGPU (фаза 9): двойной монтаж — только в dev-сборке React, WebGPU — только на настоящем GPU.
     { name: 'gpu-dev', testMatch: 'strict-mode.spec.ts', use: { ...chrome, baseURL: url(DEV) } },
