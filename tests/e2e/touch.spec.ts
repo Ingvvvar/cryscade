@@ -151,6 +151,10 @@ async function touchTour(page: Page, orientation: Orientation): Promise<string[]
   const check = history.getByRole('button', { name: 'Перевірити' }).first();
   await press(page, check, () => expect(history.getByText(/^(Збігається|Не збігається)$/).first()).toBeVisible());
   await press(page, history.getByRole('link', { name: 'Відтворити' }).first(), () => expect(page.locator('[data-notice="replay"]')).toBeVisible());
+  // Повтор — новая страница: полоса в DOM раньше, чем пришли стили и шрифты (живой адрес, WebKit — раскладка без стилей:
+  // ссылка у левого края), а мерить — то, что видно: после load и шрифтов.
+  await page.waitForLoadState('load');
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
   blocked.push(...(await targets(page, '.notices :is(button, a[href])', false, orientation, 1)));
   await press(page, page.getByRole('link', { name: 'Грати' }), async () => {
     await expect(page.locator('[data-notice="replay"]')).toHaveCount(0);
