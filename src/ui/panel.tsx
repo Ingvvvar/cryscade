@@ -142,7 +142,7 @@ function BetChoice({ game, snapshot, playable }: { readonly game: Game; readonly
 export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, onOpenDialog, autoplay, sound, onSound }: PanelProps) {
   const { dict, money } = useLanguage();
   const text = dict.text;
-  const style = { '--u': `${String(layout.scale)}px` } as CSSProperties;
+  const style = { '--u': `${String(layout.scale)}px`, '--stage-top': `${String(layout.stage.y)}px`, '--stage-left': `${String(layout.stage.x)}px` } as CSSProperties;
   const playable = snapshot.state.name === 'idle' && snapshot.notice !== 'versionchange';
   const presenting = showing(snapshot.state);
   const sessionOnScreen = turbo.preset.sessionAlwaysVisible;

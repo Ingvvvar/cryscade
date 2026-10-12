@@ -1,4 +1,5 @@
-/* Палитра §9. Размеры панели — в единицах дизайна: --u = CSS-пикселей на единицу, ставит муляж панели. */
+/* Палитра §9. Размеры панели — в единицах дизайна: --u = CSS-пикселей на единицу, ставит муляж панели; --stage-top и
+   --stage-left — угол холста дизайна на экране. */
 :root {
   color-scheme: dark;
   --cave-0: #050814;
@@ -417,16 +418,18 @@ button:disabled::before {
   pointer-events: auto;
 }
 
-/* Меню (§11): popover в верхнем слое — Esc и клик мимо закрывают его сами. Размеры — в единицах дизайна панели. */
+/* Меню (§11): popover в верхнем слое — Esc и клик мимо закрывают его сами. Размеры — в единицах дизайна панели. Место — под
+   ☰ от угла холста, а не от края экрана: холст вписан по центру, и на высоком телефоне меню накрывало ☰ — второе касание
+   по ней жало пункт меню, а не закрывало его (прогон №7). */
 .menu {
   position: fixed;
   inset: auto;
-  top: calc(max(12px, env(safe-area-inset-top)) + var(--u) * 76);
-  left: calc(max(12px, env(safe-area-inset-left)) + var(--u) * 16);
+  top: calc(var(--stage-top) + var(--u) * 76);
+  left: calc(var(--stage-left) + var(--u) * 16);
   margin: 0;
   min-width: calc(var(--u) * 320);
   /* Пункты не ниже 44 px: в ландшафте на телефоне меню выше экрана — тогда прокрутка (содержимое без полей и рамки). */
-  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 12px - var(--u) * 111);
+  max-height: calc(100dvh - var(--stage-top) - 12px - var(--u) * 111);
   padding: calc(var(--u) * 16);
   color: var(--text);
   background: var(--cave-1);

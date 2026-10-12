@@ -91,12 +91,24 @@ async function touchTour(page: Page, orientation: Orientation): Promise<string[]
     await expect(bet).toHaveText('2,00');
   });
   const menu = page.getByTestId('menu');
-  await press(page, page.getByRole('button', { name: 'Меню' }), () => expect(menu).toBeVisible());
+  const menuButton = page.getByRole('button', { name: 'Меню' });
+  await press(page, menuButton, () => expect(menu).toBeVisible());
   blocked.push(...(await targets(page, '[data-testid="menu"] button', true, orientation, 5)));
-  // Закрыть — касанием мимо: на телефоне в портрете меню накрывает саму ☰ («Ждёт меня»), второе касание по ней — пункт меню.
+  // Меню не накрывает свою ☰ (прогон №7): второе касание по ней меню закрывает, а не жмёт пункт под пальцем.
+  const seen = await menuButton.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) === button;
+  });
+  expect(seen, 'середина ☰ при открытом меню — сама ☰').toBe(true);
+  await press(page, menuButton, () => expect(menu).toBeHidden());
+  await expect(page.locator('dialog'), 'второе касание ☰ не открыло диалог').toHaveCount(0);
+  await press(page, menuButton, () => expect(menu).toBeVisible());
   await tapScene(page);
   await expect(menu).toBeHidden();
   expect(await rings(page)).toStrictEqual([]);
+  await press(page, menuButton, () => expect(menu).toBeVisible());
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
   // Автоигра: popover, флажок, «Почати»; полоса серии — «Стоп», потом «Сховати».
   const autoplay = page.getByTestId('autoplay');
   await press(page, page.getByRole('button', { name: 'Авто' }), () => expect(autoplay).toBeVisible());
