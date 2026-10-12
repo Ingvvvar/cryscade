@@ -46,7 +46,8 @@ export type ZoneName =
   | 'betValue'
   | 'betUp'
   | 'spin'
-  | 'toggles';
+  | 'turbo'
+  | 'auto';
 
 export interface Design {
   readonly width: number;
@@ -83,8 +84,11 @@ export const DESIGNS: Readonly<Record<Orientation, Design>> = {
       betDown: { x: 60, y: 1000, width: 140, height: 104 },
       spin: { x: 250, y: 968, width: 220, height: 168 },
       betUp: { x: 520, y: 1000, width: 140, height: 104 },
-      betValue: { x: 230, y: 1140, width: 260, height: 40 },
-      toggles: { x: 40, y: 1188, width: 640, height: 76 },
+      // Ставка — в нижнем ряду между «Турбо» и «Авто», подпись над ней: между «Спін» и рядом квадрату 44 × 44 места
+      // не было (прогон №7).
+      betValue: { x: 260, y: 1144, width: 200, height: 120 },
+      turbo: { x: 40, y: 1188, width: 200, height: 76 },
+      auto: { x: 480, y: 1188, width: 200, height: 76 },
     },
   },
   landscape: {
@@ -93,7 +97,8 @@ export const DESIGNS: Readonly<Record<Orientation, Design>> = {
     zones: {
       top: { x: 0, y: 0, width: 1280, height: 64 },
       feature: { x: 24, y: 88, width: 244, height: 200 },
-      balance: { x: 24, y: 632, width: 244, height: 64 },
+      // Подпись, сумма и «Поповнити» столбиком: кнопка с областью 44 × 44 — над нижним краем экрана (прогон №7).
+      balance: { x: 24, y: 536, width: 244, height: 160 },
       ...framed(292, 72),
       winLabel: { x: 952, y: 96, width: 304, height: 48 },
       winValue: { x: 952, y: 144, width: 304, height: 88 },
@@ -101,7 +106,8 @@ export const DESIGNS: Readonly<Record<Orientation, Design>> = {
       betDown: { x: 952, y: 440, width: 80, height: 72 },
       betValue: { x: 1040, y: 440, width: 136, height: 72 },
       betUp: { x: 1176, y: 440, width: 80, height: 72 },
-      toggles: { x: 952, y: 544, width: 304, height: 72 },
+      turbo: { x: 952, y: 544, width: 144, height: 72 },
+      auto: { x: 1112, y: 544, width: 144, height: 72 },
     },
   },
 };

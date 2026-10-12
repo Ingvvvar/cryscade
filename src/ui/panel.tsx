@@ -218,10 +218,12 @@ export function Panel({ layout, game, snapshot, turbo, onTurbo, session, now, on
         <span className="label">{text.bet}</span>
         <BetChoice game={game} snapshot={snapshot} playable={playable} />
       </Zone>
-      <Zone layout={layout} name="toggles">
+      <Zone layout={layout} name="turbo">
         <button type="button" className="toggle" aria-pressed={turbo.turbo} disabled={!turbo.preset.turbo} onClick={onTurbo}>
           {text.turbo}
         </button>
+      </Zone>
+      <Zone layout={layout} name="auto">
         <AutoButton autoplay={autoplay} allowed={turbo.preset.autoplay} playable={playable} />
       </Zone>
     </div>

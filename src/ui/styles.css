@@ -140,9 +140,9 @@ button:disabled::before {
   z-index: -1;
 }
 
-/* Верхняя зона — у края экрана, а над «Турбо» и «Авто» — ставка: их область растёт вниз. */
+/* Верхняя зона — у края экрана, а в ландшафте над «Турбо» и «Авто» — ставка: их область растёт вниз. */
 .zone-top button::before,
-.zone-toggles button::before {
+.panel-landscape :is(.zone-turbo, .zone-auto) button::before {
   top: 0;
   transform: translateX(-50%);
 }
@@ -234,6 +234,18 @@ button:disabled::before {
 
 .panel-landscape .zone-betValue .label {
   font-size: calc(var(--u) * 16);
+}
+
+/* «Поповнити» возвращает 1000 (§4.6): область 44 × 44 не заходит на сумму над кнопкой — промах по числу её не жмёт. */
+.panel-landscape .refill {
+  margin-top: calc(var(--u) * 14);
+}
+
+/* Ставка в портрете — в нижнем ряду между «Турбо» и «Авто», той же высоты и вида, подпись над ней. */
+.panel-portrait .zone-betValue {
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 8);
 }
 
 .step {
@@ -626,6 +638,13 @@ button:disabled::before {
 }
 
 .panel .bet-value:not(:disabled):hover {
+  border-color: rgb(159 180 232 / 0.35);
+}
+
+.panel-portrait .bet-value {
+  width: 100%;
+  height: calc(var(--u) * 76);
+  background: rgb(11 18 48 / 0.82);
   border-color: rgb(159 180 232 / 0.35);
 }
 

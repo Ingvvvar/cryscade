@@ -146,6 +146,27 @@ export function hygiene(page: Page): Promise<{
   });
 }
 
+/** Точки рамки target с шагом 1 px и сколько из них при касании получил бы area (elementFromPoint). */
+export function coveredBy(page: Page, target: string, area: string): Promise<{ readonly points: number; readonly hits: number }> {
+  return page.evaluate(
+    ({ target: query, area: owner }) => {
+      const element = document.querySelector(query);
+      if (element === null) return { points: 0, hits: 0 };
+      const rect = element.getBoundingClientRect();
+      let points = 0;
+      let hits = 0;
+      for (let y = rect.top + 0.5; y < rect.bottom; y++) {
+        for (let x = rect.left + 0.5; x < rect.right; x++) {
+          points++;
+          if (document.elementFromPoint(x, y)?.closest(owner)) hits++;
+        }
+      }
+      return { points, hits };
+    },
+    { target, area },
+  );
+}
+
 /** Текст стилей, которые отдала страница: свойства только iOS (-webkit-touch-callout) CSSOM настольных движков отбрасывает. */
 export function shippedCss(page: Page): Promise<string> {
   return page.evaluate(async () => {

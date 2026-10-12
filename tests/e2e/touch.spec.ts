@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from '../support/fixtures.ts';
-import { checkTargets, emulate, focusRing, hygiene, idle, rings, settle, shippedCss, tap, tapHighlights, tapScene, type Orientation, type TargetCheck } from '../support/touch-page.ts';
+import { checkTargets, coveredBy, emulate, focusRing, hygiene, idle, rings, settle, shippedCss, tap, tapHighlights, tapScene, type Orientation, type TargetCheck } from '../support/touch-page.ts';
 
 // Телефон (§11, прогон №6): вокруг кнопок при касании проступал прямоугольник — подсветка касания браузера (Chromium
 // рисует её со скруглением 3 px поверх круглой «Спін»), рамка фокуса, которую WebKit ставит после касания на первый
@@ -14,11 +14,10 @@ const IOS = ['iPhone SE (3rd gen)', 'iPhone 15', 'iPhone 17 Pro Max', 'iPad (gen
 const ORIENTATIONS: readonly Orientation[] = ['портрет', 'ландшафт'];
 
 /**
- * Где невидимой областью 44 × 44 не набрать (замер прогона №6, «Ждёт меня»): кнопка ставки в портрете стоит между видимыми
- * «Спін» и «Турбо»/«Авто» ближе 22 px; «Поповнити» в ландшафте на телефоне уходит за нижний край экрана. Им можно только
- * blocked: всё свободное место квадрата — их; small не разрешён никому.
+ * Кому можно blocked — всё свободное место квадрата их, а 44 × 44 не набрать. Никому: прогон №6 разрешал ставку в
+ * портрете и «Поповнити» в ландшафте, прогон №7 дал им место раскладкой. small не разрешён никому.
  */
-const BLOCKED: Readonly<Record<Orientation, readonly string[]>> = { портрет: ['Обрати ставку'], ландшафт: ['Поповнити'] };
+const BLOCKED: Readonly<Record<Orientation, readonly string[]>> = { портрет: [], ландшафт: [] };
 
 const CONTROLS = ':is(button, a[href], label.choice, input.text-input)';
 
@@ -59,6 +58,10 @@ async function closeDialog(page: Page, dialog: Locator): Promise<void> {
 async function touchTour(page: Page, orientation: Orientation): Promise<string[]> {
   const blocked: string[] = [];
   blocked.push(...(await targets(page, '.zone button', false, orientation, 9)));
+  // Сумма баланса — не область «Поповнити»: кнопка возвращает 1000, промах по числу её не жмёт.
+  const balance = await coveredBy(page, '[data-testid="balance"]', '.refill');
+  expect(balance.points, 'точки суммы баланса').toBeGreaterThan(100);
+  expect(balance.hits, 'точки суммы баланса — область «Поповнити»').toBe(0);
   // «Спін» — круглый button, и нажатие — тот же круг: углы её квадрата получает сцена, а не кнопка.
   const corners = await page.getByRole('button', { name: 'Спін', exact: true }).evaluate((spin) => {
     const box = spin.getBoundingClientRect();
@@ -202,9 +205,10 @@ for (const [platform, names] of [
           // Положительные контроли тех же проверок на этой странице: каждая ловит то, что ловить должна.
           await page.addStyleTag({ content: '* { -webkit-tap-highlight-color: rgba(255, 0, 0, 1) !important; }' });
           expect((await tapHighlights(page)).colored.length).toBeGreaterThan(20);
-          await page.addStyleTag({ content: "* { -webkit-tap-highlight-color: transparent !important; } .panel .bet-value::before { content: none !important; } :root[data-input] :focus-visible { outline: 3px solid red !important; }" });
+          await page.addStyleTag({ content: "* { -webkit-tap-highlight-color: transparent !important; } .panel .refill::before { content: none !important; } :root[data-input] :focus-visible { outline: 3px solid red !important; }" });
+          // «Поповнити» ниже 44 px на всех восьми устройствах: без своей области квадрата у неё нет.
           const lost = await checkTargets(page, '.zone button', false, BLOCKED[orientation]);
-          expect(lost.problems.filter((problem) => problem.startsWith('Обрати ставку'))).toHaveLength(1);
+          expect(lost.problems.filter((problem) => problem.startsWith('Поповнити'))).toHaveLength(1);
           const lab = page.getByRole('dialog', { name: 'Лабораторія мережі' });
           await tap(page, page.getByRole('button', { name: 'Меню' }));
           await tap(page, page.getByTestId('menu').getByRole('button', { name: 'Лабораторія мережі' }));
