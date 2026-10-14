@@ -157,6 +157,8 @@ button:disabled::before {
   gap: calc(var(--u) * 16);
 }
 
+/* Кнопки зон — шрифтом страницы, 16 px Manrope: на телефоне читается, и области 44 × 44 выверены на нём (прогон №7).
+   Свой шрифт — только у ставки и кнопок popover: их правила .panel .… сильнее этого font: inherit. */
 .panel button {
   pointer-events: auto;
   font: inherit;
@@ -191,7 +193,6 @@ button:disabled::before {
 .icon {
   width: calc(var(--u) * 60);
   height: calc(var(--u) * 60);
-  font-size: calc(var(--u) * 28);
 }
 
 /* Звук выключен (§12): ♪ приглушён и перечёркнут — состояние видно глазами, а не только диктору. */
@@ -252,17 +253,12 @@ button:disabled::before {
 .step {
   width: 100%;
   height: 100%;
-  font-size: calc(var(--u) * 44);
-  font-weight: 700;
 }
 
 .spin {
   height: 100%;
   aspect-ratio: 1;
   border-radius: 50% !important;
-  font-family: 'Unbounded Variable', system-ui, sans-serif;
-  font-size: calc(var(--u) * 30);
-  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   /* Свет сверху, надпись — в тёмной части: самый светлый фон под «Спін» — 6.3:1 к тексту (AA, e2e shell.spec). */
@@ -279,8 +275,6 @@ button:disabled::before {
 .toggle {
   flex: 1;
   height: 100%;
-  font-size: calc(var(--u) * 22);
-  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -310,8 +304,6 @@ button:disabled::before {
 /* «Поповнити» — рядом с балансом: баланс не упирается в ноль навсегда (§4.6). */
 .refill {
   padding: calc(var(--u) * 6) calc(var(--u) * 18);
-  font-size: calc(var(--u) * 18);
-  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
