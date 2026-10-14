@@ -19,7 +19,7 @@ function bandLabels(bands: readonly number[]): string[] {
   });
 }
 
-export function RulesDialog({ services, onClose, returnFocus }: DialogProps) {
+export function RulesDialog({ services, onClose, returnFocus, openedBy }: DialogProps) {
   const { dict } = useLanguage();
   const [icons, setIcons] = useState<readonly string[] | null>(null);
   useEffect(() => {
@@ -44,7 +44,7 @@ export function RulesDialog({ services, onClose, returnFocus }: DialogProps) {
   const feature = steps.map((step, index) => `${index === last ? rules.orMore(step.cores) : String(step.cores)} — ${String(step.spins)}`).join(', ');
   const cap = new Intl.NumberFormat(dict.locale).format(config.capX100 / 100);
   return (
-    <Modal name="rules" title={dict.text.rules} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus}>
+    <Modal name="rules" title={dict.text.rules} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus} openedBy={openedBy}>
       <div className="rules" data-autofocus="" tabIndex={-1}>
         <p>{rules.clusters(config.clusterMin)}</p>
         <p>{rules.cascades}</p>

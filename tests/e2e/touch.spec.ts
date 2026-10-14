@@ -36,13 +36,28 @@ async function targets(page: Page, selector: string, scrolled: boolean, orientat
   return result.blocked;
 }
 
+/**
+ * Первый фокус диалога, открытого с клавиатуры, — как до прогона №7: элемент с data-autofocus, а в «Чесності» и
+ * «Історії» — «×»: их поле и таблица приходят запросом, когда фокус уже стоит.
+ */
+const KEYBOARD_FIRST: Readonly<Record<string, (dialog: Locator) => Locator>> = {
+  'Правила і виплати': (dialog) => dialog.locator('.rules'),
+  'Налаштування': (dialog) => dialog.getByRole('radio', { name: 'Українська' }),
+  'Чесність': (dialog) => dialog.getByRole('button', { name: 'Закрити' }),
+  'Лабораторія мережі': (dialog) => dialog.getByLabel('Затримка, мс'),
+  'Історія': (dialog) => dialog.getByRole('button', { name: 'Закрити' }),
+};
+
 /** Диалог из меню касаниями; ready — дождаться содержимого (история и честность грузятся запросом), потом — область. */
 async function openDialog(page: Page, item: string, orientation: Orientation, least: number, ready?: (dialog: Locator) => Promise<void>): Promise<Locator> {
   const menu = page.getByTestId('menu');
   await press(page, page.getByRole('button', { name: 'Меню' }), () => expect(menu).toBeVisible());
   const dialog = page.getByRole('dialog', { name: item });
   await press(page, menu.getByRole('button', { name: item }), () => expect(dialog).toBeVisible());
+  // Открыт касанием — фокус на самом диалоге: поле в фокусе открыло бы клавиатуру телефона (прогон №7).
+  await expect(dialog, `${item}: фокус после касания — сам диалог`).toBeFocused();
   await ready?.(dialog);
+  await expect(dialog, `${item}: фокус после загрузки — сам диалог`).toBeFocused();
   await targets(page, `dialog[open] ${CONTROLS}`, true, orientation, least);
   return dialog;
 }
@@ -225,6 +240,10 @@ for (const [platform, names] of [
           await tap(page, page.getByRole('button', { name: 'Меню' }));
           await tap(page, page.getByTestId('menu').getByRole('button', { name: 'Лабораторія мережі' }));
           await expect(lab).toBeVisible();
+          // Диалог, открытый касанием, поле не фокусирует — фокус в поле даёт касание по нему.
+          const field = lab.getByLabel('Затримка, мс');
+          await tap(page, field);
+          await expect(field).toBeFocused();
           expect(await rings(page), 'рамка на поле «Лабораторії» после касания — без правила последнего ввода').not.toStrictEqual([]);
         });
 
@@ -316,6 +335,9 @@ for (const [platform, names] of [
             await page.keyboard.press('Enter');
             const dialog = page.getByRole('dialog', { name: item });
             await expect(dialog).toBeVisible();
+            const first = KEYBOARD_FIRST[item];
+            if (first === undefined) throw new Error(`нет первого фокуса для «${item}»`);
+            await expect(first(dialog), `${item}: первый фокус с клавиатуры`).toBeFocused();
             if (item === 'Історія') await expect(dialog.getByRole('button', { name: 'Перевірити' })).toBeVisible();
             if (item === 'Чесність') await expect(dialog.getByTestId('commitment')).toBeVisible();
             expect(await walk(24), item).toBeGreaterThanOrEqual(least);

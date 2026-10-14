@@ -41,27 +41,27 @@ function started(): { readonly events: FakeWindow; readonly mark: InputMark; rea
 
 describe('отметка последнего ввода', () => {
   it('до первого ввода отметки нет; касание — pointer, клавиша — keyboard; слушатели — на погружении', () => {
-    const { events, mark } = started();
-    expect(mark.dataset['input']).toBeUndefined();
+    const { events, mark, modality } = started();
+    expect([mark.dataset['input'], modality.last]).toStrictEqual([undefined, null]);
     expect(events.count()).toBe(2);
     expect(events.captures).toStrictEqual([true, true]);
     events.fire('pointerdown');
-    expect(mark.dataset['input']).toBe('pointer');
+    expect([mark.dataset['input'], modality.last]).toStrictEqual(['pointer', 'pointer']);
     events.fire('keydown', 'Tab');
-    expect(mark.dataset['input']).toBe('keyboard');
+    expect([mark.dataset['input'], modality.last]).toStrictEqual(['keyboard', 'keyboard']);
     events.fire('pointerdown');
-    expect(mark.dataset['input']).toBe('pointer');
+    expect([mark.dataset['input'], modality.last]).toStrictEqual(['pointer', 'pointer']);
   });
 
   it('модификатор сам по себе ввод с клавиатуры не означает; клавиша с ним — означает', () => {
-    const { events, mark } = started();
+    const { events, mark, modality } = started();
     events.fire('pointerdown');
     for (const key of ['Shift', 'Control', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'Fn']) {
       events.fire('keydown', key);
-      expect([key, mark.dataset['input']]).toStrictEqual([key, 'pointer']);
+      expect([key, mark.dataset['input'], modality.last]).toStrictEqual([key, 'pointer', 'pointer']);
     }
     events.fire('keydown', ' ');
-    expect(mark.dataset['input']).toBe('keyboard');
+    expect([mark.dataset['input'], modality.last]).toStrictEqual(['keyboard', 'keyboard']);
   });
 
   it('dispose снимает оба слушателя: отметка больше не меняется', () => {
@@ -71,6 +71,6 @@ describe('отметка последнего ввода', () => {
     expect(events.count()).toBe(0);
     expect(events.captures).toStrictEqual([true, true, true, true]);
     events.fire('pointerdown');
-    expect(mark.dataset['input']).toBe('keyboard');
+    expect([mark.dataset['input'], modality.last]).toStrictEqual(['keyboard', 'keyboard']);
   });
 });

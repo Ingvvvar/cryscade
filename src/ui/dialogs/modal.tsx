@@ -1,8 +1,10 @@
 // Диалог (§11): нативный <dialog> в модальном режиме — Esc, фон и ловушку фокуса браузер берёт на себя. Фокус по
-// закрытии возвращаем сами: Chromium возвращает его открывшему, WebKit — нет (проба фазы 7). Первым фокус получает
-// элемент с data-autofocus, иначе — первый в диалоге.
+// закрытии возвращаем сами: Chromium возвращает его открывшему, WebKit — нет (проба фазы 7). Первый фокус — по тому,
+// чем диалог открыт (прогон №7): касанием или мышью — сам диалог, чтобы поле не открыло клавиатуру телефона; с клавиатуры
+// — элемент с data-autofocus, иначе первый в диалоге.
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import type { InputKind } from '../input-modality.ts';
 
 interface ModalProps {
   /** Имя для тестов и стилей: data-dialog. */
@@ -13,10 +15,12 @@ interface ModalProps {
   readonly onClose: () => void;
   /** Куда вернуть фокус, когда диалог закрылся. */
   readonly returnFocus: HTMLElement | null;
+  /** Чем открыт: pointer — фокус на самом диалоге. */
+  readonly openedBy: InputKind | null;
   readonly children: ReactNode;
 }
 
-export function Modal({ name, title, closeLabel, onClose, returnFocus, children }: ModalProps) {
+export function Modal({ name, title, closeLabel, onClose, returnFocus, openedBy, children }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -28,12 +32,13 @@ export function Modal({ name, title, closeLabel, onClose, returnFocus, children 
     };
     dialog.addEventListener('close', closed);
     if (!dialog.open) dialog.showModal();
-    dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    if (openedBy === 'pointer') dialog.focus();
+    else dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     return () => {
       dialog.removeEventListener('close', closed);
       if (dialog.open) dialog.close();
     };
-  }, [onClose, returnFocus]);
+  }, [onClose, returnFocus, openedBy]);
   return (
     <dialog ref={ref} className="modal" aria-labelledby={titleId} data-dialog={name}>
       <header className="modal-head">

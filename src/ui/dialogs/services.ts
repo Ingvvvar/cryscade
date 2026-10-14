@@ -6,6 +6,7 @@ import type { FairnessView, HistoryResult, SeedResult, VerifyResult } from '../.
 import type { SymbolIcons } from '../../render/renderer.ts';
 import type { ExternalSource } from '../external.ts';
 import type { Language } from '../i18n/dictionary.ts';
+import type { InputKind, LastInput } from '../input-modality.ts';
 import type { SettingsView } from '../settings.ts';
 
 interface SettingsControl extends ExternalSource<SettingsView> {
@@ -41,10 +42,14 @@ export interface DialogServices {
   readonly lab: LabControl;
   /** Иконки символов для правил — из атласа живого рендерера. */
   readonly icons: SymbolIcons;
+  /** Последний ввод игрока: по нему хозяин диалогов запоминает, чем диалог открыт. */
+  readonly input: LastInput;
 }
 
 export interface DialogProps {
   readonly services: DialogServices;
   readonly onClose: () => void;
   readonly returnFocus: HTMLElement | null;
+  /** Чем открыт диалог — последний ввод в момент открытия; null — ввода ещё не было. */
+  readonly openedBy: InputKind | null;
 }

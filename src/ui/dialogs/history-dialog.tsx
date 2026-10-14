@@ -21,7 +21,7 @@ async function checkRound(fairness: FairnessControl, entry: HistoryEntry): Promi
   return commitment === entry.commitment && bookIndex === entry.bookIndex && payX100 === entry.payX100 ? 'match' : 'mismatch';
 }
 
-export function HistoryDialog({ services, onClose, returnFocus }: DialogProps) {
+export function HistoryDialog({ services, onClose, returnFocus, openedBy }: DialogProps) {
   const { dict, money } = useLanguage();
   const text = dict.history;
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
@@ -62,7 +62,7 @@ export function HistoryDialog({ services, onClose, returnFocus }: DialogProps) {
     return <span className={result === 'match' ? 'verdict verdict-ok' : 'verdict verdict-bad'}>{result === 'match' ? text.match : text.mismatch}</span>;
   };
   return (
-    <Modal name="history" title={dict.text.history} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus}>
+    <Modal name="history" title={dict.text.history} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus} openedBy={openedBy}>
       {loaded.kind === 'loading' && <p className="muted">{dict.text.loading}</p>}
       {loaded.kind === 'failed' && <p className="muted">{dict.text.failed}</p>}
       {loaded.kind === 'ready' && loaded.rounds.length === 0 && <p className="muted">{text.empty}</p>}

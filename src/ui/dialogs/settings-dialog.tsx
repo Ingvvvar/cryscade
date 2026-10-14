@@ -12,13 +12,13 @@ const PRESET_ORDER: readonly PresetName[] = ['standard', 'strict'];
 /** Подпись пресета — ключ словаря по его имени: имя пресета код не сравнивает (§1.6). */
 const PRESET_LABEL = { standard: 'presetStandard', strict: 'presetStrict' } as const satisfies Record<PresetName, string>;
 
-export function SettingsDialog({ services, onClose, returnFocus }: DialogProps) {
+export function SettingsDialog({ services, onClose, returnFocus, openedBy }: DialogProps) {
   const { dict } = useLanguage();
   const settings = useExternal(services.settings);
   const locked = services.lockedPreset;
   const preset = locked ?? settings.preset;
   return (
-    <Modal name="settings" title={dict.text.settings} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus}>
+    <Modal name="settings" title={dict.text.settings} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus} openedBy={openedBy}>
       <fieldset className="field">
         <legend className="field-title">{dict.text.language}</legend>
         {LANGUAGES.map((language) => (

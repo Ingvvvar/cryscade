@@ -42,7 +42,7 @@ function shown(field: Field, settings: LabSettings): string {
   return String(field.percent ? Math.round(value * 100) : value);
 }
 
-export function LabDialog({ services, onClose, returnFocus }: DialogProps) {
+export function LabDialog({ services, onClose, returnFocus, openedBy }: DialogProps) {
   const { dict } = useLanguage();
   const text = dict.lab;
   const ids = useId();
@@ -54,7 +54,7 @@ export function LabDialog({ services, onClose, returnFocus }: DialogProps) {
     setSettings(lab.settings);
   };
   return (
-    <Modal name="lab" title={dict.text.lab} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus}>
+    <Modal name="lab" title={dict.text.lab} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus} openedBy={openedBy}>
       <p className="muted">{text.intro}</p>
       <div className="lab-grid">
         {FIELDS.map((field, index) => (

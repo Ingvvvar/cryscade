@@ -56,8 +56,10 @@ async function mount(): Promise<void> {
   if (root === null) {
     throw new Error('В index.html нет #root');
   }
-  // Рамка фокуса — только после клавиатуры (§11): отметка последнего ввода у <html>, правило — в styles.css.
-  new InputModality(window, document.documentElement).start();
+  // Рамка фокуса — только после клавиатуры (§11): отметка последнего ввода у <html>, правило — в styles.css. Тот же
+  // последний ввод решает первый фокус диалога.
+  const input = new InputModality(window, document.documentElement);
+  input.start();
   const probe = await loadProbe();
   const choice = rendererChoice(window.location.search);
   const reload = (): void => {
@@ -170,7 +172,7 @@ async function mount(): Promise<void> {
         now={now}
         autoplay={autoplay}
         language={language}
-        services={{ settings, lockedPreset, fairness: controller, lab, icons }}
+        services={{ settings, lockedPreset, fairness: controller, lab, icons, input }}
       />
   );
   // Замер рендеров App за раунд (§11) — Profiler только при зонде (dev и e2e-сборка; в e2e — профилирующий react-dom).

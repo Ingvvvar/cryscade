@@ -44,7 +44,7 @@ async function verifyLines(fairness: FairnessControl, dict: Dictionary, secret: 
   return [...lines, round.bookIndex === result.bookIndex && round.payX100 === result.payX100 ? text.foundMatch(time) : text.foundMismatch(time)];
 }
 
-export function FairnessDialog({ services, onClose, returnFocus }: DialogProps) {
+export function FairnessDialog({ services, onClose, returnFocus, openedBy }: DialogProps) {
   const { dict } = useLanguage();
   const text = dict.fairness;
   const ids = useId();
@@ -117,7 +117,7 @@ export function FairnessDialog({ services, onClose, returnFocus }: DialogProps) 
   };
 
   return (
-    <Modal name="fairness" title={dict.text.fairness} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus}>
+    <Modal name="fairness" title={dict.text.fairness} closeLabel={dict.text.close} onClose={onClose} returnFocus={returnFocus} openedBy={openedBy}>
       {loaded.kind === 'loading' && <p className="muted">{dict.text.loading}</p>}
       {loaded.kind === 'failed' && <p className="muted">{dict.text.failed}</p>}
       {loaded.kind === 'ready' && loaded.view === null && <p className="muted">{text.replayOnly}</p>}

@@ -75,7 +75,8 @@ test('настройки: английский — панель, суммы и �
   const ukCounter = celebration?.counter ?? '';
   expect(ukCounter).toMatch(/^\d+,\d\d$/);
   await openSettings(page, 'Меню', 'Налаштування');
-  await expect(page.getByRole('radio', { name: 'Українська' })).toBeFocused();
+  // Открыт мышью — фокус на самом диалоге (прогон №7); с клавиатуры — на выбранном языке (keyboard.spec).
+  await expect(page.getByRole('dialog', { name: 'Налаштування' })).toBeFocused();
   await page.getByRole('radio', { name: 'English' }).check();
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Spin' })).toBeVisible();
