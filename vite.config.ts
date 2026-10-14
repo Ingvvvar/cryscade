@@ -90,8 +90,14 @@ export function cryscadeConfig(options: CryscadeConfigOptions = {}): UserConfig 
     ...(options.profiling === true ? { resolve: { alias: [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }] } } : {}),
     plugins: [react(), ...inject, budget.main],
     worker: { plugins: budget.worker },
-    // Порог Vite на размер чанка снят: гейт — бюджет начального JS выше.
-    build: { chunkSizeWarningLimit: Number.POSITIVE_INFINITY },
+    build: {
+      // Порог Vite на размер чанка снят: гейт — бюджет начального JS выше.
+      chunkSizeWarningLimit: Number.POSITIVE_INFINITY,
+      // Динамический импорт — без preload: помощник Vite ставил <link rel=modulepreload> на зависимости чанка, а модуль
+      // просит их только после самого чанка; WebKit через 3 с после load пишет в консоль о каждой ещё не взятой (прогон
+      // №7: format и modal при открытии диалога, init при старте Pixi на медленной сети). Preload из index.html остаётся.
+      modulePreload: { resolveDependencies: (_file, deps, { hostType }) => (hostType === 'html' ? deps : []) },
+    },
   };
 }
 
